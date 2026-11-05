@@ -46,6 +46,7 @@ import javax.servlet.http.HttpSession;
 @WebServlet(urlPatterns = "/api/*")
 public class ApiServlet extends HttpServlet {
     private static final Gson GSON = new Gson();
+    private static final Set<String> PROJECT_PRIORITY = Set.of("CRITICA", "ALTA", "MEDIA", "BAIXA");
     private static final Set<String> PROJECT_STATUS = Set.of("PLANEJAMENTO", "EM_ANDAMENTO", "CONCLUIDO", "PAUSADO");
     private static final Set<String> TASK_STATUS = Set.of("A_FAZER", "EM_ANDAMENTO", "CONCLUIDA", "BLOQUEADA");
 
@@ -420,6 +421,8 @@ public class ApiServlet extends HttpServlet {
                 + " FROM tasks t WHERE " + NO_CHILDREN));
         out.put("attention", Db.query(TASK_SQL + " WHERE t.status <> 'CONCLUIDA' AND " + NO_CHILDREN
                 + " ORDER BY t.end_date, t.id LIMIT 8"));
+        out.put("portfolio", Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.id"));
+        HealthCalc.attach((List<Map<String, Object>>) out.get("portfolio"));
         out.put("by_responsible", Db.query("SELECT responsible, COUNT(*) total,"
                 + " SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) done FROM"
                 + " (SELECT COALESCE(NULLIF(t.responsible, ''), 'Sem responsável') responsible, t.status FROM tasks t"
@@ -432,7 +435,7 @@ public class ApiServlet extends HttpServlet {
 
     private Object projects(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
         if (s.size() == 1) {
-            if (m.equals("GET")) return Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.id");
+            if (m.equals("GET")) return withHealth(Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.id"));
             if (m.equals("POST")) return saveProject(null, body(req));
         } else {
             long id = Long.parseLong(s.get(1));
@@ -469,7 +472,13 @@ public class ApiServlet extends HttpServlet {
     private static Map<String, Object> projectOr404(long id) throws SQLException {
         Map<String, Object> p = Db.one(PROJECT_SQL + " WHERE p.id = ?", id);
         if (p == null) throw new ApiException(404, "Projeto não encontrado.");
+        withHealth(List.of(p));
         return p;
+    }
+
+    private static List<Map<String, Object>> withHealth(List<Map<String, Object>> list) throws SQLException {
+        HealthCalc.attach(list);
+        return list;
     }
 
     private Object saveProject(Long id, JsonObject b) throws SQLException {
@@ -480,18 +489,21 @@ public class ApiServlet extends HttpServlet {
         LocalDate start = date(b, "start_date", "Início");
         LocalDate end = date(b, "end_date", "Fim");
         BigDecimal budget = money(b, "budget", "Orçamento", false);
+        String priority = b.has("priority") && !b.get("priority").isJsonNull() ? str(b, "priority", "Prioridade", 10, false) : "";
+        if (priority.isBlank()) priority = "MEDIA";
+        if (!PROJECT_PRIORITY.contains(priority)) throw new ApiException(400, "Prioridade inválida.");
         if (!PROJECT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior à inicial.");
         String oldStatus = null;
         if (id == null) {
-            id = Db.insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget) VALUES(?,?,?,?,?,?,?)",
-                    name, scope, owner, status, start, end, budget);
+            id = Db.insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget,priority) VALUES(?,?,?,?,?,?,?,?)",
+                    name, scope, owner, status, start, end, budget, priority);
             EmailTriggers.fire("PROJECT_CREATED", id, owner, "project:" + id, mapOf("Responsável", owner, "Início", start.toString(), "Fim", end.toString()));
         } else {
             Map<String, Object> before = Db.one("SELECT status FROM projects WHERE id = ?", id);
             oldStatus = before == null ? null : (String) before.get("status");
-            Db.update("UPDATE projects SET name=?, scope=?, owner=?, status=?, start_date=?, end_date=?, budget=? WHERE id=?",
-                    name, scope, owner, status, start, end, budget, id);
+            Db.update("UPDATE projects SET name=?, scope=?, owner=?, status=?, start_date=?, end_date=?, budget=?, priority=? WHERE id=?",
+                    name, scope, owner, status, start, end, budget, priority, id);
             if (oldStatus != null && !oldStatus.equals(status)) {
                 EmailTriggers.fire("PROJECT_STATUS_CHANGED", id, owner, "project:" + id, mapOf("Situação anterior", oldStatus, "Nova situação", status, "Responsável", owner));
             }

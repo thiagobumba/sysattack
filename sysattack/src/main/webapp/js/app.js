@@ -5,6 +5,13 @@
   const dlg = document.getElementById('dlg');
 
   const P_STATUS = { PLANEJAMENTO: ['Planejamento', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'], PAUSADO: ['Pausado', 'b-dark'] };
+  const PRIORITY = { CRITICA: ['Crítica', 'b-red'], ALTA: ['Alta', 'b-orange'], MEDIA: ['Média', 'b-grey'], BAIXA: ['Baixa', 'b-light'] };
+  const PRIO_RANK = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
+  const H_RANK = { VERMELHO: 0, AMARELO: 1, VERDE: 2, NAO_INICIADO: 3, PAUSADO: 4, CONCLUIDO: 5 };
+  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', PAUSADO: 'h-grey', CONCLUIDO: 'h-done' };
+  const prioBadge = p => badge(PRIORITY, p.priority || 'MEDIA');
+  const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}" title="${esc((h.reasons || []).join(' · ') || h.label)}"><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
+  const byUrgency = (a, b) => (PRIO_RANK[a.priority || 'MEDIA'] - PRIO_RANK[b.priority || 'MEDIA']) || ((H_RANK[a.health.level] ?? 9) - (H_RANK[b.health.level] ?? 9)) || a.name.localeCompare(b.name);
   const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'] };
   const ROLES = { ADMIN: 'Administrador', USER: 'Usuário' };
   const FIN_KIND = { NF_SERVICO: ['Nota fiscal de serviço', 'b-dark'], FATURA: ['Fatura', 'b-grey'] };
@@ -66,6 +73,20 @@
   }
 
   // ------------------------------------------------------------------ visão geral
+  function portfolioPanel(list) {
+    const n = lv => list.filter(p => p.health.level === lv).length;
+    const others = list.filter(p => !['VERMELHO', 'AMARELO', 'VERDE'].includes(p.health.level)).length;
+    const act = list.filter(p => p.health.level === 'VERMELHO' || p.health.level === 'AMARELO').sort(byUrgency);
+    const tile = (lv, label, cls, filter) => `<a class="ptile ${cls}" href="#/projetos" data-health="${filter}"><b>${lv}</b><span>${label}</span></a>`;
+    return `<section class="panel"><div class="panel-head"><div><h2 class="panel-title">Saúde do portfólio</h2><p class="panel-sub">Cada projeto recebe a pior cor entre prazo, custo, marcos e mudanças.</p></div>
+      <a class="btn btn-sm" href="#/projetos">Ver projetos →</a></div>
+      <div class="ptiles">${tile(n('VERMELHO'), 'Críticos', 'h-red', 'VERMELHO')}${tile(n('AMARELO'), 'Em atenção', 'h-amber', 'AMARELO')}${tile(n('VERDE'), 'Saudáveis', 'h-green', 'VERDE')}${tile(others, 'Não iniciados, pausados ou concluídos', 'h-grey', 'OUTROS')}</div>
+      ${act.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Projeto que precisa de ação</th><th>Saúde</th><th>Prioridade</th><th>Motivo</th></tr></thead><tbody>
+        ${act.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')}</span></td><td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
+          <td class="wrap">${esc(p.health.reasons.join(' · '))}</td></tr>`).join('')}</tbody></table></div>`
+        : list.length ? '<p class="hint" style="margin:0">Nenhum projeto em atenção ou crítico no momento.</p>' : ''}</section>`;
+  }
+
   async function viewDashboard() {
     const d = await api('GET', 'dashboard'), k = d.kpi;
     const max = Math.max(1, ...d.by_responsible.map(r => r.total));
@@ -73,6 +94,7 @@
       <section class="bar"><strong>Projetos no SysAttack</strong><div class="bar-actions">
         <a class="btn" href="#/projetos">Acompanhar projetos</a>
         <button class="btn btn-primary" data-action="new-project">+ Novo projeto</button></div></section>
+      ${portfolioPanel(d.portfolio || [])}
       <section class="kpis">
         <div class="kpi"><div class="kpi-top"><span class="kpi-label">Projetos em<br>andamento</span>${ic('box')}</div><div class="kpi-value">${k.projects_active}</div><div class="kpi-sub">${k.projects_total} projetos cadastrados</div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-label">Tarefas<br>abertas</span>${ic('list')}</div><div class="kpi-value">${k.tasks_total - k.tasks_done}</div><div class="kpi-sub">${k.tasks_done} concluídas de ${k.tasks_total}</div></div>
@@ -98,19 +120,33 @@
   async function viewProjects() {
     const list = await api('GET', 'projects');
     view.projects = list;
+    const f = view.pf || (view.pf = { health: 'all', prio: 'all' });
+    if (view.pendingHealth) { f.health = view.pendingHealth; f.prio = 'all'; view.pendingHealth = null; }
     main.innerHTML = pageHead(['SysAttack', 'Projetos'], 'Projetos', 'Escopo, prazos, orçamento e andamento de cada projeto.') + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira de projetos</h2>
         <button class="btn btn-primary btn-sm" data-action="new-project">+ Novo projeto</button></div>
-        <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th class="num">Tarefas</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${list.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')}</span></td>
-          <td>${fmt(p.start_date)} – ${fmt(p.end_date)}<span class="small">${duration(p.start_date, p.end_date)} dias</span></td>
+        <div class="filters"><select id="pf-h" aria-label="Filtrar por saúde"><option value="all">Todas as saúdes</option><option value="VERMELHO">Crítico</option><option value="AMARELO">Atenção</option><option value="VERDE">Saudável</option><option value="OUTROS">Não iniciado, pausado ou concluído</option></select>
+          <select id="pf-p" aria-label="Filtrar por prioridade"><option value="all">Todas as prioridades</option>${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>
+        <div class="table-wrap" id="pf-body"></div>
+        <p class="hint" style="margin-top:12px">Saúde = pior resultado entre prazo, custo, marcos e mudanças. Passe o mouse sobre a cor para ver o motivo. Ordenação: prioridade e, dentro dela, os projetos mais críticos primeiro.</p></section>`;
+    const hs = document.getElementById('pf-h'), ps = document.getElementById('pf-p');
+    hs.value = f.health; ps.value = f.prio;
+    const draw = () => {
+      f.health = hs.value; f.prio = ps.value;
+      const rows = list.filter(p => (f.prio === 'all' || (p.priority || 'MEDIA') === f.prio)
+        && (f.health === 'all' || (f.health === 'OUTROS' ? !['VERMELHO', 'AMARELO', 'VERDE'].includes(p.health.level) : p.health.level === f.health))).sort(byUrgency);
+      document.getElementById('pf-body').innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Prioridade</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${rows.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')} · ${p.task_count} tarefa(s)${p.late_count ? ` · <b class="late-txt">${p.late_count} atrasada(s)</b>` : ''}</span></td>
+          <td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
+          <td class="nowrap">${fmt(p.start_date)} – ${fmt(p.end_date)}<span class="small">${duration(p.start_date, p.end_date)} dias</span></td>
           <td>${pbar(p.progress, p.status === 'CONCLUIDO')}</td>
           <td class="num">${Number(p.budget) > 0 ? money(p.budget) : '—'}</td>
-          <td class="num">${p.task_count}${p.late_count ? `<span class="small late-txt">${p.late_count} atrasada(s)</span>` : ''}</td>
           <td>${badge(P_STATUS, p.status)}</td>
           <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto" data-action="edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto" data-action="del-project" data-id="${p.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`
-        : empty('Nenhum projeto ainda', 'Crie o primeiro projeto com escopo, início e fim.')}</div></section>`;
+        : list.length ? empty('Nenhum projeto com esse filtro', 'Troque a saúde ou a prioridade para ver os demais.') : empty('Nenhum projeto ainda', 'Crie o primeiro projeto com escopo, início e fim.');
+    };
+    hs.addEventListener('change', draw); ps.addEventListener('change', draw); draw();
   }
 
   async function viewProject(id) {
@@ -123,10 +159,11 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Escopo inicial</h2><div class="bar-actions">
         <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Editar projeto</button></div></div>
         <p class="scope-text">${p.scope ? esc(p.scope) : 'Escopo ainda não informado.'}</p>
-        <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(P_STATUS, p.status)}</dd></div><div><dt>Responsável</dt><dd>${esc(p.owner || '—')}</dd></div>
+        <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(P_STATUS, p.status)}</dd></div><div><dt>Saúde</dt><dd>${healthChip(p.health)}</dd></div><div><dt>Prioridade</dt><dd>${prioBadge(p)}</dd></div><div><dt>Responsável</dt><dd>${esc(p.owner || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Fim</dt><dd>${fmt(p.end_date)}</dd></div>
         <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
-        <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl></section>
+        <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl>
+        ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}</section>
       <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
         ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
         <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;
@@ -488,6 +525,7 @@
       <div class="field full"><label for="n">Nome do projeto</label><input id="n" name="name" maxlength="160" value="${esc(p.name)}" required></div>
       <div class="field"><label for="o">Responsável</label><input id="o" name="owner" maxlength="120" value="${esc(p.owner)}"></div>
       <div class="field"><label for="s">Situação</label><select id="s" name="status">${opts(P_STATUS, p.status)}</select></div>
+      <div class="field"><label for="pr">Prioridade</label><select id="pr" name="priority">${opts(PRIORITY, p.priority || 'MEDIA')}</select></div>
       <div class="field"><label for="a">Início</label><input id="a" name="start_date" type="date" value="${p.start_date}" required></div>
       <div class="field"><label for="b">Fim</label><input id="b" name="end_date" type="date" value="${p.end_date}" required></div>
       <div class="field full"><label for="bu">Orçamento (R$)</label><input id="bu" name="budget" type="number" min="0" step="0.01" value="${Number(p.budget) > 0 ? p.budget : ''}" placeholder="Opcional — usado no controle financeiro"></div>
@@ -557,6 +595,8 @@
 
   // ------------------------------------------------------------------ ações (delegação de eventos)
   document.addEventListener('click', async e => {
+    const ph = e.target.closest('[data-health]');
+    if (ph) view.pendingHealth = ph.dataset.health;
     const go = e.target.closest('[data-go]');
     const el = e.target.closest('[data-action]');
     if (go && !el && !e.target.closest('a')) { location.hash = go.dataset.go; return; }

@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Saúde e prioridade por projeto. A saúde (verde, amarelo, vermelho) é calculada na hora, pelo pior resultado entre prazo, custo, marcos e mudanças, e aparece em Projetos (com filtros), na Visão geral (painel "Saúde do portfólio") e no detalhe do projeto. A prioridade (Crítica, Alta, Média, Baixa) é definida no cadastro do projeto. Projetos existentes ficam como Média. Limites: prazo 5 e 15 p.p. atrás do previsto; custo 90% e 100% do orçamento; marcos 1 e 2 atrasados; change pendente há mais de 7 dias.
+
 - Identidade alinhada ao site momesso.ind.br: laranja #F45200, creme #FDDDB3, cinza #DDDDE0, Inter com títulos finos e cantos retos. Login redesenhado (card com faixa preta, botão preto, rodapé escuro).
 - Revisão geral de UX/UI (Visão geral, Projetos, Spot, Tarefas, Marcos, Cronograma, Relatórios, Usuários, IA Agent, E-mail): cabeçalhos mais leves, títulos de painel e rótulos com menos caixa-alta, tabelas sem colunas cortadas, abas do projeto em linha própria com rolagem, foco visível nos campos, ajustes de mobile.
 

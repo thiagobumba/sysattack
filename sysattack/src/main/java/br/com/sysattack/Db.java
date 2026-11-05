@@ -71,6 +71,7 @@ public final class Db {
             s.execute("ALTER TABLE tasks ADD CONSTRAINT IF NOT EXISTS fk_tasks_parent FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE");
             s.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_milestone BOOLEAN DEFAULT FALSE NOT NULL");
             s.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget DECIMAL(14,2) DEFAULT 0 NOT NULL");
+            s.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'MEDIA' NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS finance_entries ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,"
