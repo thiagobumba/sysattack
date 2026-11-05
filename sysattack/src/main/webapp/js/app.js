@@ -553,6 +553,7 @@
     const id = Number(el.dataset.id);
     const inProject = view.name === 'projeto';
     try {
+      if (el.dataset.action.startsWith('sp-')) { await Spot.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
         case 'close': dlg.close(); break;
@@ -632,6 +633,7 @@
       else if (name === 'marcos') await viewMilestones();
       else if (name === 'cronograma') await viewSchedule();
       else if (name === 'usuarios') await viewUsers();
+      else if (name === 'spot') await Spot.view(arg);
       else if (name === 'ia' && isAdmin()) await viewAI();
       else await viewDashboard();
     } catch (ex) {
@@ -640,6 +642,7 @@
     window.scrollTo(0, y);
   }
 
+  window.App = { get me() { return me; }, get main() { return main; }, dlg, api, openDialog, toast, pageHead, route };
   window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
   (async () => {
     try {

@@ -1,0 +1,9 @@
+target/
+*.war
+*.class
+config.properties
+ai.key
+*.mv.db
+*.trace.db
+.idea/
+.vscode/

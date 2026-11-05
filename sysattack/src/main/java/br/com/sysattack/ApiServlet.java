@@ -52,7 +52,7 @@ public class ApiServlet extends HttpServlet {
     private static final Set<String> FIN_KIND = Set.of("NF_SERVICO", "FATURA");
     private static final Set<String> FIN_STATUS = Set.of("PENDENTE", "PAGO");
     private static final Set<String> DOC_CATEGORY = Set.of("ESPECIFICACAO", "CONTRATO", "PROPOSTA", "DESENHO", "NOTA_FISCAL", "OUTRO");
-    private static final Object FILE_SENT = new Object();
+    static final Object FILE_SENT = new Object();
     private static final long MAX_UPLOAD = 25L * 1024 * 1024;
     /** Tipos de arquivo aceitos nos documentos (extensão -> tipo MIME). Sem HTML/SVG/scripts por segurança. */
     private static final Map<String, String> MIME = Map.ofEntries(
@@ -171,6 +171,8 @@ public class ApiServlet extends HttpServlet {
             case "finance": return finance(m, s, req);
             case "documents": return documents(m, s, req, resp, user);
             case "ai": requireAdmin(user); return ai(m, s, req, user);
+            case "ai-status": return AiConfig.availability();
+            case "spot": return SpotService.handle(m, s, req, resp, user);
             default: throw new ApiException(404, "Rota inexistente.");
         }
     }
@@ -777,13 +779,13 @@ public class ApiServlet extends HttpServlet {
 
     // ------------------------------------------------------------------ utilidades
 
-    private static JsonObject body(HttpServletRequest req) throws IOException {
+    static JsonObject body(HttpServletRequest req) throws IOException {
         JsonElement e = JsonParser.parseReader(req.getReader());
         if (e == null || !e.isJsonObject()) throw new ApiException(400, "Corpo da requisição inválido.");
         return e.getAsJsonObject();
     }
 
-    private static String str(JsonObject o, String key, String label, int max, boolean required) {
+    static String str(JsonObject o, String key, String label, int max, boolean required) {
         JsonElement e = o.get(key);
         String v = (e == null || e.isJsonNull()) ? "" : e.getAsString().trim();
         if (required && v.isEmpty()) throw new ApiException(400, "Preencha o campo: " + label + ".");
@@ -791,13 +793,13 @@ public class ApiServlet extends HttpServlet {
         return v;
     }
 
-    private static long longOf(JsonObject o, String key, String label) {
+    static long longOf(JsonObject o, String key, String label) {
         JsonElement e = o.get(key);
         if (e == null || e.isJsonNull()) throw new ApiException(400, "Preencha o campo: " + label + ".");
         return e.getAsLong();
     }
 
-    private static LocalDate date(JsonObject o, String key, String label) {
+    static LocalDate date(JsonObject o, String key, String label) {
         String v = str(o, key, label, 10, true);
         try {
             return LocalDate.parse(v);
@@ -806,28 +808,28 @@ public class ApiServlet extends HttpServlet {
         }
     }
 
-    private static boolean bool(JsonObject o, String key) {
+    static boolean bool(JsonObject o, String key) {
         JsonElement e = o.get(key);
         return e != null && !e.isJsonNull() && e.getAsBoolean();
     }
 
-    private static Long optLong(JsonObject o, String key) {
+    static Long optLong(JsonObject o, String key) {
         JsonElement e = o.get(key);
         if (e == null || e.isJsonNull() || e.getAsString().isBlank()) return null;
         return e.getAsLong();
     }
 
-    private static Long optNum(Object v) {
+    static Long optNum(Object v) {
         return v == null ? null : ((Number) v).longValue();
     }
 
-    private static LocalDate optDate(JsonObject o, String key, String label) {
+    static LocalDate optDate(JsonObject o, String key, String label) {
         JsonElement e = o.get(key);
         if (e == null || e.isJsonNull() || e.getAsString().isBlank()) return null;
         return date(o, key, label);
     }
 
-    private static BigDecimal money(JsonObject o, String key, String label, boolean required) {
+    static BigDecimal money(JsonObject o, String key, String label, boolean required) {
         JsonElement e = o.get(key);
         String v = (e == null || e.isJsonNull()) ? "" : e.getAsString().trim().replace(',', '.');
         if (v.isEmpty()) {

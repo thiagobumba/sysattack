@@ -347,3 +347,4 @@ img.preview { object-fit: contain; }
   .gantt { --name-w: 170px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.kpi.neg .kpi-value { color: var(--red); }

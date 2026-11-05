@@ -98,4 +98,59 @@ public final class Mailer {
                 + "e avise o administrador.\n\n— SysAttack", "UTF-8");
         Transport.send(m);
     }
+
+    /** Monta a sessão SMTP a partir do config.properties; null se o servidor não estiver configurado. */
+    private static Session session(Properties c) {
+        String host = c.getProperty("smtp.host", "").trim();
+        if (host.isEmpty()) return null;
+        String user = c.getProperty("smtp.user", "").trim();
+        String pass = c.getProperty("smtp.password", "");
+        String security = c.getProperty("smtp.security", "starttls").trim().toLowerCase();
+        Properties pr = new Properties();
+        pr.put("mail.smtp.host", host);
+        pr.put("mail.smtp.port", c.getProperty("smtp.port", "587").trim());
+        pr.put("mail.smtp.connectiontimeout", "10000");
+        pr.put("mail.smtp.timeout", "20000");
+        pr.put("mail.smtp.writetimeout", "20000");
+        if (security.equals("starttls")) {
+            pr.put("mail.smtp.starttls.enable", "true");
+            pr.put("mail.smtp.starttls.required", "true");
+        } else if (security.equals("ssl")) {
+            pr.put("mail.smtp.ssl.enable", "true");
+        }
+        boolean auth = !user.isEmpty();
+        pr.put("mail.smtp.auth", String.valueOf(auth));
+        return auth ? Session.getInstance(pr, new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(user, pass);
+            }
+        }) : Session.getInstance(pr);
+    }
+
+    /**
+     * Envia um e-mail HTML. Retorna true se foi enviado de verdade; false no modo teste (smtp.dev=true),
+     * em que só registra no log do Tomcat.
+     */
+    public static boolean sendHtml(java.util.List<String> to, String subject, String html, String replyTo) throws Exception {
+        Properties c = config();
+        Session session = session(c);
+        if (session == null) {
+            if ("true".equalsIgnoreCase(c.getProperty("smtp.dev", "").trim())) {
+                LOG.warning("[SysAttack][MODO TESTE] E-mail NÃO enviado. Para: " + to + " | Assunto: " + subject);
+                return false;
+            }
+            throw new NotConfigured();
+        }
+        String user = c.getProperty("smtp.user", "").trim();
+        String from = c.getProperty("smtp.from", user).trim();
+        MimeMessage m = new MimeMessage(session);
+        m.setFrom(new InternetAddress(from, "SysAttack", "UTF-8"));
+        m.setRecipients(Message.RecipientType.TO, InternetAddress.parse(String.join(",", to)));
+        if (replyTo != null && !replyTo.isBlank()) m.setReplyTo(InternetAddress.parse(replyTo));
+        m.setSubject(subject.replaceAll("[\\r\\n]+", " "), "UTF-8");
+        m.setContent(html, "text/html; charset=UTF-8");
+        Transport.send(m);
+        return true;
+    }
 }
