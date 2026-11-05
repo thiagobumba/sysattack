@@ -74,3 +74,13 @@ Pasta `~/.sysattack/` (banco `sysattack.mv.db` e arquivos em `docs/`). Mude com 
 ## Estrutura
 - `src/main/java/br/com/sysattack` — `ApiServlet` (API JSON), `Db`, `Auth`, `Mailer`, `AiConfig`, `TaskRules`, `AppListener`
 - `src/main/webapp` — `login.html`, `index.html`, `css/`, `js/`, `img/`, `favicon.ico`
+
+## Projetos Spot
+
+Menu **Projetos Spot**: projetos ágeis por horas, sem marcos nem cronograma.
+
+- **Projeto**: horas fixadas, modelo (franquia mensal ou pacote), início, participantes do comitê, destinatários e observação de faturamento.
+- **Apontamentos de horas**, **Demandas** (com horas aprovadas) e **Ações e pendências**.
+- **Cálculo (feito pelo sistema, nunca pela IA)**: mensal = do dia 1º do mês de referência até a data; pacote = desde o início. Consumidas = soma das horas do período; reservadas = Σ (aprovado − realizado) das demandas abertas; saldo = fixadas − consumidas; saldo projetado = saldo − reservadas.
+- **Relatórios com Claude**: a aba *Relatórios com Claude* gera o texto (destaques, alertas, resumo por demanda, mensagem do e-mail) a partir dos números calculados. Requer a chave conectada em *Configurações IA Agent*. O texto pode ser editado antes do envio.
+- **Envio**: o relatório vai no corpo do e-mail (precisa de SMTP em `config.properties`; com `smtp.dev=true` nada é enviado de fato). Para PDF use *Imprimir / salvar PDF*.

@@ -62,6 +62,37 @@ public final class AiConfig {
         return out;
     }
 
+    /** Informação mínima para qualquer usuário saber se há IA disponível (sem dados sensíveis). */
+    public static Map<String, Object> availability() throws SQLException {
+        Map<String, Object> row = Db.one("SELECT model FROM ai_settings WHERE id = 1");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("connected", row != null);
+        out.put("model", row == null ? "" : row.get("model"));
+        return out;
+    }
+
+    /** Pede um texto ao Claude (modelo escolhido na conexão). Usado pelos relatórios dos projetos spot. */
+    public static String complete(String system, String userMessage, int maxTokens) throws AiException, SQLException {
+        Map<String, Object> row = Db.one("SELECT model FROM ai_settings WHERE id = 1");
+        if (row == null) throw new AiException(409, "O Claude não está conectado. Peça a um administrador para conectar em Configurações IA Agent.");
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", row.get("model"));
+        body.put("max_tokens", maxTokens);
+        body.put("system", system);
+        body.put("messages", List.of(Map.of("role", "user", "content", userMessage)));
+        JsonObject o = JsonParser.parseString(request("POST", "/v1/messages", GSON.toJson(body), 120)).getAsJsonObject();
+        StringBuilder sb = new StringBuilder();
+        JsonArray content = o.getAsJsonArray("content");
+        if (content != null) {
+            for (JsonElement e : content) {
+                JsonObject b = e.getAsJsonObject();
+                if (b.has("text")) sb.append(b.get("text").getAsString());
+            }
+        }
+        if (sb.length() == 0) throw new AiException(502, "O Claude não devolveu texto. Tente novamente.");
+        return sb.toString();
+    }
+
     /** Valida a chave na Anthropic (lista de modelos, sem custo) e a guarda criptografada. */
     public static void connect(String apiKey, String model, String workspaceId, String userName, Object userId)
             throws AiException, SQLException {
@@ -75,7 +106,7 @@ public final class AiConfig {
         if (!workspaceId.isEmpty() && !workspaceId.matches("wrkspc_[A-Za-z0-9]{6,60}")) {
             throw new AiException(400, "ID de workspace inválido (formato: wrkspc_...). Deixe em branco se a chave já é de um workspace.");
         }
-        call(apiKey, workspaceId, "GET", "/v1/models?limit=1", null); // lança erro se a chave não for aceita
+        call(apiKey, workspaceId, "GET", "/v1/models?limit=1", null, 30); // lança erro se a chave não for aceita
         String enc;
         try {
             enc = encrypt(apiKey);
@@ -151,6 +182,10 @@ public final class AiConfig {
 
     /** Ponto de entrada para as próximas etapas (assistente nos projetos): chamada autenticada à API. */
     public static String request(String method, String path, String json) throws AiException, SQLException {
+        return request(method, path, json, 45);
+    }
+
+    public static String request(String method, String path, String json, int timeoutSec) throws AiException, SQLException {
         Map<String, Object> row = Db.one("SELECT api_key_enc, workspace_id FROM ai_settings WHERE id = 1");
         if (row == null) throw new AiException(409, "O Claude não está conectado. Conecte em Configurações IA Agent.");
         String key;
@@ -159,14 +194,14 @@ public final class AiConfig {
         } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
             throw new AiException(500, "Não foi possível ler a chave salva (o arquivo ai.key mudou?). Desconecte e conecte novamente.");
         }
-        return call(key, (String) row.get("workspace_id"), method, path, json);
+        return call(key, (String) row.get("workspace_id"), method, path, json, timeoutSec);
     }
 
     // ------------------------------------------------------------------ HTTP
 
-    private static String call(String apiKey, String workspace, String method, String path, String json) throws AiException {
+    private static String call(String apiKey, String workspace, String method, String path, String json, int timeoutSec) throws AiException {
         try {
-            HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE + path)).timeout(Duration.ofSeconds(45))
+            HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE + path)).timeout(Duration.ofSeconds(timeoutSec))
                     .header("x-api-key", apiKey).header("anthropic-version", VERSION).header("content-type", "application/json");
             if (workspace != null && !workspace.isEmpty()) b.header("anthropic-workspace-id", workspace);
             b = json == null ? b.GET() : b.POST(HttpRequest.BodyPublishers.ofString(json));
