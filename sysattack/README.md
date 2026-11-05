@@ -84,3 +84,14 @@ Menu **Projetos Spot**: projetos ágeis por horas, sem marcos nem cronograma.
 - **Cálculo (feito pelo sistema, nunca pela IA)**: mensal = do dia 1º do mês de referência até a data; pacote = desde o início. Consumidas = soma das horas do período; reservadas = Σ (aprovado − realizado) das demandas abertas; saldo = fixadas − consumidas; saldo projetado = saldo − reservadas.
 - **Relatórios com Claude**: a aba *Relatórios com Claude* gera o texto (destaques, alertas, resumo por demanda, mensagem do e-mail) a partir dos números calculados. Requer a chave conectada em *Configurações IA Agent*. O texto pode ser editado antes do envio.
 - **Envio**: o relatório vai no corpo do e-mail (precisa de SMTP em `config.properties`; com `smtp.dev=true` nada é enviado de fato). Para PDF use *Imprimir / salvar PDF*.
+
+## Configurações de E-mail e gatilhos
+
+Menu **Configurações de E-mail** (somente administradores):
+
+- **SMTP pela tela**: servidor, porta, segurança, usuário, senha (guardada criptografada com a mesma chave do `ai.key`), remetente e botão **Enviar teste**. Se nada estiver salvo na tela, continua valendo o `config.properties`.
+- **Gatilhos**: regras "quando acontecer X → enviar para Y". Podem valer para todos os projetos ou para um projeto (aba **Gatilhos de e-mail** dentro do projeto).
+  Eventos: projeto criado, situação do projeto alterada, tarefa criada, tarefa concluída, marco concluído, tarefa atrasada (verificada a cada 30 min, um aviso por tarefa), lançamento financeiro criado e documento adicionado.
+  Destinatários: lista de e-mails e, opcionalmente, o responsável (quando o nome dele é igual ao de um usuário ativo).
+  Assunto aceita `{evento}`, `{projeto}` e `{item}`.
+- **Histórico** dos envios (90 dias) com sucesso ou erro. Os envios acontecem em segundo plano e uma falha de e-mail nunca impede a operação no sistema.
