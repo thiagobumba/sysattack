@@ -55,5 +55,14 @@ const SA = (() => {
     input.addEventListener('input', upd); upd();
   };
 
-  return { rulesHtml, bindRules, esc, api, todayIso, fmt, dayNum, isoOf, addDays, duration, ic };
+  /** Versão do sistema (arquivo version.json): { version, stage, released }. Texto: "1.0.0 - Alpha". */
+  const versionLabel = async () => {
+    try {
+      const r = await fetch('version.json', { cache: 'no-store' });
+      const v = await r.json();
+      return v.version + (v.stage ? ' - ' + v.stage : '');
+    } catch (e) { return ''; }
+  };
+
+  return { versionLabel, rulesHtml, bindRules, esc, api, todayIso, fmt, dayNum, isoOf, addDays, duration, ic };
 })();

@@ -668,6 +668,16 @@
     }
     // menus de configuração: só administradores; para os demais o item nem existe na página (a API também recusa)
     document.querySelectorAll('[data-route="ia"], [data-route="email"]').forEach(a => { if (isAdmin()) a.hidden = false; else a.remove(); });
+    if (!isAdmin()) {
+      document.querySelector('#g-admin .nav-label').textContent = 'Conta';
+      document.querySelector('[data-route="usuarios"] span').textContent = 'Meu usuário';
+    }
+    const initials = me.name.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('who-av').textContent = initials;
+    document.getElementById('who-name').textContent = me.name;
+    document.getElementById('who-role').textContent = ROLES[me.role] || me.role;
+    document.getElementById('who').hidden = false;
+    SA.versionLabel().then(v => { if (v) document.getElementById('ver').textContent = 'SysAttack ' + v; });
     route();
   })();
 })();

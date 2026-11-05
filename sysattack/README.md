@@ -104,7 +104,7 @@ Na pasta do repositório (onde está a pasta `.git`), no PowerShell:
 .\atualizar.ps1 nome-da-branch
 ```
 
-O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`. Com `-Watch` (`.\atualizar.ps1 nome-da-branch -Watch`) o script fica vigiando o GitHub e refaz o pull e o build sozinho a cada novo commit da branch. A troca do `.war` no Tomcat continua manual.
+O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `claude/dev`, branch única onde o Claude sobe as alterações. Com `-Watch` (`.\atualizar.ps1 nome-da-branch -Watch`) o script fica vigiando o GitHub e refaz o pull e o build sozinho a cada novo commit da branch. A troca do `.war` no Tomcat continua manual.
 
 ## Relatórios & Dashs
 
@@ -113,3 +113,10 @@ Menu **Relatórios & Dashs** (todos os usuários; projetos spot não entram). Fi
 - **Guia Projetos:** Timeline do Projeto, Itens em atraso, Previsto × Realizado (progresso esperado pelo prazo × progresso informado, ponderado pela duração), Quantidade de changes por projeto e Atrasos gerados por changes (somente changes **aprovadas** com impacto em dias).
 - **Guia Orçamentária:** Previsto × Realizado em R$ (orçamento × notas fiscais e faturas lançadas) e Custo Projeto Total.
 - **Changes:** nova aba dentro de cada projeto para registrar solicitações de mudança (data, motivo, solicitante, impacto em dias e R$, situação).
+
+## Versões e git
+
+- **Nomenclatura:** `1.0.0 - Alpha` → `1.0.0 - Beta` → `1.0.0 - RC` → `1.0.1 - Oficial`. A fonte da verdade é `sysattack/src/main/webapp/version.json` (`version` e `stage`); o rodapé do menu e a tela de login mostram esse valor sem precisar mexer em mais nada.
+- **Branches:** `main` guarda só versões publicadas; o trabalho do dia a dia vai para `claude/dev`.
+- **Publicar uma versão:** atualizar `version.json` e o `CHANGELOG.md`, abrir o pull request de `claude/dev` para `main`, fazer o merge e criar a tag `v<versão>[-etapa]` (ex.: `v1.0.0-alpha`, `v1.0.0-beta`, `v1.0.0-rc`, `v1.0.1`) com uma release no GitHub (pré-lançamento até a Oficial).
+- Histórico das versões em `CHANGELOG.md`.
