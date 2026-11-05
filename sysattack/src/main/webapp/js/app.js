@@ -329,6 +329,13 @@
   }
 
   // ------------------------------------------------------------------ Configurações IA Agent (Claude) — administrador
+  async function viewPrivacy() {
+    const r = await fetch('privacidade-texto.html', { cache: 'no-store' });
+    if (!r.ok) throw new Error('Não foi possível carregar o texto da política.');
+    main.innerHTML = pageHead(['SysAttack', 'Política de Privacidade'], 'Política de Privacidade', 'Como o SysAttack trata dados pessoais.') +
+      `<section class="panel policy">${await r.text()}</section>`;
+  }
+
   async function viewAI() {
     const st = await api('GET', 'ai');
     const head = pageHead(['SysAttack', 'Configurações IA Agent'], 'Configurações IA Agent', 'Conecte uma conta Anthropic para acoplar o Claude ao SysAttack.');
@@ -641,6 +648,7 @@
       else if (name === 'usuarios') await viewUsers();
       else if (name === 'spot') await Spot.view(arg);
       else if (name === 'relatorios') await Rep.view();
+      else if (name === 'privacidade') await viewPrivacy();
       else if ((name === 'email' || name === 'ia') && !isAdmin()) {
         main.innerHTML = pageHead(['SysAttack'], 'Acesso restrito', '') + `<div class="panel">${empty('Esta área é só para administradores', 'Peça a um administrador para ajustar esta configuração.')}</div>`;
       }
