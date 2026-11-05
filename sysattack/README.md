@@ -104,7 +104,7 @@ Na pasta do repositório (onde está a pasta `.git`), no PowerShell:
 .\atualizar.ps1 nome-da-branch
 ```
 
-O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`.
+O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`. Com `-Watch` (`.\atualizar.ps1 nome-da-branch -Watch`) o script fica vigiando o GitHub e refaz o pull e o build sozinho a cada novo commit da branch. A troca do `.war` no Tomcat continua manual.
 
 ## Relatórios & Dashs
 
