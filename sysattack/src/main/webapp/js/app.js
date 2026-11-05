@@ -1,0 +1,658 @@
+/* SysAttack — telas, rotas e formulários. */
+(() => {
+  const { api, esc, fmt, todayIso, ic, duration, addDays, dayNum } = SA;
+  const main = document.getElementById('main');
+  const dlg = document.getElementById('dlg');
+
+  const P_STATUS = { PLANEJAMENTO: ['Planejamento', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'], PAUSADO: ['Pausado', 'b-dark'] };
+  const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'] };
+  const ROLES = { ADMIN: 'Administrador', USER: 'Usuário' };
+  const FIN_KIND = { NF_SERVICO: ['Nota fiscal de serviço', 'b-dark'], FATURA: ['Fatura', 'b-grey'] };
+  const DOC_CAT = { ESPECIFICACAO: 'Especificação', CONTRATO: 'Contrato', PROPOSTA: 'Proposta', DESENHO: 'Desenho / projeto', NOTA_FISCAL: 'Nota fiscal', OUTRO: 'Outro' };
+  const PREVIEW = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'txt'];
+  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  let me = null;
+  let view = { name: '', projectId: null, tab: 'gantt', tasks: [], projects: [], project: null, users: [], msTab: 'all', msRender: null, fin: [], docs: [] };
+
+  const money = n => BRL.format(Number(n) || 0);
+  const isAdmin = () => me.role === 'ADMIN';
+  const isLate = t => t.status !== 'CONCLUIDA' && t.end_date < todayIso();
+  const badge = (map, k) => `<span class="badge ${map[k][1]}">${map[k][0]}</span>`;
+  const taskBadge = t => isLate(t) ? '<span class="badge b-red">Atrasada</span>' : badge(T_STATUS, t.status);
+  const pbar = (p, done) => `<div class="pbar"><div class="pbar-track"><div class="pbar-fill${done ? ' done' : ''}" style="width:${p}%"></div></div><span>${p}%</span></div>`;
+  const empty = (t, s) => `<div class="empty"><strong>${t}</strong>${s}</div>`;
+  const fileSize = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
+  const extOf = name => (name.split('.').pop() || '').toLowerCase();
+
+  function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status');
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  function pageHead(crumbs, title, sub) {
+    const c = crumbs.map((x, i) => x.href && i < crumbs.length - 1 ? `<a href="${x.href}">${esc(x.t)}</a>` : esc(x.t || x)).join(' / ');
+    return `<header class="page-head"><div><nav class="crumbs" aria-label="Navegação">${c}</nav><h1>${esc(title)}</h1>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>
+      <div class="head-meta"><span class="hello">Olá, <b>${esc(me.name)}</b></span><button class="btn btn-sm" data-action="logout">Sair</button>
+      <span><i class="dot"></i>Referência ${fmt(todayIso())}</span></div></header>`;
+  }
+
+  // ------------------------------------------------------------------ hierarquia de tarefas
+  const byStart = (a, b) => a.start_date.localeCompare(b.start_date) || a.id - b.id;
+  function treeOrder(tasks) {
+    const ids = new Set(tasks.map(t => t.id));
+    const out = [];
+    tasks.filter(t => !t.parent_id || !ids.has(t.parent_id)).sort(byStart).forEach(r => {
+      out.push({ t: r, level: 0 });
+      tasks.filter(k => k.parent_id === r.id).sort(byStart).forEach(k => out.push({ t: k, level: 1 }));
+    });
+    return out;
+  }
+
+  function ganttRows(projects, tasks) {
+    const rows = [];
+    projects.forEach(p => {
+      const pk = 'p' + p.id;
+      rows.push({ key: pk, kind: 'project', id: p.id, name: p.name, sub: p.owner, start: p.start_date, end: p.end_date, progress: p.progress,
+        status: p.status === 'CONCLUIDO' ? 'CONCLUIDA' : '', level: 0, hasChildren: true });
+      treeOrder(tasks.filter(t => t.project_id === p.id)).forEach(({ t, level }) => rows.push({
+        key: 't' + t.id, kind: t.is_milestone ? 'milestone' : t.child_count > 0 ? 'parent' : 'task', id: t.id, name: t.name, sub: t.responsible,
+        start: t.start_date, end: t.end_date, progress: t.progress, status: t.status, late: isLate(t), dep: t.depends_on ? 't' + t.depends_on : null,
+        parentKey: t.parent_id ? 't' + t.parent_id : pk, level: level + 1, hasChildren: t.child_count > 0 }));
+    });
+    return rows;
+  }
+
+  // ------------------------------------------------------------------ visão geral
+  async function viewDashboard() {
+    const d = await api('GET', 'dashboard'), k = d.kpi;
+    const max = Math.max(1, ...d.by_responsible.map(r => r.total));
+    main.innerHTML = pageHead(['SysAttack', { t: 'Gestão de projetos', href: '#/projetos' }, 'Visão geral'], 'Visão geral', 'Cada projeto conectado ao próximo prazo.') + `
+      <section class="bar"><strong>Projetos no SysAttack</strong><div class="bar-actions">
+        <a class="btn" href="#/projetos">Acompanhar projetos</a>
+        <button class="btn btn-primary" data-action="new-project">+ Novo projeto</button></div></section>
+      <section class="kpis">
+        <div class="kpi"><div class="kpi-top"><span class="kpi-label">Projetos em<br>andamento</span>${ic('box')}</div><div class="kpi-value">${k.projects_active}</div><div class="kpi-sub">${k.projects_total} projetos cadastrados</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-label">Tarefas<br>abertas</span>${ic('list')}</div><div class="kpi-value">${k.tasks_total - k.tasks_done}</div><div class="kpi-sub">${k.tasks_done} concluídas de ${k.tasks_total}</div></div>
+        <div class="kpi accent"><div class="kpi-top"><span class="kpi-label">Tarefas<br>atrasadas</span>${ic('bars')}</div><div class="kpi-value">${k.tasks_late}</div><div class="kpi-sub">Prazo final vencido e não concluídas</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-label">Progresso<br>médio</span>${ic('people')}</div><div class="kpi-value">${k.avg_progress}%</div><div class="kpi-sub">Média das tarefas</div></div>
+      </section>
+      <div class="notice"><b>Prazo com contexto.</b> O cronograma usa as datas planejadas de início e fim de cada tarefa; o progresso é informado por quem executa. Tarefas pai são calculadas a partir das filhas.</div>
+      <div class="grid-2">
+        <section class="panel"><div class="panel-head"><div><h2 class="panel-title">Fila de atenção</h2><p class="panel-sub">Tarefas com os prazos mais próximos ou vencidos.</p></div>
+          <a class="btn btn-sm" href="#/cronograma">Ver cronograma →</a></div>
+          <div class="table-wrap">${d.attention.length ? `<table class="tbl"><thead><tr><th>Tarefa</th><th>Projeto</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>
+          ${d.attention.map(t => `<tr class="click" data-go="#/projeto/${t.project_id}"><td class="strong">${t.is_milestone ? '<i class="dia-ic"></i>' : ''}${esc(t.name)}<span class="small">${esc(t.responsible || 'Sem responsável')}</span></td>
+            <td>${esc(t.project_name)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${taskBadge(t)}</td></tr>`).join('')}</tbody></table>`
+            : empty('Tudo em dia', 'Não há tarefas abertas no momento.')}</div></section>
+        <section class="panel"><div class="panel-head"><div><h2 class="panel-title">Distribuição das demandas</h2><p class="panel-sub">Quantidade de tarefas por responsável.</p></div></div>
+          ${d.by_responsible.length ? `<div class="dist">${d.by_responsible.map(r => `<div class="dist-row"><div class="dist-top"><b>${esc(r.responsible)}</b><span>${r.total - r.done} abertas · ${r.done} concluídas</span></div>
+            <div class="dist-track" style="width:${(r.total / max) * 100}%"><div class="dist-bar"><div class="dist-done" style="width:${r.done / r.total * 100}%"></div><div class="dist-open" style="width:${(r.total - r.done) / r.total * 100}%"></div></div></div></div>`).join('')}</div>
+            <div class="legend"><span><i style="background:var(--ink)"></i>Concluídas</span><span><i style="background:var(--orange)"></i>Abertas</span></div>` : empty('Sem tarefas', 'Cadastre tarefas para ver a distribuição.')}
+        </section></div>`;
+  }
+
+  // ------------------------------------------------------------------ projetos
+  async function viewProjects() {
+    const list = await api('GET', 'projects');
+    view.projects = list;
+    main.innerHTML = pageHead(['SysAttack', 'Projetos'], 'Projetos', 'Escopo, prazos, orçamento e andamento de cada projeto.') + `
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira de projetos</h2>
+        <button class="btn btn-primary btn-sm" data-action="new-project">+ Novo projeto</button></div>
+        <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th class="num">Tarefas</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${list.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')}</span></td>
+          <td>${fmt(p.start_date)} – ${fmt(p.end_date)}<span class="small">${duration(p.start_date, p.end_date)} dias</span></td>
+          <td>${pbar(p.progress, p.status === 'CONCLUIDO')}</td>
+          <td class="num">${Number(p.budget) > 0 ? money(p.budget) : '—'}</td>
+          <td class="num">${p.task_count}${p.late_count ? `<span class="small late-txt">${p.late_count} atrasada(s)</span>` : ''}</td>
+          <td>${badge(P_STATUS, p.status)}</td>
+          <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto" data-action="edit-project" data-id="${p.id}">${ic('edit')}</button>
+          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto" data-action="del-project" data-id="${p.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`
+        : empty('Nenhum projeto ainda', 'Crie o primeiro projeto com escopo, início e fim.')}</div></section>`;
+  }
+
+  async function viewProject(id) {
+    const [p, tasks] = await Promise.all([api('GET', 'projects/' + id), api('GET', `projects/${id}/tasks`)]);
+    if (view.projectId !== id) view.tab = 'gantt';
+    view.project = p; view.tasks = tasks; view.projectId = id; view.projects = [p];
+    const leaf = tasks.filter(t => !t.child_count).length, ms = tasks.filter(t => t.is_milestone).length;
+    const tab = (k, label) => `<button class="tab ${view.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}">${label}</button>`;
+    main.innerHTML = pageHead(['SysAttack', { t: 'Projetos', href: '#/projetos' }, p.name], p.name, '') + `
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Escopo inicial</h2><div class="bar-actions">
+        <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Editar projeto</button></div></div>
+        <p class="scope-text">${p.scope ? esc(p.scope) : 'Escopo ainda não informado.'}</p>
+        <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(P_STATUS, p.status)}</dd></div><div><dt>Responsável</dt><dd>${esc(p.owner || '—')}</dd></div>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Fim</dt><dd>${fmt(p.end_date)}</dd></div>
+        <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
+        <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl></section>
+      <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
+        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}</div>
+        <div class="bar-actions" id="tab-actions"></div></div><div id="tab-body"></div></section>`;
+    await renderTab();
+  }
+
+  const btn = (action, label, extra = '', primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${action}" ${extra}>${label}</button>`;
+
+  async function renderTab() {
+    const host = document.getElementById('tab-body'), act = document.getElementById('tab-actions');
+    if (!host) return;
+    const t = view.tab;
+    act.innerHTML = t === 'finance' ? btn('new-fin', '+ Nota fiscal', 'data-kind="NF_SERVICO"') + btn('new-fin', '+ Fatura', 'data-kind="FATURA"', false)
+      : t === 'docs' ? btn('new-doc', '+ Adicionar documento')
+      : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
+      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false);
+    if (t === 'gantt') {
+      const p = view.project;
+      Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
+    } else if (t === 'tasks') host.innerHTML = taskTable(view.tasks, { tree: true });
+    else if (t === 'marcos') renderMilestones(host, view.tasks.filter(x => x.is_milestone), false);
+    else if (t === 'finance') await renderFinance(host);
+    else if (t === 'docs') await renderDocs(host);
+  }
+
+  function onGanttRow(r) {
+    if (r.kind === 'project') { if (view.name === 'projeto') openProjectForm(r.id); else location.hash = '#/projeto/' + r.id; }
+    else openTaskForm(view.tasks, r.id);
+  }
+
+  // ------------------------------------------------------------------ tabela de tarefas
+  function taskTable(list, { tree = false, showProject = false } = {}) {
+    if (!list.length) return empty('Nenhuma tarefa', 'Use “Nova tarefa” para quebrar o escopo em atividades com prazo. Crie tarefas pai e, dentro delas, tarefas filhas.');
+    const byId = Object.fromEntries(list.map(t => [t.id, t]));
+    const rows = tree ? treeOrder(list) : list.map(t => ({ t, level: 0 }));
+    return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tarefa</th>${showProject ? '<th>Projeto</th>' : ''}<th>Início</th><th>Fim</th><th>Progresso</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${rows.map(({ t, level }) => `<tr><td class="strong">${'<span class="t-ind"></span>'.repeat(level)}${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}
+        <span class="small">${'<span class="t-ind"></span>'.repeat(level)}${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}${t.child_count ? ` · ${t.child_count} filha(s), calculada` : ''}</span></td>
+        ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
+        <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
+        <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 10px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
+        <button class="icon-btn" title="Editar" aria-label="Editar tarefa" data-action="edit-task" data-id="${t.id}">${ic('edit')}</button>
+        <button class="icon-btn del" title="Excluir" aria-label="Excluir tarefa" data-action="del-task" data-id="${t.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  // ------------------------------------------------------------------ marcos
+  const dayDiff = iso => dayNum(iso) - dayNum(todayIso());
+  function renderMilestones(host, list, showProject) {
+    view.msRender = () => renderMilestones(host, list, showProject);
+    const late = list.filter(isLate), done = list.filter(t => t.status === 'CONCLUIDA');
+    const tab = view.msTab;
+    const shown = (tab === 'late' ? late : tab === 'done' ? done : list).slice().sort((a, b) => a.end_date.localeCompare(b.end_date) || a.id - b.id);
+    const T = (k, label, n, red) => `<button class="ms-tab ${tab === k ? 'active' : ''}" data-action="ms-tab" data-tab="${k}">${label} <span class="cnt${red && n ? ' red' : ''}">${n}</span></button>`;
+    host.innerHTML = `<div class="ms-tabs">${T('all', 'Todos', list.length)}${T('late', 'Atrasados', late.length, true)}${T('done', 'Concluídos', done.length)}</div>` +
+      (shown.length ? shown.map(t => {
+        const d = new Date(t.end_date + 'T00:00:00Z'), n = dayDiff(t.end_date), isDone = t.status === 'CONCLUIDA', l = isLate(t);
+        const mon = d.toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase();
+        let wd = d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' }); wd = wd[0].toUpperCase() + wd.slice(1);
+        const pill = isDone ? '<span class="pill ok">Concluído</span>' : n < 0 ? `<span class="pill late">${-n} ${-n === 1 ? 'dia atrás' : 'dias atrás'}</span>` : n === 0 ? '<span class="pill soon">Hoje</span>' : `<span class="pill${n <= 7 ? ' soon' : ''}">em ${n} ${n === 1 ? 'dia' : 'dias'}</span>`;
+        return `<article class="ms ${l ? 'late' : ''} ${isDone ? 'done' : ''}">
+          <div class="ms-date"><div class="ms-mon">${mon}${d.getUTCFullYear() !== new Date().getFullYear() ? ' ' + d.getUTCFullYear() : ''}</div><div class="ms-day">${d.getUTCDate()}</div><div class="ms-wd">${wd}</div></div>
+          <button class="ms-check" title="${isDone ? 'Reabrir marco' : 'Concluir marco'}" aria-label="${isDone ? 'Reabrir marco' : 'Concluir marco'}" data-action="ms-toggle" data-id="${t.id}" data-done="${isDone ? 1 : 0}" ${t.child_count ? 'disabled' : ''}>${ic('check')}</button>
+          <div><h3>${esc(t.name)}</h3><p>${showProject ? `<a href="#/projeto/${t.project_id}"><b>${esc(t.project_name)}</b></a> · ` : ''}Responsável: ${esc(t.responsible || '—')}</p>${pbar(t.progress, isDone)}</div>
+          ${pill}<button class="icon-btn" title="Editar" aria-label="Editar marco" data-action="edit-task" data-id="${t.id}">${ic('edit')}</button></article>`;
+      }).join('') : empty('Nenhum marco aqui', 'Marcos são entregas ou pontos de controle. Marque uma tarefa como marco ou use “Novo marco”.'));
+  }
+
+  async function viewMilestones() {
+    const [tasks, projects] = await Promise.all([api('GET', 'tasks'), api('GET', 'projects')]);
+    view.tasks = tasks; view.projects = projects;
+    main.innerHTML = pageHead(['SysAttack', 'Marcos'], 'Marcos', 'Entregas e pontos de controle de todos os projetos.') + `
+      <section class="panel"><div class="panel-head"><div class="filters" style="margin:0">
+        <select id="m-p" aria-label="Projeto"><option value="">Todos os projetos</option>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+        ${btn('new-milestone', '+ Novo marco')}</div><div id="m-host"></div></section>`;
+    const draw = () => { const pj = document.getElementById('m-p').value;
+      renderMilestones(document.getElementById('m-host'), tasks.filter(t => t.is_milestone && (!pj || String(t.project_id) === pj)), true); };
+    document.getElementById('m-p').addEventListener('input', draw); draw();
+  }
+
+  // ------------------------------------------------------------------ tarefas (todas) e cronograma geral
+  async function viewTasks() {
+    const [tasks, projects] = await Promise.all([api('GET', 'tasks'), api('GET', 'projects')]);
+    view.tasks = tasks; view.projects = projects;
+    main.innerHTML = pageHead(['SysAttack', 'Tarefas'], 'Tarefas', 'Todas as atividades de todos os projetos.') + `
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Minha fila</h2>${btn('new-task', '+ Nova tarefa')}</div>
+        <div class="filters"><input id="f-q" type="search" placeholder="Buscar por tarefa ou responsável" aria-label="Buscar">
+        <select id="f-p" aria-label="Projeto"><option value="">Todos os projetos</option>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+        <select id="f-s" aria-label="Situação"><option value="">Todas as situações</option><option value="LATE">Atrasadas</option>
+        ${Object.entries(T_STATUS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div><div id="t-list"></div></section>`;
+    const apply = () => {
+      const q = document.getElementById('f-q').value.toLowerCase(), pj = document.getElementById('f-p').value, st = document.getElementById('f-s').value;
+      const f = tasks.filter(t => (!pj || String(t.project_id) === pj) && (!st || (st === 'LATE' ? isLate(t) : t.status === st))
+        && (!q || (t.name + ' ' + t.responsible).toLowerCase().includes(q)));
+      document.getElementById('t-list').innerHTML = taskTable(f, { showProject: true });
+    };
+    ['f-q', 'f-p', 'f-s'].forEach(i => document.getElementById(i).addEventListener('input', apply));
+    apply();
+  }
+
+  async function viewSchedule() {
+    const [tasks, projects] = await Promise.all([api('GET', 'tasks'), api('GET', 'projects')]);
+    view.tasks = tasks; view.projects = projects;
+    main.innerHTML = pageHead(['SysAttack', 'Cronograma'], 'Cronograma', 'Todos os projetos na linha do tempo. Clique em uma barra para abrir.') + '<section class="panel" id="g-host"></section>';
+    Gantt.render(document.getElementById('g-host'), ganttRows(projects, tasks), { key: 'all', title: 'Todos os projetos', subtitle: `${projects.length} projeto(s)`, onRow: onGanttRow });
+  }
+
+  // ------------------------------------------------------------------ financeiro
+  async function renderFinance(host) {
+    const f = await api('GET', `projects/${view.projectId}/finance`);
+    view.fin = f.entries;
+    const s = f.summary, budget = Number(f.budget) || 0, total = Number(s.total), paid = Number(s.paid), saldo = budget - total;
+    const pct = budget > 0 ? Math.min(100, Math.round(total / budget * 100)) : 0;
+    host.innerHTML = `<div class="mini-kpis">
+        <div class="mini"><span>Orçamento</span><b>${budget > 0 ? money(budget) : '—'}</b></div>
+        <div class="mini accent"><span>Lançado</span><b>${money(total)}</b></div>
+        <div class="mini"><span>Pago</span><b>${money(paid)}</b></div>
+        <div class="mini"><span>A pagar</span><b>${money(total - paid)}</b></div>
+        <div class="mini ${budget > 0 && saldo < 0 ? 'neg' : ''}"><span>Saldo do orçamento</span><b>${budget > 0 ? money(saldo) : '—'}</b></div>
+        <div class="mini"><span>Notas · Faturas</span><b style="font-size:16px">${money(s.nf_total)} · ${money(s.invoice_total)}</b></div></div>
+      ${budget > 0 ? `<div class="budget-bar"><div class="pbar"><div class="pbar-track"><div class="pbar-fill ${saldo < 0 ? '' : ''}" style="width:${pct}%;${saldo < 0 ? 'background:var(--red)' : ''}"></div></div><span style="width:auto">${total > 0 ? Math.round(total / budget * 100) : 0}% do orçamento</span></div></div>` : ''}
+      ${f.entries.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Número</th><th>Prestador / fornecedor</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${f.entries.map(e => { const over = e.status !== 'PAGO' && e.due_date && e.due_date < todayIso();
+        return `<tr><td>${badge(FIN_KIND, e.kind)}</td><td class="strong">${esc(e.number || '—')}</td>
+        <td>${esc(e.party)}${e.description ? `<span class="small">${esc(e.description)}</span>` : ''}</td><td>${fmt(e.issue_date)}</td>
+        <td class="${over ? 'late-txt' : ''}">${e.due_date ? fmt(e.due_date) : '—'}</td><td class="num strong">${money(e.amount)}</td>
+        <td>${e.status === 'PAGO' ? `<span class="badge b-green">Pago</span><span class="small">${fmt(e.paid_date)}</span>` : over ? '<span class="badge b-red">Vencido</span>' : '<span class="badge b-orange">Pendente</span>'}</td>
+        <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar lançamento" data-action="edit-fin" data-id="${e.id}">${ic('edit')}</button>
+        <button class="icon-btn del" title="Excluir" aria-label="Excluir lançamento" data-action="del-fin" data-id="${e.id}">${ic('trash')}</button></td></tr>`; }).join('')}</tbody></table></div>`
+        : empty('Nenhum lançamento', 'Lance as notas fiscais de serviço e faturas deste projeto para acompanhar os gastos contra o orçamento.')}`;
+  }
+
+  function openFinanceForm(id, kind) {
+    const e = id ? view.fin.find(x => x.id === id) : { kind: kind || 'NF_SERVICO', number: '', party: '', description: '', issue_date: todayIso(), due_date: '', amount: '', status: 'PENDENTE', paid_date: '' };
+    const form = openDialog(id ? 'Editar lançamento' : (e.kind === 'FATURA' ? 'Lançar fatura' : 'Lançar nota fiscal de serviço'), `
+      <div class="field"><label for="fk">Tipo</label><select id="fk" name="kind">${Object.entries(FIN_KIND).map(([k, v]) => `<option value="${k}"${k === e.kind ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></div>
+      <div class="field"><label for="fn">Número</label><input id="fn" name="number" maxlength="60" value="${esc(e.number)}" placeholder="Ex.: NF 1523"></div>
+      <div class="field full"><label for="fp">Prestador / fornecedor</label><input id="fp" name="party" maxlength="160" value="${esc(e.party)}" required></div>
+      <div class="field full"><label for="fd">Descrição</label><input id="fd" name="description" maxlength="500" value="${esc(e.description)}" placeholder="O que foi contratado / faturado"></div>
+      <div class="field"><label for="fi">Emissão</label><input id="fi" name="issue_date" type="date" value="${e.issue_date}" required></div>
+      <div class="field"><label for="fv">Vencimento</label><input id="fv" name="due_date" type="date" value="${e.due_date || ''}"></div>
+      <div class="field"><label for="fa">Valor (R$)</label><input id="fa" name="amount" type="number" min="0" step="0.01" value="${e.amount}" required></div>
+      <div class="field"><label for="fs">Situação</label><select id="fs" name="status"><option value="PENDENTE"${e.status === 'PENDENTE' ? ' selected' : ''}>Pendente</option><option value="PAGO"${e.status === 'PAGO' ? ' selected' : ''}>Pago</option></select></div>
+      <div class="field full" id="g-paid"><label for="fg">Data do pagamento</label><input id="fg" name="paid_date" type="date" value="${e.paid_date || todayIso()}"></div>`,
+      async d => {
+        const body = { ...d, project_id: view.projectId };
+        await api(id ? 'PUT' : 'POST', id ? 'finance/' + id : 'finance', body);
+        toast(id ? 'Lançamento salvo.' : 'Lançamento criado.');
+      });
+    const sync = () => { form.querySelector('#g-paid').hidden = form.elements.status.value !== 'PAGO'; };
+    form.elements.status.addEventListener('change', sync); sync();
+  }
+
+  // ------------------------------------------------------------------ documentos
+  async function renderDocs(host) {
+    const docs = await api('GET', `projects/${view.projectId}/documents`);
+    view.docs = docs;
+    host.innerHTML = docs.length ? `<div class="docs">${docs.map(d => { const ext = extOf(d.file_name);
+      const canDel = isAdmin() || d.uploaded_by_id === me.id;
+      return `<div class="doc"><div class="doc-ic ${ext === 'pdf' ? 'pdf' : ''}">${esc(ext.toUpperCase())}</div>
+        <div><b>${esc(d.title)}</b><small>${DOC_CAT[d.category] || 'Outro'} · ${esc(d.file_name)} · ${fileSize(d.size)} · enviado por ${esc(d.uploaded_by)} em ${fmt(d.uploaded_at.slice(0, 10))}</small>
+        ${d.description ? `<small style="display:block;margin-top:2px">${esc(d.description)}</small>` : ''}</div>
+        <div class="doc-acts">${PREVIEW.includes(ext) ? `<button class="btn btn-sm" data-action="doc-view" data-id="${d.id}">Visualizar</button>` : ''}
+        <a class="btn btn-sm" href="api/documents/${d.id}/file?download=1">Baixar</a>
+        ${canDel ? `<button class="icon-btn del" title="Excluir" aria-label="Excluir documento" data-action="del-doc" data-id="${d.id}">${ic('trash')}</button>` : ''}</div></div>`; }).join('')}</div>`
+      : empty('Nenhum documento', 'Guarde aqui PDFs, especificações, contratos, desenhos e outros arquivos do projeto (até 25 MB cada).');
+  }
+
+  function openDocForm() {
+    openDialog('Adicionar documento', `
+      <div class="field full"><label for="df">Arquivo (até 25 MB)</label><input id="df" name="file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.dwg,.dxf"></div>
+      <div class="field"><label for="dt">Título (opcional)</label><input id="dt" name="title" maxlength="160" placeholder="Se vazio, usa o nome do arquivo"></div>
+      <div class="field"><label for="dc">Categoria</label><select id="dc" name="category">${Object.entries(DOC_CAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+      <div class="field full"><label for="dd">Descrição (opcional)</label><textarea id="dd" name="description" maxlength="500" style="min-height:70px"></textarea></div>`,
+      async d => {
+        const file = d.file;
+        if (!file || !file.name) throw new Error('Selecione um arquivo.');
+        if (file.size > 25 * 1024 * 1024) throw new Error('O arquivo é maior que 25 MB.');
+        const r = await fetch(`api/projects/${view.projectId}/documents`, { method: 'POST', credentials: 'same-origin', body: file, headers: {
+          'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name),
+          'X-Doc-Title': encodeURIComponent(d.title || ''), 'X-Doc-Category': d.category, 'X-Doc-Description': encodeURIComponent(d.description || '') } });
+        const data = await r.json().catch(() => null);
+        if (r.status === 401) { location.replace('login.html'); return; }
+        if (!r.ok) throw new Error((data && data.error) || 'Falha ao enviar o arquivo.');
+        toast('Documento enviado.');
+      }, 'Enviar');
+  }
+
+  function openPreview(d) {
+    const ext = extOf(d.file_name), url = `api/documents/${d.id}/file`;
+    dlg.className = 'wide';
+    dlg.innerHTML = `<div class="dlg-head"><h2>${esc(d.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
+      ${ext === 'pdf' || ext === 'txt' ? `<iframe class="preview" src="${url}" title="${esc(d.title)}"></iframe>` : `<img class="preview" src="${url}" alt="${esc(d.title)}">`}
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><a class="btn btn-sm" href="${url}" target="_blank" rel="noopener">Abrir em nova aba</a>
+      <a class="btn btn-sm btn-primary" href="${url}?download=1">Baixar</a></div></div>`;
+    dlg.showModal();
+  }
+
+  // ------------------------------------------------------------------ Configurações IA Agent (Claude) — administrador
+  async function viewAI() {
+    const st = await api('GET', 'ai');
+    const head = pageHead(['SysAttack', 'Configurações IA Agent'], 'Configurações IA Agent', 'Conecte uma conta Anthropic para acoplar o Claude ao SysAttack.');
+    const security = `<section class="panel"><div class="panel-head"><h2 class="panel-title">Segurança e custos</h2></div><ul class="ai-list">
+      <li>A chave é guardada <b>criptografada</b> no servidor e nunca é exibida de novo — só a versão mascarada.</li>
+      <li>Somente <b>administradores</b> veem e alteram esta página.</li>
+      <li>O uso da API é <b>cobrado na conta do Claude Console</b>, separada de qualquer assinatura do Claude.ai. Use uma <b>chave exclusiva</b> para o SysAttack, com validade, e defina limite de gastos no workspace.</li>
+      <li>O servidor do SysAttack precisa de acesso à internet (<code>api.anthropic.com</code>, porta 443). Se a rede usa proxy, avise a TI.</li></ul></section>`;
+    if (!st.connected) {
+      main.innerHTML = head + `<section class="panel"><div class="panel-head"><h2 class="panel-title">Conexão com o Claude</h2><span class="ai-status"><i></i>Desconectado</span></div>
+        <div class="notice" style="margin-bottom:18px"><b>Por que chave de API e não “entrar com a conta”?</b> A Anthropic não permite usar o login do Claude.ai (Free, Pro ou Max) dentro de sistemas de terceiros.
+          A conexão oficial é feita com uma chave de API criada na conta da empresa no <b>Claude Console</b>.</div>
+        <ol class="steps"><li>Entre em <b>platform.claude.com/settings/keys</b> com a conta da empresa (com faturamento ou créditos ativos).</li>
+          <li>Clique em <b>Create key</b>, dê o nome <b>SysAttack</b> e, se possível, defina uma data de expiração.</li>
+          <li>Copie a chave (começa com <code>sk-ant-</code>) — ela só aparece uma vez — e cole abaixo.</li></ol>
+        <form id="ai-form" class="fgrid ai-form" novalidate autocomplete="off">
+          <div class="field full"><label for="ai-k">Chave de API</label><input id="ai-k" name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" required></div>
+          <div class="field full"><label for="ai-m">Modelo</label><select id="ai-m" name="model">${st.default_models.map((m, i) => `<option value="${esc(m)}"${i === 0 ? ' selected' : ''}>${esc(m)}${i === 0 ? ' (recomendado)' : ''}</option>`).join('')}</select></div>
+          <details><summary>Opções avançadas</summary><div class="field"><label for="ai-w">ID do workspace (opcional)</label><input id="ai-w" name="workspace_id" placeholder="wrkspc_… — só se a chave não for de um workspace" maxlength="80"></div></details>
+          <div class="form-error" hidden role="alert"></div>
+          <div class="form-actions" style="justify-content:flex-start"><button type="submit" class="btn btn-primary">Conectar</button></div></form></section>` + security;
+      const form = document.getElementById('ai-form'), err = form.querySelector('.form-error');
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const b = form.querySelector('[type=submit]');
+        b.disabled = true; b.textContent = 'Validando na Anthropic…'; err.hidden = true;
+        try {
+          await api('POST', 'ai/connect', { api_key: form.api_key.value.trim(), model: form.model.value, workspace_id: form.workspace_id.value.trim() });
+          form.api_key.value = '';
+          toast('Claude conectado.'); await route();
+        } catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; b.textContent = 'Conectar'; }
+      });
+      return;
+    }
+    const test = st.last_test_at ? `${st.last_test_ok ? '<span class="badge b-green">OK</span>' : '<span class="badge b-red">Falhou</span>'} <span class="small" style="display:inline">${esc(st.last_test_at.slice(0, 16))} · ${esc(st.last_test_msg || '')}</span>` : '<span class="small" style="display:inline">Ainda não testado</span>';
+    main.innerHTML = head + `<section class="panel"><div class="panel-head"><h2 class="panel-title">Conexão com o Claude</h2><span class="ai-status on"><i></i>Conectado</span></div>
+      <dl class="meta-grid" style="margin-top:0;padding-top:0;border:0">
+        <div><dt>Chave</dt><dd><code>${esc(st.key_hint)}</code></dd></div>
+        <div><dt>Conectado por</dt><dd>${esc(st.connected_by || '—')}</dd></div>
+        <div><dt>Em</dt><dd>${esc((st.connected_at || '').slice(0, 16))}</dd></div>
+        ${st.workspace_id ? `<div><dt>Workspace</dt><dd>${esc(st.workspace_id)}</dd></div>` : ''}</dl>
+      <div class="field" style="max-width:560px;margin-top:24px"><label for="ai-m">Modelo usado pelo assistente</label>
+        <div class="ai-row"><select id="ai-m" aria-label="Modelo"><option value="${esc(st.model)}" selected>${esc(st.model)}</option></select>
+        <button class="btn btn-sm" data-action="ai-save-model">Salvar modelo</button></div></div>
+      <p style="margin:22px 0 6px"><b>Último teste:</b> ${test}</p>
+      <div class="bar-actions" style="margin-top:18px"><button class="btn btn-primary" data-action="ai-test">Testar conexão</button>
+        <button class="btn btn-danger" data-action="ai-disconnect">Desconectar</button></div>
+      <p class="hint" style="margin-top:14px">“Desconectar” apaga a chave do SysAttack. Para encerrar o acesso por completo, desative ou exclua também a chave no Claude Console.</p></section>` + security;
+    api('GET', 'ai/models').then(r => {   // lista os modelos que a chave realmente enxerga
+      const sel = document.getElementById('ai-m'); if (!sel) return;
+      const ids = r.models.includes(st.model) ? r.models : [st.model, ...r.models];
+      sel.innerHTML = ids.map(m => `<option value="${esc(m)}"${m === st.model ? ' selected' : ''}>${esc(m)}</option>`).join('');
+    }).catch(() => {});
+  }
+
+  // ------------------------------------------------------------------ usuários
+  async function viewUsers() {
+    const list = await api('GET', 'users');
+    view.users = list;
+    const sub = isAdmin() ? 'Quem pode entrar no sistema. Bloqueie ou ative acessos quando necessário.'
+                          : 'Seus dados de acesso. Para trocar a senha, enviaremos um código de confirmação ao seu e-mail.';
+    main.innerHTML = pageHead(['SysAttack', 'Usuários'], isAdmin() ? 'Usuários' : 'Meu usuário', sub) + `
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">${isAdmin() ? 'Acessos cadastrados' : 'Dados do acesso'}</h2>
+        ${isAdmin() ? '<button class="btn btn-primary btn-sm" data-action="new-user">+ Novo usuário</button>' : ''}</div>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${list.map(u => { const self = u.id === me.id;
+          return `<tr><td class="strong">${esc(u.name)}${self ? '<span class="small">Você</span>' : ''}</td><td>${esc(u.email)}</td>
+          <td><span class="badge ${u.role === 'ADMIN' ? 'b-dark' : 'b-grey'}">${ROLES[u.role]}</span></td>
+          <td>${u.active ? '<span class="badge b-green">Ativo</span>' : '<span class="badge b-red">Bloqueado</span>'}</td>
+          <td class="acts">
+            ${self ? `<button class="icon-btn" title="Alterar senha" aria-label="Alterar senha" data-action="change-password">${ic('key')}</button>` : ''}
+            ${isAdmin() ? `<button class="icon-btn" title="Editar" aria-label="Editar usuário" data-action="edit-user" data-id="${u.id}">${ic('edit')}</button>
+              ${self ? '' : `<button class="icon-btn" title="${u.active ? 'Bloquear acesso' : 'Ativar acesso'}" aria-label="${u.active ? 'Bloquear' : 'Ativar'} usuário" data-action="toggle-user" data-id="${u.id}" data-active="${u.active ? 1 : 0}">${ic(u.active ? 'lock' : 'unlock')}</button>
+              <button class="icon-btn del" title="Excluir" aria-label="Excluir usuário" data-action="del-user" data-id="${u.id}">${ic('trash')}</button>`}` : ''}
+          </td></tr>`; }).join('')}</tbody></table></div></section>`;
+  }
+
+  function openUserForm(id) {
+    const u = id ? view.users.find(x => x.id === id) : { name: '', email: '', role: 'USER' };
+    const form = openDialog(id ? 'Editar usuário' : 'Novo usuário', `
+      <div class="field full"><label for="un">Nome completo</label><input id="un" name="name" maxlength="120" value="${esc(u.name)}" required></div>
+      <div class="field"><label for="ue">E-mail (usado no login)</label><input id="ue" name="email" type="email" maxlength="120" value="${esc(u.email)}" ${id ? 'disabled' : 'required'}></div>
+      <div class="field"><label for="ur">Perfil</label><select id="ur" name="role"><option value="USER"${u.role === 'USER' ? ' selected' : ''}>Usuário</option><option value="ADMIN"${u.role === 'ADMIN' ? ' selected' : ''}>Administrador</option></select></div>
+      <div class="field full"><label for="up">${id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial'}</label><input id="up" name="password" type="password" autocomplete="new-password" ${id ? '' : 'required'}></div>
+      <div class="full">${SA.rulesHtml()}<p class="hint">Combine a senha com a pessoa por um canal seguro. Depois, cada um pode trocá-la com confirmação por e-mail.</p></div>`,
+      async d => {
+        if (id) { delete d.email; if (!d.password) delete d.password; }
+        await api(id ? 'PUT' : 'POST', id ? 'users/' + id : 'users', d);
+        toast(id ? 'Usuário salvo.' : 'Usuário criado.');
+      });
+    SA.bindRules(form.elements.password, form);
+  }
+
+  function openPasswordForm() {
+    const form = openDialog('Alterar senha', `
+      <div class="full"><p class="hint">Por segurança, enviaremos um código de 6 dígitos para <b>${esc(me.email)}</b>. Ele vale por 15 minutos.</p></div>
+      <div class="field full"><label for="pc">Código recebido por e-mail</label>
+        <div class="code-row"><input id="pc" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
+        <button type="button" class="btn btn-sm" id="send-code">Enviar código</button></div>
+        <p class="hint" id="code-msg" aria-live="polite"></p></div>
+      <div class="field full"><label for="pn">Nova senha</label><input id="pn" name="password" type="password" autocomplete="new-password" required></div>
+      <div class="full">${SA.rulesHtml()}</div>
+      <div class="field full"><label for="pr">Repita a nova senha</label><input id="pr" name="repeat" type="password" autocomplete="new-password" required></div>`,
+      async d => {
+        if (d.password !== d.repeat) throw new Error('As senhas não conferem.');
+        await api('POST', 'me/password', { code: d.code.trim(), password: d.password });
+        toast('Senha alterada.');
+      });
+    SA.bindRules(form.elements.password, form);
+    const b = form.querySelector('#send-code'), msg = form.querySelector('#code-msg');
+    b.addEventListener('click', async () => {
+      b.disabled = true; msg.className = 'hint'; msg.textContent = 'Enviando…';
+      try {
+        const r = await api('POST', 'me/password-code', {});
+        msg.className = 'hint msg-ok'; msg.textContent = `Código enviado para ${r.email}. Confira também o spam.`;
+        form.elements.code.focus();
+        let left = 60;
+        const t = setInterval(() => {
+          if (!dlg.open || --left <= 0) { clearInterval(t); b.disabled = false; b.textContent = 'Reenviar código'; }
+          else b.textContent = `Reenviar em ${left}s`;
+        }, 1000);
+      } catch (ex) { msg.className = 'hint msg-err'; msg.textContent = ex.message; b.disabled = false; }
+    });
+  }
+
+  // ------------------------------------------------------------------ formulários: diálogo, projeto, tarefa
+  function openDialog(title, bodyHtml, onSubmit, submitLabel = 'Salvar') {
+    dlg.className = '';
+    dlg.innerHTML = `<div class="dlg-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div>
+      <div class="dlg-body"><form class="fgrid" novalidate>${bodyHtml}<div class="form-error" hidden role="alert"></div>
+      <div class="form-actions"><button type="button" class="btn" data-action="close">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div></form></div>`;
+    const form = dlg.querySelector('form'), err = dlg.querySelector('.form-error');
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const b = form.querySelector('[type=submit]');
+      b.disabled = true; err.hidden = true;
+      try { await onSubmit(Object.fromEntries(new FormData(form))); dlg.close(); await route(); }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; }
+    });
+    dlg.showModal();
+    return form;
+  }
+  dlg.addEventListener('close', () => { dlg.className = ''; });
+
+  const opts = (map, sel) => Object.entries(map).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${v[0]}</option>`).join('');
+
+  async function openProjectForm(id) {
+    const p = id ? await api('GET', 'projects/' + id) : { name: '', owner: me.name, status: 'PLANEJAMENTO', scope: '', budget: '', start_date: todayIso(), end_date: addDays(todayIso(), 30) };
+    openDialog(id ? 'Editar projeto' : 'Novo projeto', `
+      <div class="field full"><label for="n">Nome do projeto</label><input id="n" name="name" maxlength="160" value="${esc(p.name)}" required></div>
+      <div class="field"><label for="o">Responsável</label><input id="o" name="owner" maxlength="120" value="${esc(p.owner)}"></div>
+      <div class="field"><label for="s">Situação</label><select id="s" name="status">${opts(P_STATUS, p.status)}</select></div>
+      <div class="field"><label for="a">Início</label><input id="a" name="start_date" type="date" value="${p.start_date}" required></div>
+      <div class="field"><label for="b">Fim</label><input id="b" name="end_date" type="date" value="${p.end_date}" required></div>
+      <div class="field full"><label for="bu">Orçamento (R$)</label><input id="bu" name="budget" type="number" min="0" step="0.01" value="${Number(p.budget) > 0 ? p.budget : ''}" placeholder="Opcional — usado no controle financeiro"></div>
+      <div class="field full"><label for="c">Escopo inicial</label><textarea id="c" name="scope" maxlength="4000" placeholder="O que será entregue, o que está fora do escopo e como saberemos que acabou.">${esc(p.scope)}</textarea></div>`,
+      async d => {
+        const saved = await api(id ? 'PUT' : 'POST', id ? 'projects/' + id : 'projects', d);
+        toast(id ? 'Projeto salvo.' : 'Projeto criado. Agora adicione as tarefas.');
+        if (!id) location.hash = '#/projeto/' + saved.id;
+      });
+  }
+
+  /** preset: { projectId, parentId, milestone }. allTasks: tarefas conhecidas (para pai e predecessora). */
+  function openTaskForm(allTasks, taskId, preset = {}) {
+    const t0 = taskId ? allTasks.find(x => x.id === taskId) : null;
+    const projects = view.projects || [];
+    const projectId = t0 ? t0.project_id : (preset.projectId || null);
+    const t = t0 || { name: '', description: '', responsible: '', progress: 0, status: 'A_FAZER', depends_on: null, parent_id: preset.parentId || null,
+      is_milestone: !!preset.milestone, project_id: projectId || '' };
+    if (!t0) {
+      const pr = (view.project && view.project.id === projectId) ? view.project : projects.find(x => x.id === projectId);
+      const today = todayIso(), inside = pr && today >= pr.start_date && today <= pr.end_date;
+      t.start_date = inside || !pr ? today : pr.start_date;
+      t.end_date = addDays(t.start_date, preset.milestone ? 0 : 6);
+    }
+    const hasKids = !!(t0 && t0.child_count > 0);
+    const projSel = !taskId && !projectId
+      ? `<div class="field full"><label for="tp">Projeto</label><select id="tp" name="project_id" required>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>` : '';
+    const form = openDialog(taskId ? (t.is_milestone ? 'Editar marco' : 'Editar tarefa') : (preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
+      <div class="field full"><label for="tn">Nome</label><input id="tn" name="name" maxlength="160" value="${esc(t.name)}" required></div>
+      <div class="field full"><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone ? 'checked' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
+      <div class="field"><label for="tpar">Tarefa pai</label><select id="tpar" name="parent_id" ${hasKids ? 'disabled' : ''}></select></div>
+      <div class="field"><label for="td">Depende de</label><select id="td" name="depends_on"></select></div>
+      <div class="field"><label for="tr">Responsável</label><input id="tr" name="responsible" maxlength="120" value="${esc(t.responsible)}"></div>
+      <div class="field"><label for="ts">Situação</label><select id="ts" name="status" ${hasKids ? 'disabled' : ''}>${opts(T_STATUS, t.status)}</select></div>
+      <div class="field"><label for="ta" id="l-start">Início</label><input id="ta" name="start_date" type="date" value="${t.start_date}" ${hasKids ? 'disabled' : 'required'}></div>
+      <div class="field" id="g-end"><label for="tb">Fim (prazo)</label><input id="tb" name="end_date" type="date" value="${t.end_date}" ${hasKids ? 'disabled' : 'required'}></div>
+      <div class="field full"><label for="tg">Progresso</label><div class="range-row"><input id="tg" name="progress" type="range" min="0" max="100" step="5" value="${t.progress}" ${hasKids ? 'disabled' : ''}><output id="tgo">${t.progress}%</output></div></div>
+      ${hasKids ? '<p class="hint full" style="grid-column:1/-1">Esta tarefa tem filhas: início, fim, progresso e situação são calculados automaticamente a partir delas.</p>' : ''}
+      <div class="field full"><label for="tx">Descrição</label><textarea id="tx" name="description" maxlength="4000" style="min-height:80px">${esc(t.description)}</textarea></div>`,
+      async d => {
+        const body = { ...d, is_milestone: !!d.is_milestone, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
+        if (taskId) delete body.project_id;
+        await api(taskId ? 'PUT' : 'POST', taskId ? 'tasks/' + taskId : 'tasks', body);
+        toast(taskId ? 'Salvo.' : 'Criado.');
+      });
+    const el = form.elements, ms = el.is_milestone, rng = el.progress, st = el.status;
+    const currentProject = () => taskId || projectId ? t.project_id || projectId : Number(el.project_id.value);
+    const fillSelects = () => {
+      const pid = currentProject();
+      const same = allTasks.filter(x => x.project_id === pid && x.id !== taskId);
+      el.parent_id.innerHTML = '<option value="">Nenhuma (tarefa principal)</option>' + same.filter(x => !x.parent_id)
+        .map(x => `<option value="${x.id}"${x.id === t.parent_id ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+      el.depends_on.innerHTML = '<option value="">Nenhuma</option>' + same.map(x => `<option value="${x.id}"${x.id === t.depends_on ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+    };
+    fillSelects();
+    if (el.project_id && !taskId && !projectId) el.project_id.addEventListener('change', () => { t.parent_id = null; fillSelects(); });
+    const syncMs = () => { form.querySelector('#g-end').hidden = ms.checked; form.querySelector('#l-start').textContent = ms.checked ? 'Data do marco' : 'Início'; };
+    ms.addEventListener('change', syncMs); syncMs();
+    rng.addEventListener('input', () => {
+      form.querySelector('#tgo').textContent = rng.value + '%';
+      if (rng.value === '100') st.value = 'CONCLUIDA';
+      else if (st.value === 'CONCLUIDA') st.value = 'EM_ANDAMENTO';
+      else if (rng.value > 0 && st.value === 'A_FAZER') st.value = 'EM_ANDAMENTO';
+    });
+    st.addEventListener('change', () => { if (st.value === 'CONCLUIDA') { rng.value = 100; form.querySelector('#tgo').textContent = '100%'; } });
+  }
+
+  // ------------------------------------------------------------------ ações (delegação de eventos)
+  document.addEventListener('click', async e => {
+    const go = e.target.closest('[data-go]');
+    const el = e.target.closest('[data-action]');
+    if (go && !el && !e.target.closest('a')) { location.hash = go.dataset.go; return; }
+    if (!el) return;
+    const id = Number(el.dataset.id);
+    const inProject = view.name === 'projeto';
+    try {
+      switch (el.dataset.action) {
+        case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
+        case 'close': dlg.close(); break;
+        case 'change-password': openPasswordForm(); break;
+        case 'new-user': openUserForm(); break;
+        case 'edit-user': openUserForm(id); break;
+        case 'toggle-user': {
+          const active = el.dataset.active === '1';
+          if (!active || confirm('Bloquear este usuário? Ele perde o acesso imediatamente.')) {
+            await api('PUT', `users/${id}/active`, { active: !active });
+            toast(active ? 'Usuário bloqueado.' : 'Usuário ativado.'); await route();
+          }
+          break;
+        }
+        case 'del-user':
+          if (confirm('Excluir este usuário? Ele perde o acesso imediatamente.')) { await api('DELETE', 'users/' + id); toast('Usuário excluído.'); await route(); }
+          break;
+        case 'new-project': openProjectForm(); break;
+        case 'edit-project': e.stopPropagation(); openProjectForm(id); break;
+        case 'del-project':
+          e.stopPropagation();
+          if (confirm('Excluir este projeto, suas tarefas, lançamentos e documentos? Esta ação não pode ser desfeita.')) { await api('DELETE', 'projects/' + id); toast('Projeto excluído.'); location.hash = '#/projetos'; await route(); }
+          break;
+        case 'new-task': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null }); break;
+        case 'new-milestone': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null, milestone: true }); break;
+        case 'new-subtask': {
+          const parent = view.tasks.find(x => x.id === id);
+          openTaskForm(view.tasks, null, { projectId: parent.project_id, parentId: id });
+          break;
+        }
+        case 'edit-task': openTaskForm(view.tasks, id); break;
+        case 'del-task': {
+          const t = view.tasks.find(x => x.id === id);
+          if (confirm(t && t.child_count > 0 ? `Excluir esta tarefa e as ${t.child_count} tarefa(s) filha(s)?` : 'Excluir esta tarefa?')) { await api('DELETE', 'tasks/' + id); toast('Tarefa excluída.'); await route(); }
+          break;
+        }
+        case 'tab': view.tab = el.dataset.tab; document.querySelectorAll('.tabs .tab').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
+        case 'ms-tab': view.msTab = el.dataset.tab; if (view.msRender) view.msRender(); break;
+        case 'ms-toggle': await api('PUT', `tasks/${id}/done`, { done: el.dataset.done !== '1' }); await route(); break;
+        case 'new-fin': openFinanceForm(null, el.dataset.kind); break;
+        case 'edit-fin': openFinanceForm(id); break;
+        case 'del-fin':
+          if (confirm('Excluir este lançamento?')) { await api('DELETE', 'finance/' + id); toast('Lançamento excluído.'); await route(); }
+          break;
+        case 'ai-test': {
+          el.disabled = true; el.textContent = 'Testando…';
+          try { const r = await api('POST', 'ai/test', {}); toast(`Conexão OK com ${r.model}.`); }
+          catch (ex) { toast(ex.message); }
+          await route(); break;
+        }
+        case 'ai-save-model': await api('PUT', 'ai', { model: document.getElementById('ai-m').value }); toast('Modelo salvo.'); await route(); break;
+        case 'ai-disconnect':
+          if (confirm('Desconectar o Claude do SysAttack? A chave salva será apagada daqui.\n\nPara encerrar o acesso por completo, desative ou exclua também a chave no Claude Console.')) {
+            await api('DELETE', 'ai'); toast('Claude desconectado.'); await route();
+          }
+          break;
+        case 'new-doc': openDocForm(); break;
+        case 'doc-view': openPreview(view.docs.find(x => x.id === id)); break;
+        case 'del-doc':
+          if (confirm('Excluir este documento?')) { await api('DELETE', 'documents/' + id); toast('Documento excluído.'); await route(); }
+          break;
+      }
+    } catch (ex) { toast(ex.message); }
+  });
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+  // ------------------------------------------------------------------ rotas
+  async function route() {
+    const [, name = 'visao-geral', arg] = location.hash.split('/');
+    document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === name || (name === 'projeto' && a.dataset.route === 'projetos')));
+    view.name = name;
+    const y = window.scrollY;
+    try {
+      if (name === 'projetos') await viewProjects();
+      else if (name === 'projeto') await viewProject(Number(arg));
+      else if (name === 'tarefas') await viewTasks();
+      else if (name === 'marcos') await viewMilestones();
+      else if (name === 'cronograma') await viewSchedule();
+      else if (name === 'usuarios') await viewUsers();
+      else if (name === 'ia' && isAdmin()) await viewAI();
+      else await viewDashboard();
+    } catch (ex) {
+      main.innerHTML = pageHead(['SysAttack'], 'Algo deu errado', '') + `<div class="panel">${empty('Não foi possível carregar esta tela', esc(ex.message))}</div>`;
+    }
+    window.scrollTo(0, y);
+  }
+
+  window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+  (async () => {
+    try {
+      me = await api('GET', 'me'); // sem sessão (401) o api() já redireciona para login.html
+    } catch (ex) {
+      if (/Sessão expirada/.test(ex.message)) return;
+      main.innerHTML = '<section class="panel"><h2 class="panel-title">Servidor indisponível</h2>' +
+        `<p>Não foi possível falar com a API do SysAttack: <b>${esc(ex.message)}</b></p>` +
+        '<p class="hint">Confirme que o Tomcat está ativo e que a versão do Tomcat corresponde ao .war gerado (Tomcat 9: <code>mvn clean package</code>; Tomcat 10/11: <code>mvn clean package -Pjakarta</code>).</p>' +
+        '<p><a class="btn btn-sm" href="login.html">Ir para o login</a></p></section>';
+      return;
+    }
+    if (isAdmin()) document.querySelector('[data-route="ia"]').hidden = false;
+    route();
+  })();
+})();

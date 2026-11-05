@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>br.com.sysattack</groupId>
+  <artifactId>sysattack</artifactId>
+  <version>1.0.0</version>
+  <packaging>war</packaging>
+  <name>SysAttack</name>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- pasta do código Java; o perfil jakarta troca por uma cópia convertida -->
+    <java.src>src/main/java</java.src>
+    <!-- nome do .war: mvn ... -Dwar.name=ROOT publica na raiz (sem /sysattack na URL) -->
+    <war.name>sysattack</war.name>
+    <!-- biblioteca de e-mail: javax.mail (Tomcat 9) ou jakarta.mail (perfil jakarta) -->
+    <mail.artifact>javax.mail</mail.artifact>
+    <mail.version>1.6.2</mail.version>
+  </properties>
+
+  <dependencies>
+    <!-- Tomcat 9 usa o namespace javax.servlet -->
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>4.0.1</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Banco de dados local embutido (arquivo) -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.2.224</version>
+    </dependency>
+    <!-- Envio de e-mail (SMTP) -->
+    <dependency>
+      <groupId>com.sun.mail</groupId>
+      <artifactId>${mail.artifact}</artifactId>
+      <version>${mail.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.10.1</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${war.name}</finalName>
+    <sourceDirectory>${java.src}</sourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
+        <configuration>
+          <failOnMissingWebXml>false</failOnMissingWebXml>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Tomcat 10.1 / 11 (jakarta.servlet): mvn clean package -Pjakarta
+         Copia o código-fonte, troca "javax.servlet" por "jakarta.servlet" e compila a cópia. -->
+    <profile>
+      <id>jakarta</id>
+      <properties>
+        <java.src>${project.build.directory}/jakarta-src</java.src>
+        <mail.artifact>jakarta.mail</mail.artifact>
+        <mail.version>2.0.1</mail.version>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>jakarta.servlet</groupId>
+          <artifactId>jakarta.servlet-api</artifactId>
+          <version>6.0.0</version>
+          <scope>provided</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <phase>generate-sources</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <copy todir="${project.build.directory}/jakarta-src">
+                      <fileset dir="${project.basedir}/src/main/java"/>
+                    </copy>
+                    <replace dir="${project.build.directory}/jakarta-src" token="javax.servlet" value="jakarta.servlet">
+                      <include name="**/*.java"/>
+                    </replace>
+                    <replace dir="${project.build.directory}/jakarta-src" token="javax.mail" value="jakarta.mail">
+                      <include name="**/*.java"/>
+                    </replace>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>
