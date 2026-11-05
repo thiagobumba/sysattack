@@ -11,6 +11,8 @@
     return data;
   };
 
+  fetch('version.json', { cache: 'no-store' }).then(r => r.json()).then(v => { $('ver').textContent = 'SysAttack ' + v.version + (v.stage ? ' - ' + v.stage : ''); }).catch(() => {});
+
   async function boot() {
     try {
       // já está logado? vai direto ao sistema

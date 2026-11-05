@@ -677,6 +677,7 @@
     document.getElementById('who-name').textContent = me.name;
     document.getElementById('who-role').textContent = ROLES[me.role] || me.role;
     document.getElementById('who').hidden = false;
+    SA.versionLabel().then(v => { if (v) document.getElementById('ver').textContent = 'SysAttack ' + v; });
     route();
   })();
 })();
