@@ -95,3 +95,13 @@ Menu **Configurações de E-mail** (somente administradores):
   Destinatários: lista de e-mails e, opcionalmente, o responsável (quando o nome dele é igual ao de um usuário ativo).
   Assunto aceita `{evento}`, `{projeto}` e `{item}`.
 - **Histórico** dos envios (90 dias) com sucesso ou erro. Os envios acontecem em segundo plano e uma falha de e-mail nunca impede a operação no sistema.
+
+## Atualizar a máquina após cada nova versão
+
+Na pasta do repositório (onde está a pasta `.git`), no PowerShell:
+
+```
+.\atualizar.ps1 nome-da-branch
+```
+
+O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`.
