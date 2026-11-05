@@ -637,8 +637,11 @@
       else if (name === 'cronograma') await viewSchedule();
       else if (name === 'usuarios') await viewUsers();
       else if (name === 'spot') await Spot.view(arg);
-      else if (name === 'email' && isAdmin()) await Mail.view();
-      else if (name === 'ia' && isAdmin()) await viewAI();
+      else if ((name === 'email' || name === 'ia') && !isAdmin()) {
+        main.innerHTML = pageHead(['SysAttack'], 'Acesso restrito', '') + `<div class="panel">${empty('Esta área é só para administradores', 'Peça a um administrador para ajustar esta configuração.')}</div>`;
+      }
+      else if (name === 'email') await Mail.view();
+      else if (name === 'ia') await viewAI();
       else await viewDashboard();
     } catch (ex) {
       main.innerHTML = pageHead(['SysAttack'], 'Algo deu errado', '') + `<div class="panel">${empty('Não foi possível carregar esta tela', esc(ex.message))}</div>`;
@@ -659,7 +662,8 @@
         '<p><a class="btn btn-sm" href="login.html">Ir para o login</a></p></section>';
       return;
     }
-    if (isAdmin()) { document.querySelector('[data-route="ia"]').hidden = false; document.querySelector('[data-route="email"]').hidden = false; }
+    // menus de configuração: só administradores; para os demais o item nem existe na página (a API também recusa)
+    document.querySelectorAll('[data-route="ia"], [data-route="email"]').forEach(a => { if (isAdmin()) a.hidden = false; else a.remove(); });
     route();
   })();
 })();
