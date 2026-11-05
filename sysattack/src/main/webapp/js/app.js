@@ -72,6 +72,28 @@
     return rows;
   }
 
+  // ------------------------------------------------------------------ indicadores de custo e prazo (EVM)
+  const idxClass = v => v == null ? '' : v >= 1 ? 'ok' : v >= 0.9 ? 'warn' : 'bad';
+  const idxFmt = v => v == null ? '—' : Number(v).toFixed(2).replace('.', ',');
+  function evmPanel(p) {
+    const e = p.evm;
+    if (!e) return '';
+    if (!e.available) {
+      const msg = e.reason === 'NO_BUDGET' ? 'Informe o orçamento do projeto para ver a projeção de custo.' : 'Cadastre tarefas para calcular os indicadores de prazo e custo.';
+      return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b></div><p class="hint" style="margin:6px 0 0">${msg}</p></div>`;
+    }
+    const over = e.eac != null && e.eac > e.bac, noCost = !(e.ac > 0);
+    const eacTxt = e.eac == null ? 'Sem projeção' : money(e.eac);
+    return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b><span>${e.reliable ? '' : 'Projeção ainda pouco confiável: o progresso está abaixo de 10%.'}</span></div>
+      <div class="evm-grid">
+        <div class="evm-card ${idxClass(e.spi)}" title="SPI = valor realizado ÷ valor previsto até hoje. Abaixo de 1 indica atraso."><small>Prazo (SPI)</small><b>${idxFmt(e.spi)}</b><span>${e.spi == null ? 'Ainda sem previsto' : e.spi >= 1 ? 'No ritmo ou à frente' : e.spi >= 0.9 ? 'Levemente atrasado' : 'Atrasado'}</span></div>
+        <div class="evm-card ${noCost ? '' : idxClass(e.cpi)}" title="CPI = valor realizado ÷ custo lançado. Abaixo de 1 indica que cada R$ 1 gasto entregou menos de R$ 1 de trabalho."><small>Custo (CPI)</small><b>${noCost ? '—' : idxFmt(e.cpi)}</b><span>${noCost ? 'Nenhum custo lançado' : e.cpi >= 1 ? 'Dentro do orçamento' : e.cpi >= 0.9 ? 'Levemente acima' : 'Gastando mais que entrega'}</span></div>
+        <div class="evm-card ${over ? 'bad' : 'ok'}" title="EAC = orçamento ÷ CPI. Quanto o projeto deve custar no fim se o ritmo atual continuar."><small>Custo previsto no término (EAC)</small><b>${eacTxt}</b><span>Orçamento ${money(e.bac)}</span></div>
+        <div class="evm-card ${e.vac != null && e.vac < 0 ? 'bad' : 'ok'}" title="Desvio no término = orçamento − EAC. Negativo indica estouro projetado."><small>Desvio no término</small><b>${e.vac == null ? '—' : (e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}</b><span>${e.vac == null ? '' : e.vac < 0 ? 'Estouro projetado' : 'Dentro do orçamento'}</span></div>
+      </div>
+      <p class="hint" style="margin:10px 0 0">Previsto até hoje ${money(e.pv)} (${e.planned_pct}%) · Realizado ${money(e.ev)} (${e.actual_pct}%) · Custo lançado ${money(e.ac)}${over && e.reliable ? ' · <b class="late-txt">Atenção: a projeção passa do orçamento.</b>' : ''}</p></div>`;
+  }
+
   // ------------------------------------------------------------------ visão geral
   function portfolioPanel(list) {
     const n = lv => list.filter(p => p.health.level === lv).length;
@@ -163,7 +185,8 @@
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Fim</dt><dd>${fmt(p.end_date)}</dd></div>
         <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
         <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl>
-        ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}</section>
+        ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
+        ${evmPanel(p)}</section>
       <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
         ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
         <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;

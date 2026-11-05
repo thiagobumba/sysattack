@@ -42,8 +42,9 @@ final class HealthCalc {
         }
         for (Map<String, Object> p : projects) {
             long id = ((Number) p.get("id")).longValue();
-            p.put("health", compute(p, tasks.getOrDefault(id, List.of()), changes.getOrDefault(id, List.of()),
-                    cost.getOrDefault(id, BigDecimal.ZERO), today));
+            BigDecimal spent = cost.getOrDefault(id, BigDecimal.ZERO);
+            p.put("evm", evm(p, tasks.getOrDefault(id, List.of()), spent, today));
+            p.put("health", compute(p, tasks.getOrDefault(id, List.of()), changes.getOrDefault(id, List.of()), spent, today));
         }
     }
 
@@ -98,6 +99,11 @@ final class HealthCalc {
             lvl = ratio > CUSTO_VERMELHO ? "VERMELHO" : ratio > CUSTO_AMARELO ? "AMARELO" : "VERDE";
             detail = Math.round(ratio * 100) + "% do orçamento gasto";
             h.put("budget_used", Math.round(ratio * 100));
+            Map<String, Object> ev = evm(p, tasks, spent, today);
+            if (lvl.equals("VERDE") && Boolean.TRUE.equals(ev.get("projects_overrun"))) {
+                lvl = "AMARELO";
+                detail += "; projeção de término acima do orçamento (EAC " + Math.round(((Number) ev.get("eac")).doubleValue() / budget.doubleValue() * 100) + "% do orçamento)";
+            }
             worst = Math.max(worst, add(dims, "custo", "Custo", lvl, detail));
         } else {
             add(dims, "custo", "Custo", "NA", "Sem orçamento definido");
@@ -130,6 +136,50 @@ final class HealthCalc {
         h.put("reasons", reasons);
         return h;
     }
+
+    /** Progresso mínimo (em %) para a projeção de custo ser considerada confiável. */
+    static final double EVM_MIN_PROGRESS = 10;
+
+    /**
+     * Indicadores de valor agregado (EVM). BAC = orçamento; PV = BAC x previsto%; EV = BAC x realizado%; AC = custo lançado.
+     * SPI = EV/PV; CPI = EV/AC; EAC = BAC/CPI; VAC = BAC - EAC; ETC = EAC - AC.
+     * Previsto% e realizado% usam a mesma regra dos relatórios (média ponderada pela duração das tarefas, sem marcos).
+     */
+    static Map<String, Object> evm(Map<String, Object> p, List<Map<String, Object>> tasks, BigDecimal spent, LocalDate today) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        BigDecimal budget = p.get("budget") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(p.get("budget")));
+        m.put("available", false);
+        if (budget.signum() <= 0) { m.put("reason", "NO_BUDGET"); return m; }
+        double pv = 0, rv = 0, w = 0;
+        for (Map<String, Object> t : tasks) {
+            if (Boolean.TRUE.equals(t.get("is_milestone"))) continue;
+            LocalDate s = LocalDate.parse(String.valueOf(t.get("start_date"))), e = LocalDate.parse(String.valueOf(t.get("end_date")));
+            double dur = Math.max(1, ChronoUnit.DAYS.between(s, e) + 1);
+            double prev = Math.min(1, Math.max(0, (ChronoUnit.DAYS.between(s, today) + 1) / dur)) * 100;
+            w += dur; pv += prev * dur; rv += ((Number) t.get("progress")).doubleValue() * dur;
+        }
+        if (w == 0) { m.put("reason", "NO_TASKS"); return m; }
+        double planned = pv / w, actual = rv / w, bac = budget.doubleValue(), ac = spent.doubleValue();
+        double pvMoney = bac * planned / 100, evMoney = bac * actual / 100;
+        m.put("available", true);
+        m.put("bac", round2(bac)); m.put("pv", round2(pvMoney)); m.put("ev", round2(evMoney)); m.put("ac", round2(ac));
+        m.put("planned_pct", Math.round(planned)); m.put("actual_pct", Math.round(actual));
+        if (pvMoney > 0) m.put("spi", round2(evMoney / pvMoney));
+        boolean reliable = actual >= EVM_MIN_PROGRESS;
+        m.put("reliable", reliable);
+        if (ac > 0 && evMoney > 0) {
+            double cpi = evMoney / ac, eac = bac / cpi;
+            m.put("cpi", round2(cpi)); m.put("eac", round2(eac)); m.put("vac", round2(bac - eac)); m.put("etc", round2(eac - ac));
+            m.put("projects_overrun", reliable && eac > bac);
+        } else if (ac <= 0) {
+            m.put("eac", round2(bac)); m.put("vac", 0.0); m.put("etc", round2(bac)); m.put("projects_overrun", false);
+        } else { // custo lançado sem progresso: não dá para projetar
+            m.put("cpi", 0.0); m.put("projects_overrun", reliable);
+        }
+        return m;
+    }
+
+    private static double round2(double v) { return Math.round(v * 100.0) / 100.0; }
 
     private static Map<String, Object> neutral(Map<String, Object> h, String level, String label) {
         h.put("level", level); h.put("label", label); h.put("dims", List.of()); h.put("reasons", List.of());

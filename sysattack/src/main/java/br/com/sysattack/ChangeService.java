@@ -63,7 +63,9 @@ final class ChangeService {
         if (!m.equals("GET")) throw new ApiException(405, "Operação não suportada.");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("today", LocalDate.now().toString());
-        out.put("projects", Db.query("SELECT id, name, status, owner, start_date, end_date, budget FROM projects ORDER BY start_date, id"));
+        List<Map<String, Object>> projects = Db.query("SELECT id, name, status, owner, start_date, end_date, budget FROM projects ORDER BY start_date, id");
+        HealthCalc.attach(projects); // acrescenta "health" e "evm" (indicadores de custo e prazo)
+        out.put("projects", projects);
         out.put("tasks", Db.query("SELECT t.id, t.project_id, t.name, t.parent_id, t.is_milestone, t.responsible, t.start_date, t.end_date, t.progress, t.status,"
                 + " (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) child_count FROM tasks t ORDER BY t.start_date, t.id"));
         out.put("finance", Db.query("SELECT project_id, kind, status, COALESCE(SUM(amount), 0) total, COUNT(*) qty FROM finance_entries GROUP BY project_id, kind, status"));

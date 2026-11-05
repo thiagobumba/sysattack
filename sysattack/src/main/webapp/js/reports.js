@@ -159,6 +159,22 @@ const Rep = (() => {
   // ------------------------------------------------------------------ página
   const panel = (title, sub, body) => `<section class="panel"><div class="panel-head"><div><h2 class="panel-title">${title}</h2>${sub ? `<p class="hint" style="margin:4px 0 0">${sub}</p>` : ''}</div></div>${body}</section>`;
 
+  function repEac(projects) {
+    const rows = projects.filter(p => p.status !== 'PLANEJAMENTO');
+    if (!rows.length) return empty('Sem projetos em andamento', 'A projeção aparece quando o projeto sai do planejamento.');
+    const idx = v => v == null ? '—' : Number(v).toFixed(2).replace('.', ',');
+    const cls = v => v == null ? '' : v >= 1 ? '' : v >= 0.9 ? 'warn-txt' : 'late-txt';
+    return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Projeto</th><th class="num">Orçamento</th><th class="num">Custo lançado</th><th class="num">SPI</th><th class="num">CPI</th><th class="num">Projeção no término (EAC)</th><th class="num">Desvio</th></tr></thead><tbody>
+      ${rows.map(p => { const e = p.evm || {};
+        if (!e.available) return `<tr><td class="strong">${esc(p.name)}</td><td colspan="6" class="small" style="color:var(--muted)">${e.reason === 'NO_BUDGET' ? 'Sem orçamento definido.' : 'Sem tarefas para calcular.'}</td></tr>`;
+        const vac = e.vac;
+        return `<tr><td class="strong">${esc(p.name)}${e.reliable ? '' : '<span class="small">Progresso abaixo de 10%: projeção pouco confiável</span>'}</td>
+          <td class="num">${money(e.bac)}</td><td class="num">${money(e.ac)}</td><td class="num ${cls(e.spi)}">${idx(e.spi)}</td><td class="num ${e.ac > 0 ? cls(e.cpi) : ''}">${e.ac > 0 ? idx(e.cpi) : '—'}</td>
+          <td class="num ${e.eac > e.bac ? 'late-txt' : ''}">${e.eac == null ? '—' : money(e.eac)}</td>
+          <td class="num ${vac < 0 ? 'late-txt' : ''}">${vac == null ? '—' : (vac < 0 ? '−' : '+') + money(Math.abs(vac))}</td></tr>`; }).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:10px">SPI = valor realizado ÷ valor previsto até hoje (prazo). CPI = valor realizado ÷ custo lançado. EAC = orçamento ÷ CPI. Desvio = orçamento − EAC. Valor realizado e previsto = orçamento × progresso (ponderado pela duração das tarefas). Abaixo de 1: atraso (SPI) ou gasto acima do entregue (CPI).</p>`;
+  }
+
   async function view() {
     if (!st.data || !st.fresh) st.data = await api('GET', 'reports');
     st.fresh = false;
@@ -174,6 +190,7 @@ const Rep = (() => {
         + panel('Quantidade de changes por projeto', 'Solicitações de mudança registradas, por situação.', repChangeCount(d, projects))
         + panel('Atrasos gerados por changes', 'Dias somados das changes aprovadas com impacto no prazo.', repChangeDelay(d, projects))
       : panel('Previsto × Realizado (orçamento)', 'Orçamento do projeto contra o que já foi lançado, em R$.', repBudget(d, projects))
+        + panel('Projeção de custo no término', 'Quanto cada projeto deve custar no fim, mantido o ritmo atual (valor agregado).', repEac(projects))
         + panel('Custo Projeto Total', 'Notas fiscais de serviço e faturas por projeto, em R$.', repCost(d, projects));
     A().main.innerHTML = A().pageHead(['SysAttack', 'Relatórios & Dashs'], 'Relatórios & Dashs', 'Indicadores dos projetos (os projetos spot não entram aqui).') +
       `<section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">${tab('projetos', 'Projetos')}${tab('orcamentaria', 'Orçamentária')}</div>${filter}</div></section>` + body;
