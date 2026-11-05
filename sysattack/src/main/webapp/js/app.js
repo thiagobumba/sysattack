@@ -127,9 +127,9 @@
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Fim</dt><dd>${fmt(p.end_date)}</dd></div>
         <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
         <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl></section>
-      <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
+      <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
         ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
-        <div class="bar-actions" id="tab-actions"></div></div><div id="tab-body"></div></section>`;
+        <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;
     await renderTab();
   }
 

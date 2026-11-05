@@ -389,3 +389,76 @@ img.preview { object-fit: contain; }
 .policy-lead { font-size: 16px; margin-top: 0; }
 .policy a { color: var(--orange-dark); text-decoration: underline; }
 .policy-foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
+
+/* ================= Revisão geral de UX/UI (1.0.1 Alpha) ================= */
+:root { --radius: 2px; }
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.content { padding: 28px 44px 64px; max-width: 1560px; }
+/* cabeçalho: menos ruído, hierarquia clara */
+.crumbs { font-size: 12px; font-weight: 500; letter-spacing: .02em; text-transform: none; color: #8f8f8f; }
+.crumbs a { color: #8f8f8f; }
+h1 { font-size: 38px; margin: 6px 0 6px; }
+.sub { font-size: 15px; line-height: 1.5; }
+.hello { display: none; }
+.head-meta { gap: 14px; }
+.head-meta .btn { min-height: 32px; font-size: 11px; padding: 0 14px; border-width: 1px; }
+/* painéis */
+.panel { padding: 24px 28px 28px; }
+.panel-title { font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.panel-title::before { width: 4px; height: 18px; }
+.panel-head { margin-bottom: 20px; }
+/* rótulos: menos caixa-alta e espaçamento */
+.kpi-label, .tbl th { font-size: 11.5px; letter-spacing: .06em; }
+.tbl th { background: #f4f4f4; border-bottom: 1px solid var(--line); padding: 12px 16px; }
+.tbl td { padding: 14px 16px; }
+.tbl td:first-child { min-width: 180px; }
+.tbl td { white-space: normal; }
+.tbl td.num, .tbl td.acts { white-space: nowrap; }
+.bar-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.proj-tabs { border-bottom: 2px solid var(--line) !important; }
+.panel, .table-wrap { max-width: 100%; }
+.tbl .acts { display: table-cell; }
+.tbl .acts .btn, .tbl .acts button { vertical-align: middle; margin-left: 4px; }
+.kpi { padding: 22px 22px 20px; }
+.kpi-value { font-size: 44px; }
+.badge { font-size: 10.5px; padding: 5px 9px; }
+/* abas: sem quebra de linha, rolagem horizontal quando faltar espaço */
+.tabs { overflow-x: auto; flex-wrap: nowrap !important; scrollbar-width: thin; }
+.tab { white-space: nowrap; padding: 12px 18px; font-size: 12.5px; letter-spacing: .03em; text-transform: none; font-weight: 600; font-size: 14px; }
+.tab.active { font-weight: 700; }
+/* formulários */
+.field label { font-size: 13px; color: #444; }
+.field input, .field select, .field textarea { border-color: #d6d6d6; transition: border-color .15s, box-shadow .15s; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(242,83,0,.14); }
+.field input::placeholder { color: #a5a5a5; }
+.fgrid .check, .field .check { align-self: end; min-height: 44px; }
+.toolbar input, .toolbar select, .filters input, .filters select { min-height: 40px; }
+/* vazio e estados */
+.empty { padding: 56px 16px; }
+.empty strong { font-size: 17px; font-weight: 600; }
+/* menu: realce mais discreto */
+.nav a { transition: background .12s, color .12s; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 860px) {
+  .content { padding: 20px 16px 48px; }
+  h1 { font-size: 30px; }
+  .panel { padding: 18px 16px 20px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .kpi-value { font-size: 34px; }
+  .head-meta { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 860px) {
+  .app, .layout { overflow-x: hidden; }
+  .content { max-width: 100vw; }
+  .page-head { gap: 10px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl td, .tbl th { padding: 12px 12px; }
+}
+@media (max-width: 860px) {
+  .bar-actions { justify-content: flex-start; }
+  .bar { padding: 18px 16px; }
+  .panel { overflow: hidden; }
+  .dist-row .dist-top { flex-wrap: wrap; gap: 2px 12px; }
+  .layout, .app { min-width: 0; }
+}
