@@ -205,6 +205,19 @@ public final class Db {
                     + "error VARCHAR(300) NOT NULL DEFAULT '',"
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_email_log_rule ON email_log(rule_id, ref_key)");
+            s.execute("CREATE TABLE IF NOT EXISTS project_changes ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,"
+                    + "title VARCHAR(200) NOT NULL,"
+                    + "reason VARCHAR(2000) NOT NULL DEFAULT '',"
+                    + "requested_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "change_date DATE NOT NULL,"
+                    + "impact_days INT NOT NULL DEFAULT 0,"
+                    + "impact_cost DECIMAL(14,2) NOT NULL DEFAULT 0,"
+                    + "status VARCHAR(12) NOT NULL DEFAULT 'PENDENTE',"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_changes_project ON project_changes(project_id)");
         } catch (SQLException e) {
             throw new IllegalStateException("Falha ao iniciar o banco de dados", e);
         }

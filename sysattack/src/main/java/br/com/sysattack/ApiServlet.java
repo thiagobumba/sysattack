@@ -179,6 +179,8 @@ public class ApiServlet extends HttpServlet {
             case "ai": requireAdmin(user); return ai(m, s, req, user);
             case "ai-status": return AiConfig.availability();
             case "email": return EmailService.handle(m, s, req, user);
+            case "changes": return ChangeService.handle(m, s, req, user);
+            case "reports": return ChangeService.reports(m);
             case "spot": return SpotService.handle(m, s, req, resp, user);
             default: throw new ApiException(404, "Rota inexistente.");
         }

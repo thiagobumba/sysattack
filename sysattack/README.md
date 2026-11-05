@@ -105,3 +105,11 @@ Na pasta do repositório (onde está a pasta `.git`), no PowerShell:
 ```
 
 O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`.
+
+## Relatórios & Dashs
+
+Menu **Relatórios & Dashs** (todos os usuários; projetos spot não entram). Filtro por projeto e botão *Imprimir / salvar PDF*.
+
+- **Guia Projetos:** Timeline do Projeto, Itens em atraso, Previsto × Realizado (progresso esperado pelo prazo × progresso informado, ponderado pela duração), Quantidade de changes por projeto e Atrasos gerados por changes (somente changes **aprovadas** com impacto em dias).
+- **Guia Orçamentária:** Previsto × Realizado em R$ (orçamento × notas fiscais e faturas lançadas) e Custo Projeto Total.
+- **Changes:** nova aba dentro de cada projeto para registrar solicitações de mudança (data, motivo, solicitante, impacto em dias e R$, situação).
