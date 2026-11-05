@@ -128,7 +128,7 @@
         <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
         <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl></section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}</div>
+        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
         <div class="bar-actions" id="tab-actions"></div></div><div id="tab-body"></div></section>`;
     await renderTab();
   }
@@ -141,6 +141,8 @@
     const t = view.tab;
     act.innerHTML = t === 'finance' ? btn('new-fin', '+ Nota fiscal', 'data-kind="NF_SERVICO"') + btn('new-fin', '+ Fatura', 'data-kind="FATURA"', false)
       : t === 'docs' ? btn('new-doc', '+ Adicionar documento')
+      : t === 'changes' ? btn('rp-new-change', '+ Nova change')
+      : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
       : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false);
     if (t === 'gantt') {
@@ -150,6 +152,8 @@
     else if (t === 'marcos') renderMilestones(host, view.tasks.filter(x => x.is_milestone), false);
     else if (t === 'finance') await renderFinance(host);
     else if (t === 'docs') await renderDocs(host);
+    else if (t === 'changes') await Rep.changesTab(host, view.projectId);
+    else if (t === 'triggers') await Mail.projectTab(host, view.projectId);
   }
 
   function onGanttRow(r) {
@@ -554,6 +558,8 @@
     const inProject = view.name === 'projeto';
     try {
       if (el.dataset.action.startsWith('sp-')) { await Spot.action(el); return; }
+      if (el.dataset.action.startsWith('em-')) { await Mail.action(el); return; }
+      if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
         case 'close': dlg.close(); break;
@@ -634,7 +640,12 @@
       else if (name === 'cronograma') await viewSchedule();
       else if (name === 'usuarios') await viewUsers();
       else if (name === 'spot') await Spot.view(arg);
-      else if (name === 'ia' && isAdmin()) await viewAI();
+      else if (name === 'relatorios') await Rep.view();
+      else if ((name === 'email' || name === 'ia') && !isAdmin()) {
+        main.innerHTML = pageHead(['SysAttack'], 'Acesso restrito', '') + `<div class="panel">${empty('Esta área é só para administradores', 'Peça a um administrador para ajustar esta configuração.')}</div>`;
+      }
+      else if (name === 'email') await Mail.view();
+      else if (name === 'ia') await viewAI();
       else await viewDashboard();
     } catch (ex) {
       main.innerHTML = pageHead(['SysAttack'], 'Algo deu errado', '') + `<div class="panel">${empty('Não foi possível carregar esta tela', esc(ex.message))}</div>`;
@@ -655,7 +666,8 @@
         '<p><a class="btn btn-sm" href="login.html">Ir para o login</a></p></section>';
       return;
     }
-    if (isAdmin()) document.querySelector('[data-route="ia"]').hidden = false;
+    // menus de configuração: só administradores; para os demais o item nem existe na página (a API também recusa)
+    document.querySelectorAll('[data-route="ia"], [data-route="email"]').forEach(a => { if (isAdmin()) a.hidden = false; else a.remove(); });
     route();
   })();
 })();

@@ -255,7 +255,7 @@ public final class AiConfig {
         return new SecretKeySpec(raw, "AES");
     }
 
-    private static String encrypt(String plain) throws GeneralSecurityException, IOException {
+    static String encrypt(String plain) throws GeneralSecurityException, IOException {
         byte[] iv = new byte[12];
         RANDOM.nextBytes(iv);
         Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
@@ -267,7 +267,7 @@ public final class AiConfig {
         return Base64.getEncoder().encodeToString(all);
     }
 
-    private static String decrypt(String b64) throws GeneralSecurityException, IOException {
+    static String decrypt(String b64) throws GeneralSecurityException, IOException {
         byte[] all = Base64.getDecoder().decode(b64);
         Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
         c.init(Cipher.DECRYPT_MODE, masterKey(), new GCMParameterSpec(128, all, 0, 12));

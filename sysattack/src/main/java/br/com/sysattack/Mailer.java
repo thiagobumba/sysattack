@@ -37,6 +37,8 @@ public final class Mailer {
     private Mailer() {}
 
     private static Properties config() {
+        Properties db = EmailConfig.effective(); // configuração feita na tela tem prioridade sobre o arquivo
+        if (db != null) return db;
         Properties p = new Properties();
         File f = new File(Db.dataDir(), "config.properties");
         if (f.isFile()) {
@@ -88,7 +90,7 @@ public final class Mailer {
                 : Session.getInstance(pr);
 
         MimeMessage m = new MimeMessage(session);
-        m.setFrom(new InternetAddress(from, "SysAttack", "UTF-8"));
+        m.setFrom(new InternetAddress(from, c.getProperty("smtp.fromname", "SysAttack"), "UTF-8"));
         m.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
         m.setSubject("SysAttack · código para alterar a senha", "UTF-8");
         m.setText("Olá, " + name + "!\n\n"
@@ -133,7 +135,11 @@ public final class Mailer {
      * em que só registra no log do Tomcat.
      */
     public static boolean sendHtml(java.util.List<String> to, String subject, String html, String replyTo) throws Exception {
-        Properties c = config();
+        return sendHtml(config(), to, subject, html, replyTo);
+    }
+
+    /** Igual ao anterior, mas com a configuração SMTP informada (usado no teste da tela). */
+    static boolean sendHtml(Properties c, java.util.List<String> to, String subject, String html, String replyTo) throws Exception {
         Session session = session(c);
         if (session == null) {
             if ("true".equalsIgnoreCase(c.getProperty("smtp.dev", "").trim())) {
@@ -145,7 +151,7 @@ public final class Mailer {
         String user = c.getProperty("smtp.user", "").trim();
         String from = c.getProperty("smtp.from", user).trim();
         MimeMessage m = new MimeMessage(session);
-        m.setFrom(new InternetAddress(from, "SysAttack", "UTF-8"));
+        m.setFrom(new InternetAddress(from, c.getProperty("smtp.fromname", "SysAttack"), "UTF-8"));
         m.setRecipients(Message.RecipientType.TO, InternetAddress.parse(String.join(",", to)));
         if (replyTo != null && !replyTo.isBlank()) m.setReplyTo(InternetAddress.parse(replyTo));
         m.setSubject(subject.replaceAll("[\\r\\n]+", " "), "UTF-8");

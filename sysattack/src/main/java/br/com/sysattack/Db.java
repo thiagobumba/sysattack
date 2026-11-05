@@ -167,6 +167,57 @@ public final class Db {
                     + "last_test_at TIMESTAMP,"
                     + "last_test_ok BOOLEAN,"
                     + "last_test_msg VARCHAR(300))");
+            s.execute("CREATE TABLE IF NOT EXISTS email_settings ("
+                    + "id INT PRIMARY KEY,"
+                    + "host VARCHAR(200) NOT NULL,"
+                    + "port INT NOT NULL DEFAULT 587,"
+                    + "security VARCHAR(10) NOT NULL DEFAULT 'starttls',"
+                    + "username VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "password_enc VARCHAR(2000) NOT NULL DEFAULT '',"
+                    + "from_email VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "from_name VARCHAR(120) NOT NULL DEFAULT 'SysAttack',"
+                    + "enabled BOOLEAN NOT NULL DEFAULT TRUE,"
+                    + "updated_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                    + "last_test_at TIMESTAMP,"
+                    + "last_test_ok BOOLEAN,"
+                    + "last_test_msg VARCHAR(300))");
+            s.execute("CREATE TABLE IF NOT EXISTS email_rules ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,"
+                    + "event VARCHAR(30) NOT NULL,"
+                    + "recipients VARCHAR(1000) NOT NULL DEFAULT '',"
+                    + "include_responsible BOOLEAN NOT NULL DEFAULT FALSE,"
+                    + "subject VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "message VARCHAR(1000) NOT NULL DEFAULT '',"
+                    + "enabled BOOLEAN NOT NULL DEFAULT TRUE,"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE TABLE IF NOT EXISTS email_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "rule_id BIGINT,"
+                    + "project_id BIGINT,"
+                    + "event VARCHAR(30) NOT NULL,"
+                    + "ref_key VARCHAR(80) NOT NULL DEFAULT '',"
+                    + "recipients VARCHAR(1000) NOT NULL DEFAULT '',"
+                    + "subject VARCHAR(300) NOT NULL DEFAULT '',"
+                    + "status VARCHAR(10) NOT NULL,"
+                    + "error VARCHAR(300) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_email_log_rule ON email_log(rule_id, ref_key)");
+            s.execute("CREATE TABLE IF NOT EXISTS project_changes ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,"
+                    + "title VARCHAR(200) NOT NULL,"
+                    + "reason VARCHAR(2000) NOT NULL DEFAULT '',"
+                    + "requested_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "change_date DATE NOT NULL,"
+                    + "impact_days INT NOT NULL DEFAULT 0,"
+                    + "impact_cost DECIMAL(14,2) NOT NULL DEFAULT 0,"
+                    + "status VARCHAR(12) NOT NULL DEFAULT 'PENDENTE',"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_changes_project ON project_changes(project_id)");
         } catch (SQLException e) {
             throw new IllegalStateException("Falha ao iniciar o banco de dados", e);
         }

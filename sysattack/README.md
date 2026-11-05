@@ -84,3 +84,32 @@ Menu **Projetos Spot**: projetos ágeis por horas, sem marcos nem cronograma.
 - **Cálculo (feito pelo sistema, nunca pela IA)**: mensal = do dia 1º do mês de referência até a data; pacote = desde o início. Consumidas = soma das horas do período; reservadas = Σ (aprovado − realizado) das demandas abertas; saldo = fixadas − consumidas; saldo projetado = saldo − reservadas.
 - **Relatórios com Claude**: a aba *Relatórios com Claude* gera o texto (destaques, alertas, resumo por demanda, mensagem do e-mail) a partir dos números calculados. Requer a chave conectada em *Configurações IA Agent*. O texto pode ser editado antes do envio.
 - **Envio**: o relatório vai no corpo do e-mail (precisa de SMTP em `config.properties`; com `smtp.dev=true` nada é enviado de fato). Para PDF use *Imprimir / salvar PDF*.
+
+## Configurações de E-mail e gatilhos
+
+Menu **Configurações de E-mail** (somente administradores):
+
+- **SMTP pela tela**: servidor, porta, segurança, usuário, senha (guardada criptografada com a mesma chave do `ai.key`), remetente e botão **Enviar teste**. Se nada estiver salvo na tela, continua valendo o `config.properties`.
+- **Gatilhos**: regras "quando acontecer X → enviar para Y". Podem valer para todos os projetos ou para um projeto (aba **Gatilhos de e-mail** dentro do projeto).
+  Eventos: projeto criado, situação do projeto alterada, tarefa criada, tarefa concluída, marco concluído, tarefa atrasada (verificada a cada 30 min, um aviso por tarefa), lançamento financeiro criado e documento adicionado.
+  Destinatários: lista de e-mails e, opcionalmente, o responsável (quando o nome dele é igual ao de um usuário ativo).
+  Assunto aceita `{evento}`, `{projeto}` e `{item}`.
+- **Histórico** dos envios (90 dias) com sucesso ou erro. Os envios acontecem em segundo plano e uma falha de e-mail nunca impede a operação no sistema.
+
+## Atualizar a máquina após cada nova versão
+
+Na pasta do repositório (onde está a pasta `.git`), no PowerShell:
+
+```
+.\atualizar.ps1 nome-da-branch
+```
+
+O script faz `git fetch`, `checkout` e `pull` da branch, apaga a pasta `target`, roda `mvn clean package -Pjakarta` e indica o `.war` gerado. Sem parâmetro, usa a `main`. Com `-Watch` (`.\atualizar.ps1 nome-da-branch -Watch`) o script fica vigiando o GitHub e refaz o pull e o build sozinho a cada novo commit da branch. A troca do `.war` no Tomcat continua manual.
+
+## Relatórios & Dashs
+
+Menu **Relatórios & Dashs** (todos os usuários; projetos spot não entram). Filtro por projeto e botão *Imprimir / salvar PDF*.
+
+- **Guia Projetos:** Timeline do Projeto, Itens em atraso, Previsto × Realizado (progresso esperado pelo prazo × progresso informado, ponderado pela duração), Quantidade de changes por projeto e Atrasos gerados por changes (somente changes **aprovadas** com impacto em dias).
+- **Guia Orçamentária:** Previsto × Realizado em R$ (orçamento × notas fiscais e faturas lançadas) e Custo Projeto Total.
+- **Changes:** nova aba dentro de cada projeto para registrar solicitações de mudança (data, motivo, solicitante, impacto em dias e R$, situação).

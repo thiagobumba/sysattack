@@ -117,7 +117,12 @@ public class ApiServlet extends HttpServlet {
             if (!m.equals("GET") && !"SysAttack".equals(req.getHeader("X-Requested-With"))) {
                 throw new ApiException(403, "Requisição não permitida.");
             }
-            Object out = route(m, segments(req), req, resp);
+            Object out;
+            try {
+                out = route(m, segments(req), req, resp);
+            } finally {
+                EmailTriggers.ACTOR.remove();
+            }
             if (out != FILE_SENT) resp.getWriter().write(GSON.toJson(out));
         } catch (ApiException e) {
             resp.setStatus(e.status);
@@ -151,6 +156,7 @@ public class ApiServlet extends HttpServlet {
             return Map.of("ok", true);
         }
         Map<String, Object> user = currentUser(req);
+        EmailTriggers.ACTOR.set((String) user.get("name"));
         switch (r) {
             case "me":
                 if (s.size() == 2 && m.equals("POST")) {
@@ -172,6 +178,9 @@ public class ApiServlet extends HttpServlet {
             case "documents": return documents(m, s, req, resp, user);
             case "ai": requireAdmin(user); return ai(m, s, req, user);
             case "ai-status": return AiConfig.availability();
+            case "email": return EmailService.handle(m, s, req, user);
+            case "changes": return ChangeService.handle(m, s, req, user);
+            case "reports": return ChangeService.reports(m);
             case "spot": return SpotService.handle(m, s, req, resp, user);
             default: throw new ApiException(404, "Rota inexistente.");
         }
@@ -306,11 +315,36 @@ public class ApiServlet extends HttpServlet {
         return Map.of("ok", true);
     }
 
-    private static void requireAdmin(Map<String, Object> user) {
+    static void requireAdmin(Map<String, Object> user) {
         if (!"ADMIN".equals(user.get("role"))) throw new ApiException(403, "Apenas administradores podem gerenciar usuários.");
     }
 
     // ------------------------------------------------------------------ usuários (administrador)
+
+    /** Pares rótulo/valor em ordem, para o corpo dos e-mails de gatilho. */
+    private static Map<String, String> mapOf(String... kv) {
+        Map<String, String> m = new java.util.LinkedHashMap<>();
+        for (int i = 0; i + 1 < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
+        return m;
+    }
+
+    private static void taskEvents(Map<String, Object> before, Map<String, Object> after) {
+        try {
+            long pid = ((Number) after.get("project_id")).longValue();
+            String name = (String) after.get("name"), who = (String) after.get("responsible");
+            boolean ms = Boolean.TRUE.equals(after.get("is_milestone"));
+            Map<String, String> info = mapOf("Tarefa", name, "Tipo", ms ? "Marco" : "Tarefa", "Responsável", who,
+                    "Prazo", String.valueOf(after.get("end_date")));
+            String key = "task:" + after.get("id");
+            if (before == null) EmailTriggers.fire("TASK_CREATED", pid, who, key, info);
+            boolean wasDone = before != null && "CONCLUIDA".equals(before.get("status"));
+            if ("CONCLUIDA".equals(after.get("status")) && !wasDone) {
+                EmailTriggers.fire(ms ? "MILESTONE_COMPLETED" : "TASK_COMPLETED", pid, who, key, info);
+            }
+        } catch (RuntimeException ignored) {
+            // e-mail nunca derruba a operação
+        }
+    }
 
     private static final String USER_SQL = "SELECT id, username email, name, role, active FROM users";
 
@@ -448,12 +482,19 @@ public class ApiServlet extends HttpServlet {
         BigDecimal budget = money(b, "budget", "Orçamento", false);
         if (!PROJECT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior à inicial.");
+        String oldStatus = null;
         if (id == null) {
             id = Db.insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget) VALUES(?,?,?,?,?,?,?)",
                     name, scope, owner, status, start, end, budget);
+            EmailTriggers.fire("PROJECT_CREATED", id, owner, "project:" + id, mapOf("Responsável", owner, "Início", start.toString(), "Fim", end.toString()));
         } else {
+            Map<String, Object> before = Db.one("SELECT status FROM projects WHERE id = ?", id);
+            oldStatus = before == null ? null : (String) before.get("status");
             Db.update("UPDATE projects SET name=?, scope=?, owner=?, status=?, start_date=?, end_date=?, budget=? WHERE id=?",
                     name, scope, owner, status, start, end, budget, id);
+            if (oldStatus != null && !oldStatus.equals(status)) {
+                EmailTriggers.fire("PROJECT_STATUS_CHANGED", id, owner, "project:" + id, mapOf("Situação anterior", oldStatus, "Nova situação", status, "Responsável", owner));
+            }
         }
         return projectOr404(id);
     }
@@ -494,7 +535,9 @@ public class ApiServlet extends HttpServlet {
         long id = ((Number) t.get("id")).longValue();
         Db.update("UPDATE tasks SET status = ?, progress = ? WHERE id = ?", done ? "CONCLUIDA" : "A_FAZER", done ? 100 : 0, id);
         TaskRules.rollup(optNum(t.get("parent_id")));
-        return Db.one(TASK_SQL + " WHERE t.id = ?", id);
+        Map<String, Object> saved = Db.one(TASK_SQL + " WHERE t.id = ?", id);
+        taskEvents(t, saved);
+        return saved;
     }
 
     private Object saveTask(Map<String, Object> existing, JsonObject b) throws SQLException {
@@ -556,7 +599,9 @@ public class ApiServlet extends HttpServlet {
         }
         TaskRules.rollup(parent);
         if (oldParent != null && !oldParent.equals(parent)) TaskRules.rollup(oldParent);
-        return Db.one(TASK_SQL + " WHERE t.id = ?", id);
+        Map<String, Object> saved = Db.one(TASK_SQL + " WHERE t.id = ?", id);
+        taskEvents(existing, saved);
+        return saved;
     }
 
     /** A predecessora precisa ser do mesmo projeto e não pode formar ciclo. */
@@ -661,7 +706,12 @@ public class ApiServlet extends HttpServlet {
             Db.update("UPDATE finance_entries SET kind=?, number=?, party=?, description=?, issue_date=?, due_date=?, amount=?, status=?, paid_date=? WHERE id=?",
                     kind, number, party, desc, issue, due, amount, status, paid, id);
         }
-        return Db.one("SELECT * FROM finance_entries WHERE id = ?", id);
+        Map<String, Object> saved = Db.one("SELECT * FROM finance_entries WHERE id = ?", id);
+        if (existing == null) {
+            EmailTriggers.fire("FINANCE_ENTRY", projectId, null, "fin:" + id, mapOf("Lançamento", (kind.equals("FATURA") ? "Fatura " : "Nota fiscal ") + number,
+                    "Prestador / fornecedor", party, "Valor", "R$ " + amount.toPlainString().replace('.', ','), "Situação", status));
+        }
+        return saved;
     }
 
     // ------------------------------------------------------------------ documentos
@@ -737,6 +787,7 @@ public class ApiServlet extends HttpServlet {
         long id = Db.insert("INSERT INTO documents(project_id,title,category,description,file_name,stored_name,size,uploaded_by,uploaded_by_id)"
                 + " VALUES(?,?,?,?,?,?,?,?,?)", projectId, title, category, description, fileName, stored, total,
                 user.get("name"), user.get("id"));
+        EmailTriggers.fire("DOCUMENT_ADDED", projectId, null, "doc:" + id, mapOf("Documento", title, "Categoria", category, "Arquivo", fileName));
         return Db.one(DOC_SQL + " WHERE id = ?", id);
     }
 
