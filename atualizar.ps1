@@ -4,8 +4,8 @@
 #   .\atualizar.ps1 claude/relatorios          atualiza uma vez
 #   .\atualizar.ps1 claude/relatorios -Watch   fica vigiando o GitHub e atualiza sozinho a cada novo commit
 #                                              (deixe a janela aberta; Ctrl+C para parar)
-# Sem parâmetro, usa a branch main.
-param([string]$Branch = "main", [switch]$Watch, [int]$IntervaloSegundos = 60)
+# Sem parâmetro, usa a branch claude/dev (onde o Claude sobe as alterações).
+param([string]$Branch = "claude/dev", [switch]$Watch, [int]$IntervaloSegundos = 60)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
