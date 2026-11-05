@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Identidade alinhada ao site momesso.ind.br: laranja #F45200, creme #FDDDB3, cinza #DDDDE0, Inter com títulos finos e cantos retos. Login redesenhado (card com faixa preta, botão preto, rodapé escuro).
 - Revisão geral de UX/UI (Visão geral, Projetos, Spot, Tarefas, Marcos, Cronograma, Relatórios, Usuários, IA Agent, E-mail): cabeçalhos mais leves, títulos de painel e rótulos com menos caixa-alta, tabelas sem colunas cortadas, abas do projeto em linha própria com rolagem, foco visível nos campos, ajustes de mobile.
 
 ## 1.0.0 - Alpha (05/11/2026)
