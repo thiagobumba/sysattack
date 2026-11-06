@@ -39,15 +39,7 @@ public final class Mailer {
     private static Properties config() {
         Properties db = EmailConfig.effective(); // configuração feita na tela tem prioridade sobre o arquivo
         if (db != null) return db;
-        Properties p = new Properties();
-        File f = new File(Db.dataDir(), "config.properties");
-        if (f.isFile()) {
-            try (Reader r = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) {
-                p.load(r);
-            } catch (IOException e) {
-                LOG.warning("Não foi possível ler " + f + ": " + e.getMessage());
-            }
-        }
+        Properties p = AppConfig.load();
         return p;
     }
 

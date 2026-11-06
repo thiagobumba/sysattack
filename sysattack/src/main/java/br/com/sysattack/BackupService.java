@@ -65,11 +65,7 @@ final class BackupService {
 
     // ------------------------------------------------------------------ configuração
     private static Properties cfg() {
-        Properties p = new Properties();
-        File f = new File(Db.dataDir(), "config.properties");
-        if (f.isFile()) {
-            try (InputStream in = Files.newInputStream(f.toPath())) { p.load(in); } catch (IOException ignored) { /* sem config */ }
-        }
+        Properties p = AppConfig.load();
         return p;
     }
 

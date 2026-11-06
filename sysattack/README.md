@@ -44,7 +44,7 @@ Novos usuários recebem um e-mail de boas-vindas com um link para criar a senha.
 `app.url=https://sysattack.suaempresa.com.br` (também aceito: `-Dsysattack.url=` ou a variável `SYSATTACK_URL`). O texto das políticas de uso do e-mail fica em `Invites.java`; revise-o com o jurídico/TI.
 Cada pessoa pode ativar a **verificação em duas etapas** em Usuários > Segurança da conta; o administrador pode exigi-la na edição do usuário.
 
-Há um modelo pronto em `config.exemplo.properties` (na raiz do projeto): copie-o para a pasta de dados com o nome `config.properties`, ajuste os valores e reinicie o Tomcat. O arquivo do projeto não é lido pelo sistema; só o da pasta de dados.
+O endereço do sistema (`app.url`) já vem **embutido no .war**, em `src/main/resources/config.properties` (vira `WEB-INF/classes/config.properties`): não precisa copiar nada para a pasta de dados. O `config.properties` da pasta de dados, se existir, tem prioridade e deve ser usado para senhas (nunca coloque senha no arquivo do projeto, que vai para o git). Modelo completo, com SMTP e backups: `config.exemplo.properties`.
 
 Para **testar sem e-mail**, use somente `smtp.dev=true` (o código aparece no log do Tomcat — não use em produção).
 

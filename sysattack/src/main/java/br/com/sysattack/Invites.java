@@ -51,12 +51,7 @@ final class Invites {
         String v = System.getProperty("sysattack.url");
         if (v == null || v.isBlank()) v = System.getenv("SYSATTACK_URL");
         if (v == null || v.isBlank()) {
-            File f = new File(Db.dataDir(), "config.properties");
-            if (f.isFile()) {
-                Properties p = new Properties();
-                try (InputStream in = Files.newInputStream(f.toPath())) { p.load(in); } catch (IOException ignored) { /* sem config */ }
-                v = p.getProperty("app.url");
-            }
+            v = AppConfig.load().getProperty("app.url");
         }
         return v == null ? "" : v.trim();
     }

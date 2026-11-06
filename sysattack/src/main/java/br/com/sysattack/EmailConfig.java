@@ -33,15 +33,7 @@ final class EmailConfig {
     }
 
     private static Properties fileConfig() {
-        Properties p = new Properties();
-        java.io.File f = new java.io.File(Db.dataDir(), "config.properties");
-        if (f.isFile()) {
-            try (java.io.Reader r = new java.io.InputStreamReader(new java.io.FileInputStream(f), java.nio.charset.StandardCharsets.UTF_8)) {
-                p.load(r);
-            } catch (java.io.IOException ignored) {
-                // sem arquivo legível: segue sem fallback
-            }
-        }
+        Properties p = AppConfig.load();
         return p;
     }
 
