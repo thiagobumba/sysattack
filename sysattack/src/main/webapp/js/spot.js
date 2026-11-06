@@ -1,6 +1,50 @@
 /* SysAttack — Projetos Spot: horas, demandas, ações e relatórios gerados com o Claude. */
 const Spot = (() => {
-  const { api, esc, fmt, todayIso, ic } = SA;
+  const { esc, fmt, todayIso, ic } = SA;
+  // projetos encerrados: só administrador altera, e toda alteração exige justificativa (vai no cabeçalho e fica no histórico)
+  const closedIds = new Set();
+  const isAdmin = () => A().me && A().me.role === 'ADMIN';
+  const locked = () => !!(st.data && st.data.status === 'ENCERRADO' && !isAdmin());
+  function askJustification(title) {
+    return new Promise(resolve => {
+      const d = document.createElement('dialog');
+      d.className = 'just';
+      d.innerHTML = `<form method="dialog" class="fgrid" style="padding:24px 28px;min-width:min(520px,90vw)"><h2 style="margin:0;font-size:22px;font-weight:300;color:var(--orange)" class="full">${esc(title)}</h2>
+        <p class="hint full">Este projeto está encerrado. Informe o motivo da alteração (mínimo de 10 caracteres); ele fica registrado no histórico.</p>
+        <div class="field full"><label for="jt">Justificativa</label><textarea id="jt" maxlength="1000" required></textarea></div>
+        <div class="form-error full" hidden role="alert"></div>
+        <div class="form-actions full"><button type="button" class="btn" data-c="1">Cancelar</button><button type="submit" class="btn btn-primary">Confirmar alteração</button></div></form>`;
+      document.body.appendChild(d);
+      const ta = d.querySelector('textarea'), err = d.querySelector('.form-error');
+      const done = v => { d.close(); d.remove(); resolve(v); };
+      d.querySelector('[data-c]').addEventListener('click', () => done(null));
+      d.addEventListener('cancel', e => { e.preventDefault(); done(null); });
+      d.querySelector('form').addEventListener('submit', e => {
+        e.preventDefault();
+        if (ta.value.trim().length < 10) { err.textContent = 'Descreva o motivo com pelo menos 10 caracteres.'; err.hidden = false; return; }
+        done(ta.value.trim());
+      });
+      d.showModal();
+      ta.focus();
+    });
+  }
+  /** Id do projeto spot que a chamada altera (para saber se está encerrado). */
+  function spotOf(url) {
+    const m = /^spot\/(\d+)/.exec(url);
+    if (m) return Number(m[1]);
+    return /^spot\/(hours|demands|actions|reports)\//.test(url) ? st.id : null;
+  }
+  async function api(method, url, body) {
+    if (method !== 'GET' && !/\/send$/.test(url)) {
+      const sid = spotOf(url);
+      if (sid != null && closedIds.has(sid)) {
+        const why = await askJustification('Alterar projeto encerrado');
+        if (!why) throw new Error('Alteração cancelada.');
+        return SA.api(method, url, body, { 'X-Justification': encodeURIComponent(why) });
+      }
+    }
+    return SA.api(method, url, body);
+  }
   const A = () => window.App;
   const D_STATUS = { EM_ANALISE: ['Em análise', 'b-grey'], APROVADO: ['Aprovado', 'b-dark'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], EM_HOMOLOGACAO: ['Em homologação', 'b-orange'], EM_ESPERA: ['Em espera', 'b-grey'], CONCLUIDA: ['Concluída', 'b-green'], CANCELADA: ['Cancelada', 'b-red'] };
   const A_STATUS = { PENDENTE: ['Pendente', 'b-red'], A_CONFIRMAR: ['A confirmar', 'b-orange'], PARCIAL: ['Parcial', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'] };
@@ -14,7 +58,7 @@ const Spot = (() => {
   const badge = (map, k) => map[k] ? `<span class="badge ${map[k][1]}">${map[k][0]}</span>` : esc(k);
   const opts = (map, sel) => Object.entries(map).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${Array.isArray(v) ? v[0] : v}</option>`).join('');
   const empty = (t, s) => `<div class="empty"><strong>${t}</strong>${s}</div>`;
-  const iconBtns = (kind, id) => `<td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar" data-action="sp-edit-${kind}" data-id="${id}">${ic('edit')}</button>
+  const iconBtns = (kind, id) => locked() ? '<td></td>' : `<td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar" data-action="sp-edit-${kind}" data-id="${id}">${ic('edit')}</button>
     <button class="icon-btn del" title="Excluir" aria-label="Excluir" data-action="sp-del-${kind}" data-id="${id}">${ic('trash')}</button></td>`;
 
   function kpiCards(k, label) {
@@ -35,17 +79,18 @@ const Spot = (() => {
   // ------------------------------------------------------------------ lista
   async function viewList() {
     const list = await api('GET', 'spot');
+    list.forEach(p => { if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id); });
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas: consumo, demandas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira spot</h2>
         <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
-        <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo projetado</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
+        <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
         ${list.map(p => `<tr class="click" data-go="#/spot/${p.id}"><td class="strong">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></td>
           <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
-          <td class="num strong ${Number(p.kpi.projected) < 0 ? 'late-txt' : ''}">${h(p.kpi.projected)}</td>
+          <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>
-          <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
-          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`
+          ${p.status === 'ENCERRADO' && !isAdmin() ? '<td></td>' : `<td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
+          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button></td>`}</tr>`).join('')}</tbody></table>`
         : empty('Nenhum projeto spot ainda', 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
   }
 
@@ -60,11 +105,13 @@ const Spot = (() => {
     }
     const p = await api('GET', 'spot/' + id + q);
     st.data = p;
+    if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, MODEL[p.hours_model] + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
-        <button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button></div></div>
+        ${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
+        ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
         ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Contrato</dt><dd>${p.recurring ? '<span class="badge b-dark">Recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
@@ -80,7 +127,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = locked() ? '' : { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -88,6 +135,11 @@ const Spot = (() => {
         ${s.by_item.map(i => `<tr><td>${esc(i.front || '—')}</td><td class="strong">${esc(i.label)}</td><td class="num">${h(i.hours)}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Sem horas no período', 'Lance as horas consumidas na aba “Apontamentos de horas”.')}
         ${st.data.billing_note ? `<p class="hint" style="margin-top:14px"><b>Faturamento:</b> ${esc(st.data.billing_note)}</p>` : ''}`;
+      const audit = await api('GET', `spot/${id}/audit`).catch(() => []);
+      if (audit.length) {
+        host.insertAdjacentHTML('beforeend', `<h3 style="margin:22px 0 8px;font-size:15px">Histórico de alterações após o encerramento</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Quando</th><th>Quem</th><th>Justificativa</th></tr></thead><tbody>
+          ${audit.map(x => `<tr><td>${esc(String(x.created_at).slice(0, 16).replace('T', ' '))}</td><td>${esc(x.user_name)}</td><td class="strong">${esc(x.justification)}<span class="small">${esc(x.action)}</span></td></tr>`).join('')}</tbody></table></div>`);
+      }
     } else if (st.tab === 'horas') {
       st.hours = await api('GET', `spot/${id}/hours?month=${st.month}`);
       const total = st.hours.reduce((a, x) => a + Number(x.hours), 0);
@@ -230,8 +282,10 @@ const Spot = (() => {
   async function sendReport(id) {
     const r = await api('GET', 'spot/reports/' + id);
     A().openDialog('Enviar relatório por e-mail', `
-      <div class="field full"><label for="to">Destinatários</label><input id="to" name="to" maxlength="1000" value="${esc(st.data.recipients || '')}" placeholder="email1@empresa.com, email2@empresa.com" required></div>
-      <p class="hint full">O relatório vai no corpo do e-mail, com a mensagem de abertura do texto. Requer SMTP configurado (veja o README).</p>`,
+      <div class="field full"><label for="to">Para</label><input id="to" name="to" maxlength="1000" value="${esc(String(st.data.recipients || '').split(/\s*[,;]\s*/).filter(Boolean).join('; '))}" placeholder="email1@empresa.com; email2@empresa.com" required></div>
+      <div class="field full"><label for="cc">CC (cópia)</label><input id="cc" name="cc" maxlength="1000" placeholder="Opcional. Separe vários e-mails com ponto e vírgula (;)"></div>
+      <div class="field full"><label for="bcc">CCO (cópia oculta)</label><input id="bcc" name="bcc" maxlength="1000" placeholder="Opcional. Os demais destinatários não veem estes endereços"></div>
+      <p class="hint full">Separe vários e-mails com ponto e vírgula (;). O relatório vai no corpo do e-mail. Requer SMTP configurado (veja o README).</p>`,
       async d => {
         const res = await api('POST', `spot/reports/${id}/send`, d);
         A().toast(res.delivered ? 'E-mail enviado para ' + res.to : 'Modo de teste (smtp.dev): e-mail não enviado de fato.');

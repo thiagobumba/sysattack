@@ -5,6 +5,9 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot: a lista mostra "Saldo atual" no lugar de "Saldo projetado". Projeto encerrado só pode ser alterado por administrador, com justificativa obrigatória (mínimo de 10 caracteres) que fica no histórico da aba Resumo; usuários comuns só consultam. O envio do relatório por e-mail ganhou CC e CCO, e aceita vários endereços separados por ponto e vírgula.
+- Consistência dos dados: toda alteração em Projetos Spot (incluindo as importações) é gravada de forma atômica, tudo ou nada; o banco grava no disco a cada confirmação e faz cópia de segurança diária (zip, últimas 14, na pasta de dados em `backups`).
+
 - Projetos Spot: importação do Status Report da Fábrica (HTML), sempre com prévia para revisão e em cada aba: Apontamentos de horas (só as horas; o detalhamento do chatbot substitui a linha agregada), Demandas (só as demandas, com situação sugerida e editável), Ações e pendências (ações do comitê e definições da Momesso) e Relatórios (o relatório completo, com o mesmo conteúdo e organização do arquivo, sem usar o Claude, pronto para abrir, imprimir ou enviar por e-mail). Itens já existentes são atualizados ou ignorados, nunca duplicados. A visão do período (horas consumidas, saldo) agora acompanha o mês escolhido em Apontamentos de horas. Corrigido o corte do campo Destinatários.
 
 - Projetos Spot: novo campo "Data final" (opcional, validada contra o início) e a marca "Contrato recorrente". A lista mostra o selo Recorrente e a vigência; projeto ativo com a data final vencida é sinalizado. Projetos existentes ficam sem data final e como não recorrentes.

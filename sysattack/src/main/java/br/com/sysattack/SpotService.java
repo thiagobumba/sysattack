@@ -37,6 +37,49 @@ final class SpotService {
 
     // ------------------------------------------------------------------ roteamento
     static Object handle(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
+        if (m.equals("GET")) return dispatch(m, s, req, resp, user);
+        boolean send = s.size() == 4 && s.get(3).equals("send"); // enviar e-mail não altera dados
+        // toda alteração é atômica (tudo ou nada); em projeto encerrado exige administrador + justificativa, registrada no histórico
+        return Db.tx(() -> {
+            if (!send) guardClosed(m, s, req, user);
+            return dispatch(m, s, req, resp, user);
+        });
+    }
+
+    /** Descobre a qual projeto spot a requisição se refere (ou null quando cria um projeto novo). */
+    private static Long targetSpot(List<String> s) throws SQLException {
+        if (s.size() < 2) return null;
+        String k = s.get(1);
+        try {
+            return Long.parseLong(k);
+        } catch (NumberFormatException e) {
+            // /spot/{hours|demands|actions|reports}/{id}
+        }
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : null;
+        if (table == null || s.size() < 3) return null;
+        Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
+        return row == null ? null : ((Number) row.get("spot_id")).longValue();
+    }
+
+    private static void guardClosed(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws SQLException {
+        Long spotId = targetSpot(s);
+        if (spotId == null) return;
+        Map<String, Object> p = Db.one("SELECT id, name, status FROM spot_projects WHERE id = ?", spotId);
+        if (p == null || !"ENCERRADO".equals(p.get("status"))) return;
+        if (!"ADMIN".equals(user.get("role"))) throw new ApiException(403, "Projeto encerrado: somente um administrador pode alterá-lo.");
+        String raw = req.getHeader("X-Justification");
+        String just = "";
+        if (raw != null) {
+            try { just = java.net.URLDecoder.decode(raw, "UTF-8").trim(); } catch (Exception e) { just = raw.trim(); }
+        }
+        if (just.length() < 10) throw new ApiException(400, "Projeto encerrado: informe a justificativa da alteração (mínimo de 10 caracteres).");
+        if (just.length() > 1000) just = just.substring(0, 1000);
+        String action = m + " " + String.join("/", s);
+        Db.insert("INSERT INTO spot_audit(spot_id,spot_name,user_name,action,justification) VALUES(?,?,?,?,?)",
+                spotId, p.get("name"), user.get("name"), action.length() > 200 ? action.substring(0, 200) : action, just);
+    }
+
+    private static Object dispatch(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
         if (s.size() == 1) {
             if (m.equals("GET")) return list();
             if (m.equals("POST")) return saveProject(null, ApiServlet.body(req));
@@ -68,6 +111,9 @@ final class SpotService {
                     case "actions":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_actions WHERE spot_id = ? ORDER BY kind, CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END, id", id);
                         if (m.equals("POST")) return saveAction(null, id, ApiServlet.body(req));
+                        break;
+                    case "audit":
+                        if (m.equals("GET")) return Db.query("SELECT * FROM spot_audit WHERE spot_id = ? ORDER BY created_at DESC, id DESC LIMIT 200", id);
                         break;
                     case "import":
                         if (m.equals("POST")) return importReport(id, ApiServlet.body(req), user);
@@ -478,10 +524,15 @@ final class SpotService {
         String to = normalizeRecipients(ApiServlet.str(b, "to", "Destinatários", 1000, false));
         if (to.isEmpty()) to = (String) p.get("recipients");
         if (to.isEmpty()) throw new ApiException(400, "Informe ao menos um destinatário.");
+        List<String> toL = List.of(to.split(",\\s*"));
+        List<String> ccL = new ArrayList<>(), bccL = new ArrayList<>();
+        String cc = normalizeRecipients(ApiServlet.str(b, "cc", "CC", 1000, false)), bcc = normalizeRecipients(ApiServlet.str(b, "bcc", "CCO", 1000, false));
+        if (!cc.isEmpty()) for (String e : cc.split(",\\s*")) if (!toL.contains(e)) ccL.add(e);
+        if (!bcc.isEmpty()) for (String e : bcc.split(",\\s*")) if (!toL.contains(e) && !ccL.contains(e)) bccL.add(e);
         String subject = "[SysAttack] " + r.get("title") + " · " + p.get("name");
         boolean delivered;
         try {
-            delivered = Mailer.sendHtml(List.of(to.split(",\\s*")), subject, renderReport(r, true), (String) user.get("email"));
+            delivered = Mailer.sendHtml(toL, ccL, bccL, subject, renderReport(r, true), (String) user.get("email"));
         } catch (Mailer.NotConfigured e) {
             throw new ApiException(503, "O envio de e-mail ainda não está configurado. Configure o SMTP (veja o README) ou avise o administrador.");
         } catch (Exception e) {
@@ -489,7 +540,9 @@ final class SpotService {
             throw new ApiException(502, "Não foi possível enviar o e-mail agora. Verifique a configuração SMTP e tente novamente.");
         }
         if (delivered) {
-            Db.update("UPDATE spot_reports SET sent_at = CURRENT_TIMESTAMP, sent_to = ?, sent_by = ? WHERE id = ?", to, user.get("name"), r.get("id"));
+            String sentTo = to + (ccL.isEmpty() ? "" : " | CC: " + String.join(", ", ccL)) + (bccL.isEmpty() ? "" : " | CCO: " + String.join(", ", bccL));
+            Db.update("UPDATE spot_reports SET sent_at = CURRENT_TIMESTAMP, sent_to = ?, sent_by = ? WHERE id = ?",
+                    sentTo.length() > 1000 ? sentTo.substring(0, 1000) : sentTo, user.get("name"), r.get("id"));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);

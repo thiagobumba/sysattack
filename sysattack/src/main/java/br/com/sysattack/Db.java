@@ -145,6 +145,15 @@ public final class Db {
                     + "status VARCHAR(12) NOT NULL DEFAULT 'PENDENTE',"
                     + "note VARCHAR(500) NOT NULL DEFAULT '',"
                     + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE TABLE IF NOT EXISTS spot_audit ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "spot_id BIGINT NOT NULL,"
+                    + "spot_name VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "user_name VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "action VARCHAR(200) NOT NULL,"
+                    + "justification VARCHAR(1000) NOT NULL,"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_spot_audit ON spot_audit(spot_id, created_at)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_reports ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
@@ -231,6 +240,33 @@ public final class Db {
             throw new IllegalStateException(e);
         }
         seed();
+        try (Connection c = get(); Statement s = c.createStatement()) {
+            s.execute("SET WRITE_DELAY 0"); // grava no disco a cada confirmação (sem janela de perda em queda de energia)
+        } catch (SQLException ignored) {
+            // configuração opcional
+        }
+    }
+
+    /** Cópia de segurança (zip) na pasta de dados; mantém as últimas {@code keep}. */
+    public static synchronized String backup(int keep) {
+        try {
+            File dir = new File(dataDir, "backups");
+            dir.mkdirs();
+            String name = "sysattack-" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".zip";
+            File out = new File(dir, name);
+            try (Connection c = get(); Statement s = c.createStatement()) {
+                s.execute("BACKUP TO '" + out.getAbsolutePath().replace("'", "''") + "'");
+            }
+            File[] all = dir.listFiles((d, n) -> n.startsWith("sysattack-") && n.endsWith(".zip"));
+            if (all != null && all.length > keep) {
+                java.util.Arrays.sort(all);
+                for (int i = 0; i < all.length - keep; i++) all[i].delete();
+            }
+            return out.getAbsolutePath();
+        } catch (Exception e) {
+            java.util.logging.Logger.getLogger("sysattack").warning("Falha na cópia de segurança: " + e);
+            return null;
+        }
     }
 
     public static String dataDir() {
@@ -259,8 +295,46 @@ public final class Db {
         }
     }
 
+    // ---------- transação: tudo ou nada ----------
+    private static final ThreadLocal<Connection> TX = new ThreadLocal<>();
+
+    @FunctionalInterface
+    public interface Work<T> {
+        T run() throws Exception;
+    }
+
+    /** Executa o trabalho numa única transação: se algo falhar, nada é gravado. Chamadas aninhadas reaproveitam a transação. */
+    public static <T> T tx(Work<T> work) throws Exception {
+        if (TX.get() != null) return work.run();
+        try (Connection c = get()) {
+            c.setAutoCommit(false);
+            TX.set(c);
+            try {
+                T r = work.run();
+                c.commit();
+                return r;
+            } catch (Exception | Error e) {
+                try { c.rollback(); } catch (SQLException ignored) { /* conexão já inválida */ }
+                throw e;
+            } finally {
+                TX.remove();
+            }
+        }
+    }
+
+    /** Conexão da transação em curso (não é fechada pelo chamador) ou uma nova. */
+    private static Connection acquire() throws SQLException {
+        Connection t = TX.get();
+        return t != null ? t : get();
+    }
+
+    private static void release(Connection c) throws SQLException {
+        if (c != TX.get()) c.close();
+    }
+
     public static List<Map<String, Object>> query(String sql, Object... args) throws SQLException {
-        try (Connection c = get(); PreparedStatement ps = c.prepareStatement(sql)) {
+        Connection c = acquire();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
             bind(ps, args);
             try (ResultSet rs = ps.executeQuery()) {
                 ResultSetMetaData md = rs.getMetaData();
@@ -278,6 +352,8 @@ public final class Db {
                 }
                 return rows;
             }
+        } finally {
+            release(c);
         }
     }
 
@@ -287,20 +363,26 @@ public final class Db {
     }
 
     public static int update(String sql, Object... args) throws SQLException {
-        try (Connection c = get(); PreparedStatement ps = c.prepareStatement(sql)) {
+        Connection c = acquire();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
             bind(ps, args);
             return ps.executeUpdate();
+        } finally {
+            release(c);
         }
     }
 
     public static long insert(String sql, Object... args) throws SQLException {
-        try (Connection c = get(); PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection c = acquire();
+        try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             bind(ps, args);
             ps.executeUpdate();
             try (ResultSet k = ps.getGeneratedKeys()) {
                 k.next();
                 return k.getLong(1);
             }
+        } finally {
+            release(c);
         }
     }
 

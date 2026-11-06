@@ -2,11 +2,11 @@
 const SA = (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  async function api(method, url, body) {
+  async function api(method, url, body, extra) {
     const r = await fetch('api/' + url, {
       method,
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'SysAttack' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'SysAttack', ...(extra || {}) },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
     const data = await r.json().catch(() => null);

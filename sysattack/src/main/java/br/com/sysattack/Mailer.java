@@ -140,10 +140,19 @@ public final class Mailer {
 
     /** Igual ao anterior, mas com a configuração SMTP informada (usado no teste da tela). */
     static boolean sendHtml(Properties c, java.util.List<String> to, String subject, String html, String replyTo) throws Exception {
+        return sendHtml(c, to, java.util.List.of(), java.util.List.of(), subject, html, replyTo);
+    }
+
+    /** Envio com cópia (CC) e cópia oculta (CCO). */
+    public static boolean sendHtml(java.util.List<String> to, java.util.List<String> cc, java.util.List<String> bcc, String subject, String html, String replyTo) throws Exception {
+        return sendHtml(config(), to, cc, bcc, subject, html, replyTo);
+    }
+
+    static boolean sendHtml(Properties c, java.util.List<String> to, java.util.List<String> cc, java.util.List<String> bcc, String subject, String html, String replyTo) throws Exception {
         Session session = session(c);
         if (session == null) {
             if ("true".equalsIgnoreCase(c.getProperty("smtp.dev", "").trim())) {
-                LOG.warning("[SysAttack][MODO TESTE] E-mail NÃO enviado. Para: " + to + " | Assunto: " + subject);
+                LOG.warning("[SysAttack][MODO TESTE] E-mail NÃO enviado. Para: " + to + (cc.isEmpty() ? "" : " | CC: " + cc) + (bcc.isEmpty() ? "" : " | CCO: " + bcc) + " | Assunto: " + subject);
                 return false;
             }
             throw new NotConfigured();
@@ -153,6 +162,8 @@ public final class Mailer {
         MimeMessage m = new MimeMessage(session);
         m.setFrom(new InternetAddress(from, c.getProperty("smtp.fromname", "SysAttack"), "UTF-8"));
         m.setRecipients(Message.RecipientType.TO, InternetAddress.parse(String.join(",", to)));
+        if (!cc.isEmpty()) m.setRecipients(Message.RecipientType.CC, InternetAddress.parse(String.join(",", cc)));
+        if (!bcc.isEmpty()) m.setRecipients(Message.RecipientType.BCC, InternetAddress.parse(String.join(",", bcc)));
         if (replyTo != null && !replyTo.isBlank()) m.setReplyTo(InternetAddress.parse(replyTo));
         m.setSubject(subject.replaceAll("[\\r\\n]+", " "), "UTF-8");
         m.setContent(html, "text/html; charset=UTF-8");
