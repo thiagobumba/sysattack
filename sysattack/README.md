@@ -42,7 +42,7 @@ smtp.from=sysattack@suaempresa.com.br
 ```
 Novos usuários recebem um e-mail de boas-vindas com um link para criar a senha. Para o endereço do sistema aparecer correto no e-mail, informe a URL pública:
 `app.url=https://sysattack.suaempresa.com.br` (também aceito: `-Dsysattack.url=` ou a variável `SYSATTACK_URL`). O texto das políticas de uso do e-mail fica em `Invites.java`; revise-o com o jurídico/TI.
-Cada pessoa pode ativar a **verificação em duas etapas** em Usuários > Segurança da conta; o administrador pode exigi-la no cadastro do usuário.
+Cada pessoa pode ativar a **verificação em duas etapas** em Usuários > Segurança da conta; o administrador pode exigi-la na edição do usuário.
 
 Para **testar sem e-mail**, use somente `smtp.dev=true` (o código aparece no log do Tomcat — não use em produção).
 
