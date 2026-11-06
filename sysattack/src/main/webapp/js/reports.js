@@ -219,7 +219,7 @@ const Rep = (() => {
       <div class="field"><label for="cd">Data</label><input id="cd" name="change_date" type="date" value="${c.change_date}" required></div>
       <div class="field"><label for="cs">Situação</label><select id="cs" name="status">${Object.entries(CH).map(([k, v]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></div>
       <div class="field"><label for="ci">Impacto no prazo (dias)</label><input id="ci" name="impact_days" type="number" min="0" max="3650" value="${c.impact_days}"></div>
-      <div class="field"><label for="cc">Impacto em custo (R$)</label><input id="cc" name="impact_cost" type="number" min="0" step="0.01" value="${Number(c.impact_cost) > 0 ? c.impact_cost : ''}"></div>
+      <div class="field"><label for="cc">Impacto em custo (R$)</label>${SA.moneyInput('cc', 'impact_cost', Number(c.impact_cost) > 0 ? c.impact_cost : '')}</div>
       <div class="field full"><label for="cr">Solicitante</label><input id="cr" name="requested_by" maxlength="120" value="${esc(c.requested_by)}"></div>
       <div class="field full"><label for="cx">Motivo / descrição</label><textarea id="cx" name="reason" maxlength="2000">${esc(c.reason)}</textarea></div>
       <p class="hint full">Só changes <b>aprovadas</b> entram no relatório “Atrasos gerados por changes”.</p>`,

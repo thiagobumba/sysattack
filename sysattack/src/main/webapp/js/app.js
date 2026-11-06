@@ -332,7 +332,7 @@
       <div class="field full"><label for="fd">Descrição</label><input id="fd" name="description" maxlength="500" value="${esc(e.description)}" placeholder="O que foi contratado / faturado"></div>
       <div class="field"><label for="fi">Emissão</label><input id="fi" name="issue_date" type="date" value="${e.issue_date}" required></div>
       <div class="field"><label for="fv">Vencimento</label><input id="fv" name="due_date" type="date" value="${e.due_date || ''}"></div>
-      <div class="field"><label for="fa">Valor (R$)</label><input id="fa" name="amount" type="number" min="0" step="0.01" value="${e.amount}" required></div>
+      <div class="field"><label for="fa">Valor (R$)</label>${SA.moneyInput('fa', 'amount', e.amount, { required: true })}</div>
       <div class="field"><label for="fs">Situação</label><select id="fs" name="status"><option value="PENDENTE"${e.status === 'PENDENTE' ? ' selected' : ''}>Pendente</option><option value="PAGO"${e.status === 'PAGO' ? ' selected' : ''}>Pago</option></select></div>
       <div class="field full" id="g-paid"><label for="fg">Data do pagamento</label><input id="fg" name="paid_date" type="date" value="${e.paid_date || todayIso()}"></div>`,
       async d => {
@@ -613,7 +613,7 @@
       e.preventDefault();
       const b = form.querySelector('[type=submit]');
       b.disabled = true; err.hidden = true;
-      try { await onSubmit(Object.fromEntries(new FormData(form))); delete dlg.dataset.locked; dlg.close(); await route(); }
+      try { await onSubmit(SA.moneyFields(form, Object.fromEntries(new FormData(form)))); delete dlg.dataset.locked; dlg.close(); await route(); }
       catch (ex) { if (ex.silent) return; err.textContent = ex.message; err.hidden = false; b.disabled = false; }
     });
     dlg.showModal();
@@ -633,7 +633,7 @@
       <div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" name="company_goal" style="width:auto;margin:0" ${p.company_goal ? 'checked' : ''}> ★ Meta Empresa</label><p class="hint">Projeto do plano de desenvolvimento da empresa. Fica acima de qualquer prioridade nas listas e na visão geral.</p></div>
       <div class="field"><label for="a">Início</label><input id="a" name="start_date" type="date" value="${p.start_date}" required></div>
       <div class="field"><label for="b">Fim</label><input id="b" name="end_date" type="date" value="${p.end_date}" required></div>
-      <div class="field full"><label for="bu">Orçamento (R$)</label><input id="bu" name="budget" type="number" min="0" step="0.01" value="${Number(p.budget) > 0 ? p.budget : ''}" placeholder="Opcional — usado no controle financeiro"></div>
+      <div class="field full"><label for="bu">Orçamento (R$)</label>${SA.moneyInput('bu', 'budget', Number(p.budget) > 0 ? p.budget : '', { placeholder: 'Opcional — usado no controle financeiro' })}</div>
       <div class="field full"><label for="c">Escopo inicial</label><textarea id="c" name="scope" maxlength="4000" placeholder="O que será entregue, o que está fora do escopo e como saberemos que acabou.">${esc(p.scope)}</textarea></div>`,
       async d => {
         d.company_goal = d.company_goal === 'on';

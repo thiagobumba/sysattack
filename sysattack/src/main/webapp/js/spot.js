@@ -282,7 +282,7 @@ const Spot = (() => {
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
         <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
         <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
-        <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label><input id="sv" name="project_value" type="number" min="0" step="0.01" value="${p.project_value || ''}"></div>
+        <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
@@ -614,7 +614,7 @@ const Spot = (() => {
     const x = id ? st.invoices.find(r => r.id === id) : { number: '', issue_date: todayIso(), due_date: '', amount: '', status: 'EMITIDA', description: '', file_name: '' };
     A().openDialog(id ? 'Editar nota' : 'Lançar nota', `
       <div class="field"><label for="in">Número da nota</label><input id="in" name="number" maxlength="60" value="${esc(x.number)}" required></div>
-      <div class="field"><label for="ia">Valor (R$)</label><input id="ia" name="amount" type="number" min="0.01" step="0.01" value="${x.amount}" required></div>
+      <div class="field"><label for="ia">Valor (R$)</label>${SA.moneyInput('ia', 'amount', x.amount, { required: true })}</div>
       <div class="field"><label for="ie">Emissão</label><input id="ie" name="issue_date" type="date" value="${x.issue_date}" required></div>
       <div class="field"><label for="iv">Vencimento <span class="opt">(opcional)</span></label><input id="iv" name="due_date" type="date" value="${x.due_date || ''}"></div>
       <div class="field"><label for="is">Situação</label><select id="is" name="status">${opts(Object.fromEntries(Object.entries(I_STATUS).map(([k, v]) => [k, v[0]])), x.status)}</select></div>

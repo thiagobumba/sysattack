@@ -69,5 +69,36 @@ const SA = (() => {
 
   document.querySelectorAll('[data-year]').forEach(e => { e.textContent = new Date().getFullYear(); });
 
-  return { versionLabel, rulesHtml, bindRules, esc, api, todayIso, fmt, dayNum, isoOf, addDays, duration, ic };
+  // ---- valores em reais: máscara brasileira (1.234,56) em campo de texto; o envio à API usa 1234.56
+  const moneyFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /** Número (ou texto numérico) -> "1.234,56"; vazio se não houver valor. */
+  function moneyText(v) {
+    if (v === null || v === undefined || v === '' || !isFinite(Number(v))) return '';
+    return moneyFmt.format(Number(v));
+  }
+  /** "1.234,56" -> "1234.56" (texto aceito pela API); "" se vazio. */
+  function moneyValue(t) {
+    const d = String(t ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+    if (!d) return '';
+    const p = d.padStart(3, '0');
+    return p.slice(0, -2) + '.' + p.slice(-2);
+  }
+  /** Campo de valor em reais. */
+  function moneyInput(id, name, value, { required = false, placeholder = '' } = {}) {
+    return `<input id="${id}" name="${name}" type="text" inputmode="numeric" autocomplete="off" data-money value="${esc(moneyText(value))}"${required ? ' required' : ''}${placeholder ? ` placeholder="${esc(placeholder)}"` : ''}>`;
+  }
+  // máscara ao digitar: os dígitos entram como centavos (1 -> 0,01; 12345 -> 123,45)
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (!el || !el.matches || !el.matches('input[data-money]')) return;
+    const v = moneyValue(el.value);
+    el.value = v ? moneyText(v) : '';
+  });
+  /** Troca, em um objeto de formulário, os campos de valor pelo formato da API. */
+  function moneyFields(form, d) {
+    form.querySelectorAll('input[data-money]').forEach(i => { if (i.name in d) d[i.name] = moneyValue(i.value); });
+    return d;
+  }
+
+  return { moneyText, moneyValue, moneyInput, moneyFields, versionLabel, rulesHtml, bindRules, esc, api, todayIso, fmt, dayNum, isoOf, addDays, duration, ic };
 })();
