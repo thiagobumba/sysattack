@@ -7,8 +7,6 @@
 .login-sil { position: absolute; left: 3vw; bottom: 0; height: min(84vh, 760px); width: auto; filter: brightness(0) opacity(.5) blur(.4px); z-index: 1; pointer-events: none; }
 .login-top { position: relative; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 28px 6vw; }
 .login-top img { height: 34px; width: auto; display: block; }
-.login-top a { color: #fff; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; text-decoration: none; opacity: .85; }
-.login-top a:hover { opacity: 1; text-decoration: underline; }
 .login-main { position: relative; z-index: 3; display: grid; grid-template-columns: 1fr minmax(360px, 440px); gap: 6vw; align-items: center; padding: 8px 6vw 44px; }
 .login-pitch { justify-self: end; max-width: 520px; color: var(--peach); }
 .login-pitch h2 { margin: 0 0 18px; font-weight: 300; font-size: clamp(34px, 4vw, 58px); line-height: 1.12; color: var(--peach); text-transform: none; }

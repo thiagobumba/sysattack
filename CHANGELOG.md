@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Tela de entrada: removido o link "Site Momesso" do topo (o link "Site" do rodapé continua).
+
 - Direitos autorais e marca d'água: declaração "© <ano> - Momesso Indústria de Máquinas - Todos os direitos reservados" no rodapé de todas as telas (sistema, entrada e Política de Privacidade; o ano atualiza sozinho) e marca d'água discreta com o logotipo da Momesso no canto da tela do sistema (aparece também na impressão). Correção: a Política de Privacidade (privacidade.html) usava script dentro da página, que a nova política de segurança (CSP) bloquearia; o script foi para js/privacidade.js.
 
 - Tela de entrada redesenhada no estilo do site da Momesso: fundo em degradê industrial (preto ao laranja, com granulado) e a máquina em silhueta, frase "O projeto, você planeja hoje.", cartão de login branco com botão laranja, e rodapé em faixas (logo e texto, links da Política de Privacidade e do site, barra escura). A Política de Privacidade agora aparece também dentro do cartão, logo abaixo do botão. Responsiva (celular e tablet), inclusive a tela de primeiro acesso. O CSS da tela de entrada saiu do style.css para css/login.css.
