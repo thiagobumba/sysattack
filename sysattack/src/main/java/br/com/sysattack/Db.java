@@ -550,7 +550,12 @@ public final class Db {
 
     private static void seed() {
         try {
-            if (one("SELECT id FROM projects LIMIT 1") != null) return;
+            // Os projetos de exemplo entram UMA única vez, só em banco novo (sem projetos e sem usuários). Antes, a regra era
+            // "tabela de projetos vazia", então quem apagava todos os projetos os via voltar a cada reinício do Tomcat.
+            if (one("SELECT v FROM app_meta WHERE k = 'seeded'") != null) return;
+            boolean fresh = one("SELECT id FROM projects LIMIT 1") == null && one("SELECT id FROM users LIMIT 1") == null;
+            update("INSERT INTO app_meta(k, v) VALUES('seeded', ?)", fresh ? "demo" : "no");
+            if (!fresh) return;
             LocalDate t = LocalDate.now();
 
             long p1 = insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget) VALUES(?,?,?,?,?,?,?)",
