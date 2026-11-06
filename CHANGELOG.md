@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Relatório tradicional: botão "Enviar por e-mail" direto na lista (além de dentro do relatório aberto), com o mesmo envio dos projetos de horas: Para, CC e CCO separados por ";", relatório no corpo do e-mail e registro de envio.
+
 - Financeiro e visão do projeto spot: os valores em R$ não vazam mais dos cartões (fonte ajusta à largura, cartões financeiros mais largos) e a tela ficou responsiva: cartões em 2 colunas no tablet/celular, guias com rolagem lateral, botão de ação abaixo das guias e tabelas mais compactas. O mesmo vale para o relatório tradicional (valores longos reduzem a fonte).
 
 - Relatório tradicional (escopo fechado): visual do HTML refeito para leitura profissional: cabeçalho com situação e destaques, cartões de indicadores com barra de progresso nas porcentagens, informações em grade, demandas em blocos com seus apontamentos (data e atividade), tabela de notas com etiquetas de situação, ajuste para impressão/PDF (sem quebrar blocos) e para telas pequenas.

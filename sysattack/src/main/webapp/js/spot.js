@@ -249,7 +249,7 @@ const Spot = (() => {
         ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
           <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
           <td>${r.sent_at ? `<span class="badge b-green">Enviado</span><span class="small">${fmt(String(r.sent_at).slice(0, 10))}</span>` : '<span class="badge b-grey">Não enviado</span>'}</td>
-          <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar relatório" data-action="sp-edit-manual" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
+          <td class="acts"><button class="btn btn-sm" title="Enviar por e-mail" data-action="sp-send-report" data-id="${r.id}">Enviar por e-mail</button><button class="icon-btn" title="Editar" aria-label="Editar relatório" data-action="sp-edit-manual" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum relatório tradicional', 'Clique em “+ Novo relatório”: a tela já vem com os dados do projeto e você completa o restante.')}`;
     } else {
       st.reports = await api('GET', `spot/${id}/reports`);
