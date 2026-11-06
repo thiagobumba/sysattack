@@ -3,6 +3,11 @@ const Spot = (() => {
   const { esc, fmt, todayIso, ic } = SA;
   // projetos encerrados: só administrador altera, e toda alteração exige justificativa (vai no cabeçalho e fica no histórico)
   const closedIds = new Set();
+  // vigência do contrato (início até data final): todas as telas do projeto olham para ela
+  const vigRange = p => ({ s: p.start_date, e: p.end_date || '' });
+  const clampDate = (iso, p) => (iso < p.start_date ? p.start_date : p.end_date && iso > p.end_date ? p.end_date : iso);
+  const vigText = p => p.end_date ? `${fmt(p.start_date)} a ${fmt(p.end_date)}` : `${fmt(p.start_date)} em diante`;
+  const vigLine = () => `<p class="hint" style="margin:0 0 14px"><b>Vigência do contrato:</b> ${vigText(st.data)}</p>`;
   const isAdmin = () => A().me && A().me.role === 'ADMIN';
   const locked = () => !!(st.data && st.data.status === 'ENCERRADO' && !isAdmin());
   function askJustification(title) {
@@ -52,7 +57,7 @@ const Spot = (() => {
   const MODEL = { MENSAL: 'Franquia mensal', PACOTE: 'Pacote de horas' };
   const KIND = { ACAO: 'Ação do último comitê', PENDENCIA: 'Pendência' };
 
-  let st = { id: null, tab: 'resumo', month: todayIso().slice(0, 7), data: null, hours: [], demands: [], actions: [], reports: [] };
+  let st = { id: null, tab: 'resumo', from: null, to: null, data: null, hours: [], demands: [], actions: [], reports: [] };
 
   const h = n => (Math.round((Number(n) || 0) * 10) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'h';
   const badge = (map, k) => map[k] ? `<span class="badge ${map[k][1]}">${map[k][0]}</span>` : esc(k);
@@ -96,21 +101,15 @@ const Spot = (() => {
 
   // ------------------------------------------------------------------ detalhe
   async function viewDetail(id) {
-    if (st.id !== id) st = { id, tab: 'resumo', month: todayIso().slice(0, 7), data: null, hours: [], demands: [], actions: [], reports: [] };
-    // a visão do período acompanha o mês escolhido em "Apontamentos de horas" (mês anterior = último dia do mês)
-    let q = '';
-    if (/^\d{4}-\d{2}$/.test(st.month) && st.month !== todayIso().slice(0, 7)) {
-      const [y, m] = st.month.split('-').map(Number);
-      q = '?ref=' + st.month + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
-    }
-    const p = await api('GET', 'spot/' + id + q);
+    if (st.id !== id) st = { id, tab: 'resumo', from: null, to: null, data: null, hours: [], demands: [], actions: [], reports: [] };
+    const p = await api('GET', 'spot/' + id);
     st.data = p;
     if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, MODEL[p.hours_model] + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
-        ${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
+ <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
         ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
@@ -131,7 +130,7 @@ const Spot = (() => {
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
-      host.innerHTML = `${s.by_item.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Frente</th><th>Atividade</th><th class="num">Horas</th></tr></thead><tbody>
+      host.innerHTML = `${vigLine()}${s.by_item.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Frente</th><th>Atividade</th><th class="num">Horas</th></tr></thead><tbody>
         ${s.by_item.map(i => `<tr><td>${esc(i.front || '—')}</td><td class="strong">${esc(i.label)}</td><td class="num">${h(i.hours)}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Sem horas no período', 'Lance as horas consumidas na aba “Apontamentos de horas”.')}
         ${st.data.billing_note ? `<p class="hint" style="margin-top:14px"><b>Faturamento:</b> ${esc(st.data.billing_note)}</p>` : ''}`;
@@ -141,32 +140,41 @@ const Spot = (() => {
           ${audit.map(x => `<tr><td>${esc(String(x.created_at).slice(0, 16).replace('T', ' '))}</td><td>${esc(x.user_name)}</td><td class="strong">${esc(x.justification)}<span class="small">${esc(x.action)}</span></td></tr>`).join('')}</tbody></table></div>`);
       }
     } else if (st.tab === 'horas') {
-      st.hours = await api('GET', `spot/${id}/hours?month=${st.month}`);
+      const v = vigRange(st.data);
+      const from = st.from || v.s, to = st.to || v.e;
+      st.hours = await api('GET', `spot/${id}/hours?from=${from}&to=${to || '2999-12-31'}`);
       const total = st.hours.reduce((a, x) => a + Number(x.hours), 0);
-      host.innerHTML = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><label for="sp-m" class="hint">Mês</label>
-        <input id="sp-m" type="month" value="${st.month === 'all' ? '' : st.month}" style="min-height:36px;border:1px solid #cfcfcf;padding:0 10px">
-        <button class="btn btn-sm" data-action="sp-month-all">Ver todos</button><span class="hint">${st.hours.length} lançamento(s) · <b>${h(total)}</b></span></div>
+      const inp = 'min-height:36px;border:1px solid #cfcfcf;padding:0 10px';
+      host.innerHTML = `${vigLine()}<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><label for="sp-f" class="hint">De</label>
+        <input id="sp-f" type="date" value="${from}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}"><label for="sp-t" class="hint">Até</label>
+        <input id="sp-t" type="date" value="${to}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}">
+        <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} lançamento(s) · <b>${h(total)}</b></span></div>
         ${st.hours.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Frente</th><th>Atividade</th><th>Demanda</th><th class="num">Horas</th><th></th></tr></thead><tbody>
         ${st.hours.map(x => `<tr><td>${fmt(x.work_date)}</td><td>${esc(x.front || '—')}</td><td class="strong">${esc(x.activity)}</td><td>${esc(x.demand_name || '—')}</td><td class="num">${h(x.hours)}</td>${iconBtns('hour', x.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
-      const m = document.getElementById('sp-m');
-      m.addEventListener('change', () => { st.month = m.value || 'all'; viewDetail(st.id); });
+      const rangeChanged = () => {
+        const f = document.getElementById('sp-f').value, t = document.getElementById('sp-t').value;
+        if (f && t && f > t) { A().toast('A data inicial não pode ser depois da final.'); return; }
+        st.from = f || null; st.to = t || null; renderTab();
+      };
+      document.getElementById('sp-f').addEventListener('change', rangeChanged);
+      document.getElementById('sp-t').addEventListener('change', rangeChanged);
     } else if (st.tab === 'demandas') {
       st.demands = await api('GET', `spot/${id}/demands`);
-      host.innerHTML = st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th><th class="num">Aprovado</th><th class="num">Realizado</th><th></th></tr></thead><tbody>
+      host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th><th class="num">Aprovado</th><th class="num">Realizado</th><th></th></tr></thead><tbody>
         ${st.demands.map(d => `<tr><td class="strong">${esc(d.name)}${d.notes ? `<span class="small">${esc(d.notes)}</span>` : ''}</td><td>${badge(D_STATUS, d.status)}</td><td>${esc(d.next_step || '—')}</td>
           <td class="num">${Number(d.approved_hours) > 0 ? h(d.approved_hours) : '—'}</td>
           <td class="num ${Number(d.approved_hours) > 0 && Number(d.hours_total) > Number(d.approved_hours) ? 'late-txt' : ''}">${h(d.hours_total)}</td>${iconBtns('demand', d.id)}</tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhuma demanda', 'Cadastre as demandas (com horas aprovadas) para comparar realizado × aprovado.');
+        : empty('Nenhuma demanda', 'Cadastre as demandas (com horas aprovadas) para comparar realizado × aprovado.'));
     } else if (st.tab === 'acoes') {
       st.actions = await api('GET', `spot/${id}/actions`);
-      host.innerHTML = st.actions.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead><tbody>
+      host.innerHTML = vigLine() + (st.actions.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead><tbody>
         ${st.actions.map(a => `<tr><td>${KIND[a.kind]}</td><td class="strong">${esc(a.description)}${a.note ? `<span class="small">${esc(a.note)}</span>` : ''}</td><td>${esc(a.responsible || '—')}</td><td>${badge(A_STATUS, a.status)}</td>${iconBtns('action', a.id)}</tr>`).join('')}</tbody></table></div>`
-        : empty('Nada registrado', 'Registre as ações do último comitê e as pendências (da Momesso ou do cliente).');
+        : empty('Nada registrado', 'Registre as ações do último comitê e as pendências (da Momesso ou do cliente).'));
     } else {
       st.reports = await api('GET', `spot/${id}/reports`);
       const ai = await api('GET', 'ai-status').catch(() => ({ connected: false }));
-      host.innerHTML = `${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:14px">O Claude ainda não está conectado. Um administrador precisa configurar a chave em “Configurações IA Agent”.</p>'}
+      host.innerHTML = `${vigLine()}${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:14px">O Claude ainda não está conectado. Um administrador precisa configurar a chave em “Configurações IA Agent”.</p>'}
         ${st.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Referência</th><th>Gerado por</th><th>Envio</th><th></th></tr></thead><tbody>
         ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
           <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
@@ -201,9 +209,9 @@ const Spot = (() => {
 
   async function hourForm(id) {
     const demands = await api('GET', `spot/${st.id}/demands`);
-    const x = id ? st.hours.find(r => r.id === id) : { work_date: todayIso(), front: '', activity: '', demand_id: '', hours: '' };
+    const x = id ? st.hours.find(r => r.id === id) : { work_date: clampDate(todayIso(), st.data), front: '', activity: '', demand_id: '', hours: '' };
     A().openDialog(id ? 'Editar lançamento' : 'Lançar horas', `
-      <div class="field"><label for="hd">Data</label><input id="hd" name="work_date" type="date" value="${x.work_date}" required></div>
+      <div class="field"><label for="hd">Data</label><input id="hd" name="work_date" type="date" value="${x.work_date}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
       <div class="field"><label for="hh">Horas</label><input id="hh" name="hours" type="number" min="0.1" step="0.1" value="${x.hours}" required></div>
       <div class="field"><label for="hf">Frente</label><input id="hf" name="front" maxlength="80" value="${esc(x.front)}" placeholder="Ex.: Suporte, Chatbot"></div>
       <div class="field"><label for="hm">Demanda</label><select id="hm" name="demand_id"><option value="">— nenhuma —</option>${demands.map(d => `<option value="${d.id}"${d.id === x.demand_id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
@@ -236,7 +244,7 @@ const Spot = (() => {
   function reportForm() {
     const p = st.data;
     const f = A().openDialog('Gerar relatório com o Claude', `
-      <div class="field"><label for="rd">Data de referência</label><input id="rd" name="ref_date" type="date" max="${todayIso()}" value="${todayIso()}" required></div>
+      <div class="field"><label for="rd">Data de referência</label><input id="rd" name="ref_date" type="date" min="${p.start_date}" max="${p.end_date && p.end_date < todayIso() ? p.end_date : todayIso()}" value="${clampDate(todayIso(), p)}" required></div>
       <div class="field"><label for="rt">Título</label><input id="rt" name="title" maxlength="200" value="Status Report · ${esc(p.name)}"></div>
       <div class="field full"><label for="ri">Instruções adicionais (opcional)</label><textarea id="ri" name="instructions" maxlength="600" placeholder="Ex.: destaque o atraso do Chatbot; tom mais direto."></textarea></div>
       <p class="hint full">Os números são calculados pelo SysAttack; o Claude escreve apenas o texto. A geração leva alguns segundos.</p>`,
@@ -392,7 +400,7 @@ const Spot = (() => {
       ? `<p class="hint late-txt full">Atenção: o consumo do relatório é ${h(rep.reportTotal)}, mas as linhas somam ${h(total)}. Confira antes de importar.</p>` : '';
     const body = isH ? `
       <p class="hint full">Revise o que será lançado. Horas já lançadas (mesma data, atividade e valor) são ignoradas. As horas são ligadas às demandas já cadastradas quando o nome bate; por isso importe as demandas antes, na aba Demandas.</p>
-      <div class="field"><label for="imp-d">Data dos lançamentos</label><input id="imp-d" name="date" type="date" value="${rep.date}" required></div>
+      <div class="field"><label for="imp-d">Data dos lançamentos</label><input id="imp-d" name="date" type="date" value="${clampDate(rep.date, st.data)}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
       <div class="field"><label>Total de horas</label><div class="strong" style="padding:10px 0">${h(total)}</div></div>${warn}
       <div class="full"><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Atividade</th><th>Frente</th><th>Demanda</th><th class="num">Horas</th></tr></thead><tbody>${hl}</tbody></table></div></div>`
       : `
@@ -403,7 +411,7 @@ const Spot = (() => {
         const hours = rep.hours.map((x, i) => d['hc' + i] ? { work_date: d.date, front: x.front, activity: x.activity, hours: x.hours, demand_name: x.demand } : null).filter(Boolean);
         if (!hours.length) throw new Error('Marque ao menos um lançamento.');
         const r = await api('POST', `spot/${st.id}/import`, { hours });
-        st.month = d.date.slice(0, 7);
+        st.from = null; st.to = null;
         A().toast(`Importado: ${r.hours_created} lançamento(s)` + (r.hours_skipped ? `; ${r.hours_skipped} já existia(m).` : '.'));
       } else {
         const demands = rep.demands.map((x, i) => d['dc' + i] ? { name: x.name, status: d['ds' + i], next_step: x.next_step.slice(0, 500), approved_hours: x.approved || 0, notes: x.notes } : null).filter(Boolean);
@@ -437,7 +445,7 @@ const Spot = (() => {
     A().openDialog('Importar relatório completo', `
       <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar o Claude. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
       <div class="field full"><label for="ir-t">Título</label><input id="ir-t" name="titulo" maxlength="200" value="${esc(f.titulo)}" required></div>
-      <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(f.ref_date)}" required></div>
+      <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(clampDate(f.ref_date, st.data))}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
       <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
       <div class="field full"><label>Meta</label><div class="small">${esc(f.meta)}</div></div>`, async d => {
       const r = await api('POST', `spot/${st.id}/reports/import`, { ...f, titulo: d.titulo, ref_date: d.ref_date });
@@ -472,7 +480,7 @@ const Spot = (() => {
       case 'sp-edit-project': await projectForm(id); break;
       case 'sp-del-project': await del('spot/' + id, 'Excluir este projeto spot com todas as horas, demandas e relatórios?'); break;
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
-      case 'sp-month-all': st.month = 'all'; await viewDetail(st.id); break;
+      case 'sp-vig-all': st.from = null; st.to = null; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
       case 'sp-import': pickReport('horas'); break;
       case 'sp-import-demand': pickReport('demandas'); break;

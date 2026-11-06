@@ -100,7 +100,7 @@ final class SpotService {
                 project(id);
                 switch (s.get(2)) {
                     case "hours":
-                        if (m.equals("GET")) return listHours(id, req.getParameter("month"));
+                        if (m.equals("GET")) return listHours(id, req.getParameter("month"), req.getParameter("from"), req.getParameter("to"));
                         if (m.equals("POST")) return saveHour(null, id, ApiServlet.body(req), user);
                         break;
                     case "demands":
@@ -222,7 +222,15 @@ final class SpotService {
         throw new ApiException(405, "Operação não suportada.");
     }
 
-    private static Object listHours(long spotId, String month) throws SQLException {
+    private static Object listHours(long spotId, String month, String from, String to) throws SQLException {
+        if (from != null && !from.isBlank() && to != null && !to.isBlank()) {
+            try {
+                return Db.query("SELECT h.*, d.name demand_name FROM spot_hours h LEFT JOIN spot_demands d ON d.id = h.demand_id"
+                        + " WHERE h.spot_id = ? AND h.work_date >= ? AND h.work_date <= ? ORDER BY h.work_date DESC, h.id DESC", spotId, LocalDate.parse(from), LocalDate.parse(to));
+            } catch (DateTimeParseException e) {
+                throw new ApiException(400, "Período inválido.");
+            }
+        }
         String sql = "SELECT h.*, d.name demand_name FROM spot_hours h LEFT JOIN spot_demands d ON d.id = h.demand_id WHERE h.spot_id = ?";
         if (month == null || month.isBlank() || month.equals("all")) {
             return Db.query(sql + " ORDER BY h.work_date DESC, h.id DESC LIMIT 2000", spotId);
@@ -242,6 +250,12 @@ final class SpotService {
         Long demand = ApiServlet.optLong(b, "demand_id");
         BigDecimal hours = ApiServlet.money(b, "hours", "Horas", true);
         if (hours.signum() <= 0 || hours.compareTo(new BigDecimal("9999")) > 0) throw new ApiException(400, "Informe horas maiores que zero (máximo 9999).");
+        Map<String, Object> sp = project(spotId);
+        LocalDate vs = SpotCalc.vigStart(sp), ve = SpotCalc.vigEnd(sp);
+        if (d.isBefore(vs) || (ve != null && d.isAfter(ve))) {
+            throw new ApiException(400, "A data do lançamento precisa estar dentro da vigência do contrato (" + SpotReportHtml.date(vs.toString())
+                    + (ve == null ? " em diante)." : " a " + SpotReportHtml.date(ve.toString()) + ")."));
+        }
         if (demand != null && Db.one("SELECT id FROM spot_demands WHERE id = ? AND spot_id = ?", demand, spotId) == null) {
             throw new ApiException(400, "A demanda precisa ser do mesmo projeto.");
         }
@@ -428,6 +442,7 @@ final class SpotService {
         LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
         if (ref == null) ref = today;
         if (ref.isAfter(today)) throw new ApiException(400, "A data de referência não pode ser futura.");
+        ref = SpotCalc.clampRef(p, ref); // sempre dentro da vigência do contrato
         String title = ApiServlet.str(b, "title", "Título", 200, false);
         if (title.isEmpty()) title = "Status Report · " + p.get("name");
         String extra = ApiServlet.str(b, "instructions", "Instruções adicionais", 600, false);
@@ -504,6 +519,7 @@ final class SpotService {
         if (title.length() > 200) title = title.substring(0, 200);
         LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
         if (ref == null) ref = LocalDate.now();
+        ref = SpotCalc.clampRef(project(spotId), ref); // dentro da vigência do contrato
         String json = GSON.toJson(data);
         if (json.length() > 150000) throw new ApiException(400, "Relatório grande demais para importar.");
         long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",

@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot: o período do projeto é sempre a vigência do contrato (início até a data final). A visão do período, os apontamentos, o resumo e os relatórios passam a olhar a vigência, em vez do mês corrente; a aba de horas ganhou o filtro "De / Até" limitado à vigência. Lançamentos de horas e a data de referência dos relatórios só aceitam datas dentro da vigência. Novo botão "Voltar" na tela do projeto.
+
 - Projetos Spot: a lista mostra "Saldo atual" no lugar de "Saldo projetado". Projeto encerrado só pode ser alterado por administrador, com justificativa obrigatória (mínimo de 10 caracteres) que fica no histórico da aba Resumo; usuários comuns só consultam. O envio do relatório por e-mail ganhou CC e CCO, e aceita vários endereços separados por ponto e vírgula.
 - Consistência dos dados: toda alteração no sistema (projetos, tarefas, marcos, financeiro, documentos, usuários, e-mail, Projetos Spot e as importações) é gravada de forma atômica, tudo ou nada; e-mails automáticos só saem e arquivos de documentos só são apagados depois que o banco confirma; o banco grava no disco a cada confirmação e faz cópia de segurança diária (zip, últimas 14, na pasta de dados em `backups`).
 

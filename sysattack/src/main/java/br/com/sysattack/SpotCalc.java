@@ -15,7 +15,8 @@ import java.util.Map;
  * Esses valores NUNCA vêm da IA: o Claude apenas redige o texto em cima deste "retrato" (snapshot).
  *
  * Regras:
- *  - MENSAL: período = do dia 1º do mês de referência até a data de referência. PACOTE: desde o início do projeto.
+ *  - Com data final cadastrada, o período é SEMPRE a vigência do contrato (início até a data final, limitado à data de referência).
+ *  - Sem data final: MENSAL = do dia 1º do mês de referência até a data de referência; PACOTE = desde o início do projeto.
  *  - Consumido = soma dos apontamentos do período.
  *  - Reservado = para cada demanda com horas aprovadas e ainda não concluída/cancelada: max(0, aprovado - realizado no período).
  *  - Saldo = fixadas - consumido. Saldo projetado = fixadas - consumido - reservado.
@@ -31,10 +32,35 @@ final class SpotCalc {
         return o == null ? 0 : ((Number) o).doubleValue();
     }
 
+    /** Vigência do contrato: início e data final (null quando não há). */
+    static LocalDate vigStart(Map<String, Object> p) {
+        return LocalDate.parse((String) p.get("start_date"));
+    }
+
+    static LocalDate vigEnd(Map<String, Object> p) {
+        Object e = p.get("end_date");
+        return e == null ? null : LocalDate.parse(String.valueOf(e).substring(0, 10));
+    }
+
+    /** Mantém a data de referência dentro da vigência (depois do fim, vale o último dia). */
+    static LocalDate clampRef(Map<String, Object> p, LocalDate ref) {
+        LocalDate end = vigEnd(p);
+        if (end != null && ref.isAfter(end)) ref = end;
+        if (ref.isBefore(vigStart(p))) ref = vigStart(p);
+        return ref;
+    }
+
+    private static String br(LocalDate d) {
+        return String.format("%02d/%02d/%d", d.getDayOfMonth(), d.getMonthValue(), d.getYear());
+    }
+
     static Map<String, Object> snapshot(Map<String, Object> p, LocalDate ref) throws SQLException {
         long id = ((Number) p.get("id")).longValue();
         boolean monthly = "MENSAL".equals(p.get("hours_model"));
-        LocalDate start = monthly ? ref.withDayOfMonth(1) : LocalDate.parse((String) p.get("start_date"));
+        LocalDate vEnd = vigEnd(p);
+        boolean byVig = vEnd != null;
+        if (byVig) ref = clampRef(p, ref);
+        LocalDate start = byVig ? vigStart(p) : monthly ? ref.withDayOfMonth(1) : vigStart(p);
         if (start.isAfter(ref)) start = ref;
         double contracted = num(p.get("contracted_hours"));
 
@@ -136,7 +162,7 @@ final class SpotCalc {
         out.put("project", proj);
         out.put("ref_date", ref.toString());
         out.put("period_start", start.toString());
-        out.put("period_label", monthly
+        out.put("period_label", byVig ? br(vigStart(p)) + " a " + br(vEnd) : monthly
                 ? ref.getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("pt-BR")) + "/" + ref.getYear()
                 : "desde " + start.getDayOfMonth() + "/" + start.getMonthValue() + "/" + start.getYear());
         out.put("kpi", kpi);

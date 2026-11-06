@@ -539,3 +539,4 @@ h1 { font-size: 38px; margin: 6px 0 6px; }
 .badge.rec { margin-left: 6px; font-size: 9.5px; padding: 3px 6px; vertical-align: 2px; }
 .field label .opt { font-weight: 400; color: #8a8a8a; }
 @media (max-width: 560px) { .meta-grid > .wide { grid-column: auto; } }
+a.btn { text-decoration: none; color: var(--ink); }
