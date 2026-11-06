@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Relatórios em HTML compatíveis com o Outlook em todos os tipos: projetos de horas e "Relatórios com Claude" (SpotReportHtml) e Status Report importado (ImportedReportHtml) agora usam só tabelas com bgcolor, etiquetas e cartões em células, espaçamento nas células e fonte Segoe UI, sem inline-block nem margem em tabela/div (que o Outlook ignora). As etiquetas de status ficam com cantos retos nos clientes que não arredondam; o conteúdo não mudou.
+
 - Relatório tradicional (escopo fechado): HTML reescrito para o Outlook (motor do Word): só tabelas, cores de fundo em atributo bgcolor, bordas e espaçamentos nas células, etiquetas e barras de progresso em células (sem inline-block nem largura em span, que o Outlook ignora), largura máxima com tabela fantasma para o Outlook e fonte Segoe UI. Corrige datas coladas no texto dos apontamentos, cartões sem fundo e texto cortado. Nos demais clientes o visual é o mesmo.
 
 - Relatório tradicional: o envio por e-mail fica no relatório aberto (botão "Enviar por e-mail"), igual aos projetos de horas: Para, CC e CCO separados por ";", relatório no corpo do e-mail e registro de envio.

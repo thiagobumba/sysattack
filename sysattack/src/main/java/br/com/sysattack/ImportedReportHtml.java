@@ -13,7 +13,17 @@ final class ImportedReportHtml {
     private ImportedReportHtml() {}
 
     private static final String INK = "#1d1d1b", MUTED = "#6b6b66", LINE = "#e6e4de", YELLOW = "#e8b400", RED = "#b8332f";
-    private static final String CARD = "background:#fff;border:1px solid " + LINE + ";border-radius:10px;padding:16px 18px;";
+    private static final String T0 = " role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"";
+
+    /** Caixa compatível com o Outlook: tabela com bgcolor e borda/espaçamento na célula (div com padding é ignorado pelo Word). */
+    private static String box(String inner, String leftBar) {
+        return "<table" + T0 + " width=\"100%\"><tr>" + (leftBar == null ? "" : "<td width=\"4\" bgcolor=\"" + leftBar + "\" style=\"background-color:" + leftBar + ";font-size:1px\">&nbsp;</td>")
+                + "<td bgcolor=\"#ffffff\" style=\"background-color:#ffffff;border:1px solid " + LINE + ";" + (leftBar == null ? "" : "border-left:0;") + "border-radius:10px;padding:16px 18px\">" + inner + "</td></tr></table>";
+    }
+
+    private static String gap(int px) {
+        return "<table" + T0 + " width=\"100%\"><tr><td height=\"" + px + "\" style=\"height:" + px + "px;font-size:1px;line-height:1px\">&nbsp;</td></tr></table>";
+    }
     private static final int[] LIMITS = {1000, 400};
 
     private static String h(String s) { return SpotReportHtml.h(s); }
@@ -71,12 +81,12 @@ final class ImportedReportHtml {
     }
 
     private static String pillHtml(String text, String[] c) {
-        return "<span style=\"display:inline-block;font-size:12px;font-weight:500;padding:1px 10px;border-radius:999px;border:1px solid " + c[0]
-                + ";color:" + c[0] + ";background:" + c[1] + ";margin-right:6px\">" + h(text) + "</span>";
+        return "<table" + T0 + " style=\"display:inline-table\"><tr><td bgcolor=\"" + c[1] + "\" style=\"background-color:" + c[1] + ";font-size:12px;font-weight:bold;padding:2px 10px;border:1px solid " + c[0]
+                + ";color:" + c[0] + ";white-space:nowrap;border-radius:10px\">" + h(text) + "</td></tr></table>";
     }
 
     private static String title(String t, String color) {
-        return "<div style=\"margin:0 0 12px;font-size:12.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:" + color + "\">" + h(t) + "</div>";
+        return "<table" + T0 + " width=\"100%\"><tr><td style=\"padding:0 0 12px;font-size:12.5px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:" + color + "\">" + h(t) + "</td></tr></table>";
     }
 
     private static String hoursTable(String head, JsonArray rows, String col, String totalLabel) {
@@ -107,76 +117,80 @@ final class ImportedReportHtml {
     }
 
     private static String twoCols(String left, String right) {
-        return "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:16px\"><tr><td width=\"50%\" valign=\"top\" style=\"padding-right:8px\">" + left
-                + "</td><td width=\"50%\" valign=\"top\" style=\"padding-left:8px\">" + right + "</td></tr></table>";
+        return "<table" + T0 + " width=\"100%\"><tr><td class=\"col\" width=\"50%\" valign=\"top\" style=\"padding-right:8px\">" + left
+                + "</td><td class=\"col\" width=\"50%\" valign=\"top\" style=\"padding-left:8px\">" + right + "</td></tr></table>" + gap(16);
     }
 
     static String render(JsonObject d) {
         StringBuilder b = new StringBuilder();
-        b.append("<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
-                .append(h(str(d, "titulo"))).append("</title></head><body style=\"margin:0;background:#f6f6f4;color:").append(INK)
-                .append(";font:14.5px/1.5 Inter,Arial,sans-serif\"><div style=\"max-width:1060px;margin:0 auto;padding:22px 18px 40px\">");
-        b.append("<div style=\"border-left:4px solid ").append(YELLOW).append(";padding:2px 0 2px 16px;margin-bottom:16px\">")
-                .append("<h1 style=\"margin:0 0 4px;font-size:25px;font-weight:700;line-height:1.25\">").append(h(str(d, "titulo"))).append("</h1>")
-                .append("<div style=\"color:").append(MUTED).append(";font-size:14px\">").append(h(str(d, "meta"))).append("</div>");
+        b.append("<!DOCTYPE html><html lang=\"pt-BR\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+                .append("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->")
+                .append("<title>").append(h(str(d, "titulo"))).append("</title><style>body,table,td,th,p{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:").append(INK)
+                .append("}table{border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>")
+                .append("<body bgcolor=\"#f6f6f4\" style=\"margin:0;background-color:#f6f6f4;font-size:14.5px\"><table").append(T0).append(" width=\"100%\" bgcolor=\"#f6f6f4\"><tr><td align=\"center\" style=\"padding:22px 18px 40px\">")
+                .append("<!--[if mso]><table role=\"presentation\" width=\"1000\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td><![endif]-->")
+                .append("<table").append(T0).append(" width=\"100%\" style=\"max-width:1000px\"><tr><td>");
+        b.append("<table").append(T0).append(" width=\"100%\"><tr><td width=\"4\" bgcolor=\"").append(YELLOW).append("\" style=\"background-color:").append(YELLOW).append(";font-size:1px\">&nbsp;</td><td style=\"padding:2px 0 2px 16px\">")
+                .append("<table").append(T0).append(" width=\"100%\"><tr><td style=\"font-size:25px;font-weight:bold;line-height:1.25\">").append(h(str(d, "titulo"))).append("</td></tr>")
+                .append("<tr><td style=\"padding-top:4px;color:").append(MUTED).append(";font-size:14px\">").append(h(str(d, "meta"))).append("</td></tr>");
         if (!str(d, "destaques").isEmpty()) {
-            b.append("<div style=\"color:").append(MUTED).append(";font-size:14px\"><b style=\"color:").append(INK).append("\">Destaques:</b> ")
-                    .append(h(str(d, "destaques"))).append("</div>");
+            b.append("<tr><td style=\"color:").append(MUTED).append(";font-size:14px\"><b style=\"color:").append(INK).append("\">Destaques:</b> ").append(h(str(d, "destaques"))).append("</td></tr>");
         }
-        b.append("</div>");
+        b.append("</table></td></tr></table>").append(gap(16));
 
         JsonArray kpis = arr(d, "kpis");
         if (kpis.size() > 0) {
-            b.append("<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:16px;table-layout:fixed\"><tr>");
+            b.append("<table").append(T0).append(" width=\"100%\" style=\"table-layout:fixed\"><tr>");
             int i = 0;
             for (JsonElement e : kpis) {
                 JsonObject k = e.getAsJsonObject();
                 String n = str(k, "n"), color = i == 0 ? INK : i == 2 ? (n.matches("^\\s*[-−–].*") ? RED : "#2e8b57") : "#b7791f";
-                b.append("<td valign=\"top\" style=\"padding:0 ").append(i == kpis.size() - 1 ? 0 : 7).append("px 0 ").append(i == 0 ? 0 : 7).append("px\"><div style=\"")
-                        .append(CARD).append("\"><div style=\"font-size:26px;font-weight:700;line-height:1.2;color:").append(color).append("\">").append(h(n))
-                        .append("</div><div style=\"font-size:12.5px;color:").append(MUTED).append(";margin-top:4px\">").append(h(str(k, "l"))).append("</div></div></td>");
+                b.append("<td valign=\"top\" style=\"padding:0 ").append(i == kpis.size() - 1 ? 0 : 7).append("px 0 ").append(i == 0 ? 0 : 7).append("px\">")
+                        .append(box("<table" + T0 + " width=\"100%\"><tr><td style=\"font-size:26px;font-weight:bold;line-height:1.2;color:" + color + "\">" + h(n)
+                                + "</td></tr><tr><td style=\"padding-top:4px;font-size:12.5px;color:" + MUTED + "\">" + h(str(k, "l")) + "</td></tr></table>", null)).append("</td>");
                 i++;
             }
-            b.append("</tr></table>");
+            b.append("</tr></table>").append(gap(16));
         }
 
         String chatNote = "";
         if (!str(d, "pillChat").isEmpty() || !str(d, "notaChat").isEmpty()) {
-            chatNote = "<div style=\"margin-top:14px\">" + (str(d, "pillChat").isEmpty() ? "" : pillHtml(str(d, "pillChat"), pill("Pendente")))
-                    + "<span>" + h(str(d, "notaChat")) + "</span></div>";
+            chatNote = gap(14) + "<table" + T0 + "><tr>" + (str(d, "pillChat").isEmpty() ? "" : "<td valign=\"middle\" style=\"padding-right:8px\">" + pillHtml(str(d, "pillChat"), pill("Pendente")) + "</td>")
+                    + "<td style=\"font-size:14px\">" + h(str(d, "notaChat")) + "</td></tr></table>";
         }
         b.append(twoCols(
-                "<div style=\"" + CARD + "\">" + title(str(d, "hConsumo"), INK) + hoursTable("", arr(d, "consumo"), "Demanda", str(d, "totLbl1")) + "</div>",
-                "<div style=\"" + CARD + "\">" + title(str(d, "hChat"), INK) + hoursTable("", arr(d, "chat"), "Alteração", str(d, "totLbl2")) + chatNote + "</div>"));
+                box(title(str(d, "hConsumo"), INK) + hoursTable("", arr(d, "consumo"), "Demanda", str(d, "totLbl1")), null),
+                box(title(str(d, "hChat"), INK) + hoursTable("", arr(d, "chat"), "Alteração", str(d, "totLbl2")) + chatNote, null)));
 
         JsonArray acoes = arr(d, "acoes");
         if (acoes.size() > 0) {
-            b.append("<div style=\"").append(CARD).append("margin-bottom:16px\">").append(title(str(d, "hAcoes"), INK))
+            StringBuilder t = new StringBuilder(title(str(d, "hAcoes"), INK))
                     .append("<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;font-size:13.5px\"><tr>");
             for (String c : new String[] {"Ação", "Responsável", "Status"}) {
-                b.append("<th align=\"left\" style=\"font-size:13px;color:").append(MUTED).append(";padding:4px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\">").append(c).append("</th>");
+                t.append("<th align=\"left\" style=\"font-size:13px;color:").append(MUTED).append(";padding:4px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\">").append(c).append("</th>");
             }
-            b.append("</tr>");
+            t.append("</tr>");
             for (JsonElement e : acoes) {
                 JsonObject r = e.getAsJsonObject();
-                b.append("<tr><td valign=\"top\" style=\"padding:8px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\">").append(h(str(r, "a")))
+                String obs = str(r, "t");
+                t.append("<tr><td valign=\"top\" style=\"padding:8px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\">").append(h(str(r, "a")))
                         .append("</td><td valign=\"top\" style=\"padding:8px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\">").append(h(str(r, "r")))
-                        .append("</td><td valign=\"top\" style=\"padding:8px 8px 8px 0;border-bottom:1px solid ").append(LINE).append(";width:42%\">")
-                        .append(pillHtml(str(r, "s"), pill(str(r, "s")))).append(h(str(r, "t"))).append("</td></tr>");
+                        .append("</td><td valign=\"top\" width=\"42%\" style=\"padding:8px 8px 8px 0;border-bottom:1px solid ").append(LINE).append("\"><table").append(T0).append("><tr><td valign=\"top\">")
+                        .append(pillHtml(str(r, "s"), pill(str(r, "s")))).append("</td>").append(obs.isEmpty() ? "" : "<td style=\"padding-left:8px;font-size:13.5px\">" + h(obs) + "</td>").append("</tr></table></td></tr>");
             }
-            b.append("</table></div>");
+            t.append("</table>");
+            b.append(box(t.toString(), null)).append(gap(16));
         }
 
         String prevNote = str(d, "notaPrev").isEmpty() ? "" : "<p style=\"font-size:12.5px;color:" + MUTED + ";margin:12px 0 0\">" + h(str(d, "notaPrev")) + "</p>";
         b.append(twoCols(
-                "<div style=\"" + CARD + "\">" + title(str(d, "hAnd"), INK) + list(arr(d, "andamento")) + "</div>",
-                "<div style=\"" + CARD + "\">" + title(str(d, "hPrev"), INK) + list(arr(d, "previsao")) + prevNote + "</div>"));
+                box(title(str(d, "hAnd"), INK) + list(arr(d, "andamento")), null),
+                box(title(str(d, "hPrev"), INK) + list(arr(d, "previsao")) + prevNote, null)));
 
         if (arr(d, "defs").size() > 0) {
-            b.append("<div style=\"").append(CARD).append("border-left:4px solid ").append(RED).append(";margin-bottom:16px\">").append(title(str(d, "hDefs"), INK))
-                    .append(list(arr(d, "defs"))).append("</div>");
+            b.append(box(title(str(d, "hDefs"), INK) + list(arr(d, "defs")), RED)).append(gap(16));
         }
-        if (!str(d, "rodape").isEmpty()) b.append("<div style=\"font-size:12.5px;color:").append(MUTED).append(";margin-top:4px\">").append(h(str(d, "rodape"))).append("</div>");
-        return b.append("</div></body></html>").toString();
+        if (!str(d, "rodape").isEmpty()) b.append("<table").append(T0).append(" width=\"100%\"><tr><td style=\"padding:2px 4px;font-size:12.5px;color:").append(MUTED).append("\">").append(h(str(d, "rodape"))).append("</td></tr></table>");
+        return b.append("</td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>").toString();
     }
 }
