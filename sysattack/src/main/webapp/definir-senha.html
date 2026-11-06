@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png?v=47">
+  <link rel="icon" href="favicon.ico?v=47" sizes="any">
+  <link rel="apple-touch-icon" href="img/icon-180.png?v=47">
+  <title>SysAttack · Criar senha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=47">
+  <link rel="stylesheet" href="css/login.css?v=47">
+</head>
+<body>
+  <main class="login-page">
+    <header class="login-top">
+      <img src="img/logo-white.png" alt="Momesso">
+    </header>
+    <img class="login-sil" src="img/machine-cut.png" alt="">
+    <div class="login-main">
+      <section class="login-pitch">
+        <h2>O projeto,<br>você planeja hoje.</h2>
+        <p>Prazos, horas e entregas de cada projeto em um só lugar, com a mesma precisão das nossas máquinas.</p>
+      </section>
+      <section class="login-card" aria-labelledby="ttl">
+        <h1 id="ttl">SysAttack</h1>
+        <p class="sub">Gestão de projetos Momesso</p>
+
+        <div id="loading"><p>Verificando o link…</p></div>
+        <div id="bad" hidden><div class="form-error" id="bad-msg" role="alert"></div><p class="login-note"><a href="login.html">Ir para o login</a></p></div>
+        <div id="done" hidden><p class="sub" style="color:var(--ink)"><b>Senha criada.</b> Agora você já pode entrar no SysAttack.</p><a class="btn btn-primary" href="login.html">Ir para o login <span aria-hidden="true">→</span></a></div>
+        <form id="s" novalidate hidden>
+          <p class="sub" style="color:var(--ink)">Olá, <b id="nm"></b>. Crie a senha de acesso para <b id="em"></b>.</p>
+          <div class="field"><label for="sp">Nova senha</label><input id="sp" type="password" autocomplete="new-password" required></div>
+          <ul class="rules"><li>Pelo menos 10 caracteres</li><li>Uma letra minúscula</li><li>Uma letra maiúscula</li><li>Um número</li><li>Um símbolo (! @ # $ %)</li></ul>
+          <div class="field"><label for="sc">Repita a senha</label><input id="sc" type="password" autocomplete="new-password" required></div>
+          <div class="form-error" id="serr" role="alert" hidden style="margin-bottom:16px"></div>
+          <button class="btn btn-primary" id="sgo" type="submit">Criar senha <span aria-hidden="true">→</span></button>
+          <p class="login-terms">Ao continuar, você confirma que leu a <a href="privacidade.html">Política de Privacidade</a> e as regras de uso do SysAttack.</p>
+        </form>
+      </section>
+    </div>
+    <footer class="login-foot">
+      <div class="login-band">
+        <img src="img/logo-light-bg.png" alt="Momesso">
+        <p><b>Momesso</b> · Máquinas de tratamento para sementes<br>Tecnologia e inovação para o seu negócio.</p>
+        <nav aria-label="Rodapé"><a href="privacidade.html">Política de Privacidade</a><a href="https://www.momesso.ind.br" target="_blank" rel="noopener noreferrer">Site</a></nav>
+      </div>
+      <div class="login-bar"><div><span>© <span data-year>2026</span> - Momesso Indústria de Máquinas - Todos os direitos reservados</span><span>Acesso restrito a usuários autorizados</span></div></div>
+    </footer>
+  </main>
+  <script src="js/core.js?v=47"></script>
+  <script src="js/definir-senha.js?v=47"></script>
+</body>
+</html>

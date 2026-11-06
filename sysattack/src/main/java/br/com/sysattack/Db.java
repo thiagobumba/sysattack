@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 39;
+    private static final int SCHEMA_VERSION = 41;
 
     private Db() {}
 
@@ -65,6 +65,24 @@ public final class Db {
                     + "salt VARCHAR(60) NOT NULL,"
                     + "role VARCHAR(20) NOT NULL DEFAULT 'USER')");
             s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title VARCHAR(80) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_pending BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret_enc VARCHAR(400) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_required BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_step BIGINT DEFAULT 0 NOT NULL");
+            s.execute("CREATE TABLE IF NOT EXISTS recovery_codes ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                    + "code_hash VARCHAR(64) NOT NULL)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_recovery_user ON recovery_codes(user_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS user_tokens ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                    + "token_hash VARCHAR(64) NOT NULL UNIQUE,"
+                    + "expires_at TIMESTAMP NOT NULL,"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS projects ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "name VARCHAR(160) NOT NULL,"

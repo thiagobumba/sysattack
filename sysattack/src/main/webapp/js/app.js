@@ -457,36 +457,116 @@
     view.users = list;
     const sub = isAdmin() ? 'Quem pode entrar no sistema. Bloqueie ou ative acessos quando necessário.'
                           : 'Seus dados de acesso. Para trocar a senha, enviaremos um código de confirmação ao seu e-mail.';
+    const status = u => (u.active ? '<span class="badge b-green">Ativo</span>' : '<span class="badge b-red">Bloqueado</span>')
+      + (u.invite_pending ? ' <span class="badge b-orange" title="Convite enviado; a pessoa ainda não criou a senha">Aguardando senha</span>' : '')
+      + (u.totp_enabled ? ' <span class="badge b-grey" title="Verificação em duas etapas ativa">2FA ativo</span>'
+        : u.totp_required ? ' <span class="badge b-orange" title="Exigido, mas ainda não configurado">2FA exigido</span>' : '');
     main.innerHTML = pageHead(['SysAttack', 'Usuários'], isAdmin() ? 'Usuários' : 'Meu usuário', sub) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">${isAdmin() ? 'Acessos cadastrados' : 'Dados do acesso'}</h2>
         ${isAdmin() ? '<button class="btn btn-primary btn-sm" data-action="new-user">+ Novo usuário</button>' : ''}</div>
-        <div class="table-wrap"><table class="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>
         ${list.map(u => { const self = u.id === me.id;
-          return `<tr><td class="strong">${esc(u.name)}${self ? '<span class="small">Você</span>' : ''}</td><td>${esc(u.email)}</td>
+          return `<tr><td class="strong">${esc(u.name)}${self ? '<span class="small">Você</span>' : ''}</td><td>${esc(u.job_title || '—')}</td><td>${esc(u.email)}</td>
           <td><span class="badge ${u.role === 'ADMIN' ? 'b-dark' : 'b-grey'}">${ROLES[u.role]}</span></td>
-          <td>${u.active ? '<span class="badge b-green">Ativo</span>' : '<span class="badge b-red">Bloqueado</span>'}</td>
+          <td>${status(u)}</td>
           <td class="acts">
             ${self ? `<button class="icon-btn" title="Alterar senha" aria-label="Alterar senha" data-action="change-password">${ic('key')}</button>` : ''}
             ${isAdmin() ? `<button class="icon-btn" title="Editar" aria-label="Editar usuário" data-action="edit-user" data-id="${u.id}">${ic('edit')}</button>
-              ${self ? '' : `<button class="icon-btn" title="${u.active ? 'Bloquear acesso' : 'Ativar acesso'}" aria-label="${u.active ? 'Bloquear' : 'Ativar'} usuário" data-action="toggle-user" data-id="${u.id}" data-active="${u.active ? 1 : 0}">${ic(u.active ? 'lock' : 'unlock')}</button>
+              ${self ? '' : `<button class="icon-btn" title="${u.invite_pending ? 'Reenviar convite por e-mail' : 'Enviar link para redefinir a senha'}" aria-label="Enviar e-mail de acesso" data-action="invite-user" data-id="${u.id}">${ic('mail')}</button>
+              ${u.totp_enabled ? `<button class="icon-btn" title="Redefinir o 2FA (perdeu o celular)" aria-label="Redefinir 2FA" data-action="reset-2fa" data-id="${u.id}">${ic('shield')}</button>` : ''}
+              <button class="icon-btn" title="${u.active ? 'Bloquear acesso' : 'Ativar acesso'}" aria-label="${u.active ? 'Bloquear' : 'Ativar'} usuário" data-action="toggle-user" data-id="${u.id}" data-active="${u.active ? 1 : 0}">${ic(u.active ? 'lock' : 'unlock')}</button>
               <button class="icon-btn del" title="Excluir" aria-label="Excluir usuário" data-action="del-user" data-id="${u.id}">${ic('trash')}</button>`}` : ''}
-          </td></tr>`; }).join('')}</tbody></table></div></section>`;
+          </td></tr>`; }).join('')}</tbody></table></div></section>
+      <section class="panel" id="sec-panel"><div class="panel-head"><h2 class="panel-title">Segurança da conta</h2></div><div id="sec-body"><p class="hint">Carregando…</p></div></section>`;
+    renderSecurity();
+  }
+
+  // ---- verificação em duas etapas (própria conta)
+  async function renderSecurity() {
+    const box = document.getElementById('sec-body'); if (!box) return;
+    let st;
+    try { st = await api('GET', 'me/2fa'); } catch (ex) { box.innerHTML = `<p class="hint msg-err">${esc(ex.message)}</p>`; return; }
+    box.innerHTML = `<p><b>Verificação em duas etapas (2FA):</b> ${st.enabled ? '<span class="badge b-green">Ativa</span>' : '<span class="badge b-grey">Desativada</span>'}
+      ${st.required ? '<span class="badge b-orange">Exigida pelo administrador</span>' : ''}</p>
+      <p class="hint">Além da senha, o login pede um código de 6 dígitos de um aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy).${st.enabled ? ` Códigos de recuperação restantes: <b>${st.recovery_left}</b>.` : ''}</p>
+      <p style="margin-top:14px">${st.enabled
+        ? `<button class="btn btn-sm" data-action="2fa-codes">Gerar novos códigos de recuperação</button> ${st.required ? '' : '<button class="btn btn-sm" data-action="2fa-off">Desativar</button>'}`
+        : '<button class="btn btn-primary btn-sm" data-action="2fa-on">Ativar verificação em duas etapas</button>'}</p>`;
+  }
+
+  function recoveryHtml(codes) {
+    return `<div class="full"><p><b>Guarde estes códigos de recuperação.</b> Cada um vale uma única vez e substitui o código do aplicativo se você perder o celular. Eles não serão mostrados de novo.</p>
+      <pre class="codes" style="font-size:16px;line-height:1.8;background:#f4f4f4;padding:12px 16px;user-select:all">${codes.map(esc).join('\n')}</pre></div>`;
+  }
+
+  // ativação do 2FA; `forced` = diálogo sem opção de fechar (exigência do administrador)
+  async function open2faSetup(forced) {
+    const r = await api('POST', 'me/2fa/start', {});
+    const form = openDialog('Ativar verificação em duas etapas', `
+      <div class="full"><p class="hint"><b>1.</b> No aplicativo autenticador, escaneie o QR code (ou digite a chave).</p>
+        <div class="qr-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:10px 0">
+          <div style="width:180px;height:180px;background:#fff;padding:6px;border:1px solid #ddd">${QR.svg(r.uri, { scale: 4, margin: 0 })}</div>
+          <div><p class="hint">Chave manual:</p><code style="user-select:all;word-break:break-all">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</code></div></div>
+        <p class="hint"><b>2.</b> Digite o código de 6 dígitos que o aplicativo mostra.</p></div>
+      <div class="field full"><label for="tf">Código de 6 dígitos</label><input id="tf" name="code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required></div>`,
+      async d => {
+        const res = await api('POST', 'me/2fa/enable', { code: d.code });
+        dlg.close();
+        const f2 = openDialog('Códigos de recuperação', recoveryHtml(res.recovery_codes), async () => {}, 'Guardei os códigos');
+        if (forced) lockDialog(f2);
+        throw Object.assign(new Error(''), { silent: true });
+      }, 'Ativar');
+    if (forced) lockDialog(form);
+  }
+
+  // diálogo que não pode ser fechado (Esc e botões de fechar/cancelar removidos)
+  function lockDialog(form) {
+    dlg.addEventListener('cancel', blockEsc);
+    dlg.querySelectorAll('[data-action="close"]').forEach(x => x.remove());
+    dlg.dataset.locked = '1';
+  }
+  function blockEsc(e) { if (dlg.dataset.locked) e.preventDefault(); }
+  // o navegador só deixa cancelar o Esc após uma interação do usuário; se fechar mesmo assim, reabre
+  dlg.addEventListener('close', () => { if (dlg.dataset.locked && !dlg.open) dlg.showModal(); });
+
+  function openFirstPassword() {
+    const form = openDialog('Crie a sua senha', `
+      <div class="full"><p class="hint">Este é o seu primeiro acesso com uma senha temporária. Por segurança, defina agora uma senha só sua para continuar.</p></div>
+      <div class="field full"><label for="fc">Senha temporária (a que você recebeu)</label><input id="fc" name="current" type="password" autocomplete="current-password" required></div>
+      <div class="field full"><label for="fn">Nova senha</label><input id="fn" name="password" type="password" autocomplete="new-password" required></div>
+      <div class="full">${SA.rulesHtml()}</div>
+      <div class="field full"><label for="fr">Repita a nova senha</label><input id="fr" name="repeat" type="password" autocomplete="new-password" required></div>`,
+      async d => {
+        if (d.password !== d.repeat) throw new Error('As senhas não conferem.');
+        await api('POST', 'me/password-first', { current: d.current, password: d.password });
+        location.reload();
+        throw Object.assign(new Error(''), { silent: true });
+      }, 'Salvar nova senha');
+    SA.bindRules(form.elements.password, form);
+    lockDialog(form);
   }
 
   function openUserForm(id) {
-    const u = id ? view.users.find(x => x.id === id) : { name: '', email: '', role: 'USER' };
+    const u = id ? view.users.find(x => x.id === id) : { name: '', email: '', role: 'USER', job_title: '', totp_required: false };
+    const cargos = [...new Set((view.users || []).map(x => x.job_title).filter(Boolean))].sort();
     const form = openDialog(id ? 'Editar usuário' : 'Novo usuário', `
       <div class="field full"><label for="un">Nome completo</label><input id="un" name="name" maxlength="120" value="${esc(u.name)}" required></div>
       <div class="field"><label for="ue">E-mail (usado no login)</label><input id="ue" name="email" type="email" maxlength="120" value="${esc(u.email)}" ${id ? 'disabled' : 'required'}></div>
+      <div class="field"><label for="uj">Cargo</label><input id="uj" name="job_title" maxlength="80" list="cargos" value="${esc(u.job_title || '')}" placeholder="Ex.: Engenheiro de projetos"><datalist id="cargos">${cargos.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <div class="field"><label for="ur">Perfil</label><select id="ur" name="role"><option value="USER"${u.role === 'USER' ? ' selected' : ''}>Usuário</option><option value="ADMIN"${u.role === 'ADMIN' ? ' selected' : ''}>Administrador</option></select></div>
-      <div class="field full"><label for="up">${id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial'}</label><input id="up" name="password" type="password" autocomplete="new-password" ${id ? '' : 'required'}></div>
-      <div class="full">${SA.rulesHtml()}<p class="hint">Combine a senha com a pessoa por um canal seguro. Depois, cada um pode trocá-la com confirmação por e-mail.</p></div>`,
+      <div class="field"><label><input type="checkbox" name="totp_required" ${u.totp_required ? 'checked' : ''}> Exigir verificação em duas etapas (2FA)</label><p class="hint">A pessoa terá de configurar o aplicativo autenticador no primeiro acesso.</p></div>
+      ${id ? `<div class="field full"><label for="up">Nova senha (deixe em branco para manter)</label><input id="up" name="password" type="password" autocomplete="new-password"></div>
+        <div class="full">${SA.rulesHtml()}<p class="hint">Ao definir uma senha aqui, a pessoa será obrigada a trocá-la no próximo acesso. Para que ela mesma crie a senha, use o botão de e-mail na lista.</p></div>`
+      : '<div class="full"><p class="hint">A pessoa receberá um e-mail de boas-vindas com o endereço do sistema, as políticas de uso e um link para criar a própria senha (válido por 72 horas).</p></div>'}`,
       async d => {
+        d.totp_required = d.totp_required === 'on';
         if (id) { delete d.email; if (!d.password) delete d.password; }
-        await api(id ? 'PUT' : 'POST', id ? 'users/' + id : 'users', d);
-        toast(id ? 'Usuário salvo.' : 'Usuário criado.');
+        const res = await api(id ? 'PUT' : 'POST', id ? 'users/' + id : 'users', d);
+        if (id) toast('Usuário salvo.');
+        else if (res.invite && res.invite.sent) toast('Usuário criado. Convite enviado por e-mail.');
+        else { toast('Usuário criado, mas o e-mail NÃO foi enviado: ' + ((res.invite && res.invite.error) || 'falha desconhecida') + ' Use o botão de e-mail na lista para reenviar.'); }
       });
-    SA.bindRules(form.elements.password, form);
+    if (id) SA.bindRules(form.elements.password, form);
   }
 
   function openPasswordForm() {
@@ -523,7 +603,7 @@
 
   // ------------------------------------------------------------------ formulários: diálogo, projeto, tarefa
   function openDialog(title, bodyHtml, onSubmit, submitLabel = 'Salvar') {
-    dlg.className = '';
+    dlg.className = ''; delete dlg.dataset.locked;
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div>
       <div class="dlg-body"><form class="fgrid" novalidate>${bodyHtml}<div class="form-error" hidden role="alert"></div>
       <div class="form-actions"><button type="button" class="btn" data-action="close">Cancelar</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div></form></div>`;
@@ -532,8 +612,8 @@
       e.preventDefault();
       const b = form.querySelector('[type=submit]');
       b.disabled = true; err.hidden = true;
-      try { await onSubmit(Object.fromEntries(new FormData(form))); dlg.close(); await route(); }
-      catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; }
+      try { await onSubmit(Object.fromEntries(new FormData(form))); delete dlg.dataset.locked; dlg.close(); await route(); }
+      catch (ex) { if (ex.silent) return; err.textContent = ex.message; err.hidden = false; b.disabled = false; }
     });
     dlg.showModal();
     return form;
@@ -643,6 +723,36 @@
             await api('PUT', `users/${id}/active`, { active: !active });
             toast(active ? 'Usuário bloqueado.' : 'Usuário ativado.'); await route();
           }
+          break;
+        }
+        case 'invite-user': {
+          const u = view.users.find(x => x.id === id);
+          if (confirm(u.invite_pending ? 'Reenviar o e-mail de boas-vindas com o link para criar a senha?' : 'Enviar um e-mail com link para esta pessoa definir uma nova senha? A senha atual continua valendo até ela criar a nova.')) {
+            const r = await api('POST', `users/${id}/invite`, {});
+            toast(r.sent ? 'E-mail enviado.' : 'E-mail NÃO enviado: ' + (r.error || 'falha desconhecida'));
+            await route();
+          }
+          break;
+        }
+        case 'reset-2fa':
+          if (confirm('Redefinir a verificação em duas etapas desta pessoa? Ela precisará configurar o aplicativo de novo no próximo acesso.')) {
+            await api('POST', `users/${id}/2fa-reset`, {}); toast('2FA redefinido.'); await route();
+          }
+          break;
+        case '2fa-on': open2faSetup(false); break;
+        case '2fa-codes': case '2fa-off': {
+          const off = el.dataset.action === '2fa-off';
+          const f = openDialog(off ? 'Desativar verificação em duas etapas' : 'Novos códigos de recuperação', `
+            <div class="full"><p class="hint">${off ? 'Confirme com a sua senha e um código atual.' : 'Os códigos antigos deixam de valer. Confirme com a sua senha e um código atual.'}</p></div>
+            <div class="field full"><label for="cp">Senha</label><input id="cp" name="password" type="password" autocomplete="current-password" required></div>
+            <div class="field full"><label for="cc">Código do aplicativo (ou de recuperação)</label><input id="cc" name="code" autocomplete="one-time-code" maxlength="20" required></div>`,
+            async d => {
+              const r = await api('POST', off ? 'me/2fa/disable' : 'me/2fa/recovery', d);
+              if (off) { toast('Verificação em duas etapas desativada.'); return; }
+              dlg.close();
+              openDialog('Códigos de recuperação', recoveryHtml(r.recovery_codes), async () => {}, 'Guardei os códigos');
+              throw Object.assign(new Error(''), { silent: true });
+            }, off ? 'Desativar' : 'Gerar códigos');
           break;
         }
         case 'del-user':
@@ -756,9 +866,15 @@
     const initials = me.name.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
     document.getElementById('who-av').textContent = initials;
     document.getElementById('who-name').textContent = me.name;
-    document.getElementById('who-role').textContent = ROLES[me.role] || me.role;
+    document.getElementById('who-role').textContent = me.job_title || ROLES[me.role] || me.role;
     document.getElementById('who').hidden = false;
     SA.versionLabel().then(v => { if (v) document.getElementById('ver').textContent = 'SysAttack ' + v; });
+    if (me.must_change) { main.innerHTML = ''; openFirstPassword(); return; }
+    if (me.totp_required && !me.totp_enabled) {
+      main.innerHTML = '<section class="panel"><h2 class="panel-title">Configuração de segurança pendente</h2><p class="hint">O administrador exige a verificação em duas etapas para a sua conta.</p></section>';
+      try { await open2faSetup(true); } catch (ex) { main.innerHTML += `<p class="msg-err">${esc(ex.message)}</p>`; }
+      return;
+    }
     route();
   })();
 })();

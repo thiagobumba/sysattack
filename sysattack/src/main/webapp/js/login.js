@@ -34,11 +34,23 @@
     e.preventDefault();
     $('err').hidden = true; $('go').disabled = true;
     try {
-      await post('login', { email: $('e').value.trim(), password: $('p').value });
+      const r = await post('login', { email: $('e').value.trim(), password: $('p').value });
+      if (r && r.need_2fa) { $('f').hidden = true; $('t').hidden = false; $('tc').focus(); return; }
       location.replace('./');
     } catch (ex) {
       $('err').textContent = ex.message; $('err').hidden = false;
       $('go').disabled = false; $('p').select();
+    }
+  });
+
+  $('t').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('terr').hidden = true; $('tgo').disabled = true;
+    try {
+      await post('login/2fa', { code: $('tc').value.trim() });
+      location.replace('./');
+    } catch (ex) {
+      $('terr').textContent = ex.message; $('terr').hidden = false; $('tgo').disabled = false; $('tc').select();
     }
   });
 

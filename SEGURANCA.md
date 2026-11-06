@@ -17,7 +17,12 @@
 6. **Backups**: segunda cópia fora do servidor (`backup.mirror`) e teste de restauração periódico.
 7. **Senha do SMTP**: use senha de app / conta dedicada com permissão só de envio.
 
+## Convite, primeira senha e 2FA
+- Novo usuário nasce sem senha utilizável; o link do e-mail (token de 256 bits, só o hash fica no banco, 72 h, uso único) permite criar a senha. Senha definida pelo administrador exige troca no primeiro acesso.
+- 2FA por TOTP (SHA-1, 6 dígitos, 30 s, janela ±1, sem reuso do mesmo código); segredo criptografado com a chave `ai.key` (inclua-a no backup); 8 códigos de recuperação guardados como hash. Etapa do código com limite de tentativas e sessão pendente de 5 minutos.
+
 ## Limites conhecidos
 - O arquivo do banco H2 não é criptografado por padrão (depende do disco criptografado).
-- Não há autenticação em dois fatores; quem controla o e-mail do usuário controla a troca de senha.
+- 2FA é opcional por usuário, a menos que o administrador o exija; sem 2FA, quem controla o e-mail do usuário controla a troca de senha.
+- O link de convite vale por 72 horas e funciona uma vez; quem tiver acesso à caixa de e-mail do usuário nesse período consegue criar a senha (por isso, exija 2FA para contas sensíveis).
 - O sistema não foi submetido a teste de intrusão; trate esta lista como base, não como certificação.

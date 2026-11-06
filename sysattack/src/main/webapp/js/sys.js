@@ -15,7 +15,9 @@ const Sys = (() => {
   const ACTION = {
     LOGIN: 'Entrou', LOGOUT: 'Saiu', LOGIN_FALHA: 'Falha de login', LOGIN_BLOQUEADO: 'Login recusado', SETUP: 'Primeiro acesso', SETUP_BLOQUEADO: 'Primeiro acesso recusado',
     SENHA_ALTERADA: 'Senha alterada', USUARIO_CRIADO: 'Usuário criado', USUARIO_ALTERADO: 'Usuário alterado', USUARIO_EXCLUIDO: 'Usuário excluído',
-    USUARIO_BLOQUEADO: 'Usuário bloqueado', USUARIO_DESBLOQUEADO: 'Usuário desbloqueado', BACKUP_MANUAL: 'Backup manual', BACKUP_DOWNLOAD: 'Download de backup'
+    USUARIO_BLOQUEADO: 'Usuário bloqueado', USUARIO_DESBLOQUEADO: 'Usuário desbloqueado', BACKUP_MANUAL: 'Backup manual', BACKUP_DOWNLOAD: 'Download de backup',
+    LOGIN_SENHA_OK: 'Senha ok, aguardando 2FA', LOGIN_2FA_FALHA: 'Falha no código 2FA', SENHA_DEFINIDA: 'Senha criada pelo convite', CONVITE_REENVIADO: 'Convite reenviado',
+    LINK_SENHA_ENVIADO: 'Link de nova senha enviado', '2FA_ATIVADO': '2FA ativado', '2FA_DESATIVADO': '2FA desativado', '2FA_CODIGOS_NOVOS': 'Novos códigos de recuperação', '2FA_REDEFINIDO': '2FA redefinido'
   };
 
   function warnings(list) {

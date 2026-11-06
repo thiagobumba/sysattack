@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png?v=46">
-  <link rel="icon" href="favicon.ico?v=46" sizes="any">
-  <link rel="apple-touch-icon" href="img/icon-180.png?v=46">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png?v=47">
+  <link rel="icon" href="favicon.ico?v=47" sizes="any">
+  <link rel="apple-touch-icon" href="img/icon-180.png?v=47">
   <title>SysAttack · Entrar</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=46">
-  <link rel="stylesheet" href="css/login.css?v=46">
+  <link rel="stylesheet" href="css/style.css?v=47">
+  <link rel="stylesheet" href="css/login.css?v=47">
 </head>
 <body>
   <main class="login-page">
@@ -40,6 +40,14 @@
           <p class="login-note" id="ver" style="margin-top:6px;padding-top:0;border-top:0;font-size:12px"></p>
         </form>
 
+        <form id="t" novalidate hidden>
+          <p class="sub" style="color:var(--ink)">Verificação em duas etapas. Digite o código de 6 dígitos do seu aplicativo autenticador, ou um código de recuperação.</p>
+          <div class="field"><label for="tc">Código</label><input id="tc" autocomplete="one-time-code" inputmode="text" maxlength="20" required style="letter-spacing:.2em;font-weight:700"></div>
+          <div class="form-error" id="terr" role="alert" hidden style="margin-bottom:16px"></div>
+          <button class="btn btn-primary" id="tgo" type="submit">Verificar e entrar <span aria-hidden="true">→</span></button>
+          <p class="login-note"><a href="login.html">Voltar ao login</a></p>
+        </form>
+
         <form id="s" novalidate hidden>
           <p class="sub" style="color:var(--ink)">Primeiro acesso · crie a conta do <b>administrador</b>. Ela será usada para cadastrar os demais usuários.</p>
           <div class="field"><label for="sn">Nome completo</label><input id="sn" autocomplete="name" required></div>
@@ -62,7 +70,7 @@
       <div class="login-bar"><div><span>© <span data-year>2026</span> - Momesso Indústria de Máquinas - Todos os direitos reservados</span><span>Acesso restrito a usuários autorizados</span></div></div>
     </footer>
   </main>
-  <script src="js/core.js?v=46"></script>
-  <script src="js/login.js?v=46"></script>
+  <script src="js/core.js?v=47"></script>
+  <script src="js/login.js?v=47"></script>
 </body>
 </html>

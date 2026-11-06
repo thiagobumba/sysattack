@@ -152,7 +152,8 @@ public class ApiServlet extends HttpServlet {
         String r = s.get(0);
         if (r.equals("setup-status") && m.equals("GET")) return Map.of("needed", Db.one("SELECT id FROM users LIMIT 1") == null);
         if (r.equals("setup") && m.equals("POST")) return setup(req);
-        if (r.equals("login") && m.equals("POST")) return login(req);
+        if (r.equals("login") && m.equals("POST")) return s.size() == 2 && s.get(1).equals("2fa") ? login2fa(req) : login(req);
+        if (r.equals("invite")) return invite(m, s, req);
         if (r.equals("logout") && m.equals("POST")) {
             HttpSession ses = req.getSession(false);
             if (ses != null) {
@@ -164,12 +165,20 @@ public class ApiServlet extends HttpServlet {
         }
         Map<String, Object> user = currentUser(req);
         EmailTriggers.ACTOR.set((String) user.get("name"));
+        // pendências obrigatórias do primeiro acesso (trocar a senha temporária / ativar o 2FA exigido): só "me" funciona até resolver
+        boolean mustChange = Boolean.TRUE.equals(user.get("must_change"));
+        boolean mustTwofa = Boolean.TRUE.equals(user.get("totp_required")) && !Boolean.TRUE.equals(user.get("totp_enabled"));
+        if ((mustChange || mustTwofa) && !r.equals("me")) {
+            throw new ApiException(403, mustChange ? "Troque a senha temporária para continuar." : "Ative a verificação em duas etapas para continuar.");
+        }
         switch (r) {
             case "me":
                 if (s.size() == 2 && m.equals("POST")) {
                     if (s.get(1).equals("password-code")) return sendPasswordCode(req, user);
                     if (s.get(1).equals("password")) return changePassword(req, user);
+                    if (s.get(1).equals("password-first")) return firstPassword(req, user);
                 }
+                if (s.size() >= 2 && s.get(1).equals("2fa")) return twofa(m, s, req, user);
                 return user;
             case "users":
                 // quem não é administrador enxerga apenas o próprio usuário
@@ -202,7 +211,7 @@ public class ApiServlet extends HttpServlet {
         Object u = ses == null ? null : ses.getAttribute("user");
         if (u == null) throw new ApiException(401, "Sessão expirada. Entre novamente.");
         // confere no banco a cada requisição: usuário bloqueado ou excluído perde o acesso imediatamente
-        Map<String, Object> row = Db.one("SELECT id, username email, name, role, active FROM users WHERE id = ?",
+        Map<String, Object> row = Db.one("SELECT id, username email, name, role, active, job_title, must_change, totp_enabled, totp_required FROM users WHERE id = ?",
                 ((Map<?, ?>) u).get("id"));
         if (row == null || !Boolean.TRUE.equals(row.get("active"))) {
             ses.invalidate();
@@ -262,8 +271,152 @@ public class ApiServlet extends HttpServlet {
             String salt = Auth.newSalt();
             Db.update("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", Auth.hash(password, salt), salt, row.get("id"));
         }
+        if (Boolean.TRUE.equals(row.get("totp_enabled"))) {
+            // senha certa, mas falta o segundo fator: ainda NÃO há sessão de usuário, só um estado pendente de 5 minutos
+            HttpSession old = req.getSession(false);
+            if (old != null) old.invalidate();
+            HttpSession ses = req.getSession(true);
+            ses.setMaxInactiveInterval(300);
+            ses.setAttribute("pending2fa", new long[] {((Number) row.get("id")).longValue(), now + 5 * 60_000L, 0});
+            Audit.log(req, email, "LOGIN_SENHA_OK", "aguardando o código de verificação", true);
+            return Map.of("need_2fa", true);
+        }
         Audit.log(req, email, "LOGIN", "", true);
         return startSession(req, row);
+    }
+
+    /** Segundo passo do login: código do aplicativo autenticador (6 dígitos) ou um código de recuperação. */
+    private Object login2fa(HttpServletRequest req) throws Exception {
+        HttpSession ses = req.getSession(false);
+        long[] p = ses == null ? null : (long[]) ses.getAttribute("pending2fa");
+        long now = System.currentTimeMillis();
+        if (p == null || p[1] < now) throw new ApiException(401, "A verificação expirou. Entre novamente com e-mail e senha.");
+        String key = "2fa|" + p[0];
+        long until = lockedUntil(key, now);
+        if (until > 0) throw new ApiException(429, "Muitas tentativas. Aguarde " + ((until - now) / 60000 + 1) + " minuto(s) e tente novamente.");
+        Map<String, Object> row = Db.one("SELECT * FROM users WHERE id = ?", p[0]);
+        String who = row == null ? "" : (String) row.get("username");
+        String code = str(body(req), "code", "Código", 40, true);
+        if (row == null || !Boolean.TRUE.equals(row.get("active")) || !checkSecondFactor(p[0], code)) {
+            registerFail(key, 5, LOCK_MS, now);
+            Audit.log(req, who, "LOGIN_2FA_FALHA", "código incorreto", false);
+            if (++p[2] >= 5) { ses.invalidate(); throw new ApiException(401, "Muitas tentativas. Entre novamente com e-mail e senha."); }
+            throw new ApiException(401, "Código incorreto. Confira o aplicativo e tente de novo.");
+        }
+        ATTEMPTS.remove(key);
+        Audit.log(req, who, "LOGIN", "com verificação em duas etapas", true);
+        return startSession(req, row);
+    }
+
+    /** Aceita um código TOTP (consumindo o passo) ou um código de recuperação (uso único). */
+    private static boolean checkSecondFactor(long userId, String raw) throws SQLException {
+        String code = raw.replaceAll("[\\s-]", "");
+        if (code.matches("\\d{6}")) {
+            Map<String, Object> r = Db.one("SELECT totp_secret_enc, totp_last_step FROM users WHERE id = ?", userId);
+            String enc = r == null ? "" : (String) r.get("totp_secret_enc");
+            if (enc.isEmpty()) return false;
+            String secret;
+            try { secret = AiConfig.decrypt(enc); } catch (Exception e) { throw new ApiException(500, "Não foi possível ler a chave de verificação (o arquivo ai.key mudou?). Peça ao administrador para redefinir o 2FA."); }
+            long step = Totp.verify(secret, code, ((Number) r.get("totp_last_step")).longValue());
+            if (step < 0) return false;
+            Db.update("UPDATE users SET totp_last_step = ? WHERE id = ?", step, userId);
+            return true;
+        }
+        if (code.length() != 10) return false;
+        return Db.update("DELETE FROM recovery_codes WHERE user_id = ? AND code_hash = ?", userId, Totp.recoveryHash(code)) > 0;
+    }
+
+    private static List<String> newRecoveryCodes(long userId) throws SQLException {
+        Db.update("DELETE FROM recovery_codes WHERE user_id = ?", userId);
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            String c = Totp.newRecoveryCode();
+            out.add(c);
+            Db.update("INSERT INTO recovery_codes(user_id, code_hash) VALUES(?,?)", userId, Totp.recoveryHash(c));
+        }
+        return out;
+    }
+
+    /** Troca da senha temporária no primeiro acesso: confirma a senha atual (não depende de e-mail). */
+    private Object firstPassword(HttpServletRequest req, Map<String, Object> user) throws SQLException, IOException {
+        JsonObject b = body(req);
+        String cur = str(b, "current", "Senha atual", 200, true), next = str(b, "password", "Nova senha", 200, true);
+        Map<String, Object> row = Db.one("SELECT * FROM users WHERE id = ?", user.get("id"));
+        if (!Boolean.TRUE.equals(row.get("must_change"))) throw new ApiException(400, "A troca obrigatória não está pendente.");
+        String key = "pwf|" + user.get("id");
+        long now = System.currentTimeMillis();
+        if (lockedUntil(key, now) > 0) throw new ApiException(429, "Muitas tentativas. Aguarde alguns minutos.");
+        if (!Auth.verify(cur, (String) row.get("salt"), (String) row.get("password_hash"))) {
+            registerFail(key, 5, LOCK_MS, now);
+            throw new ApiException(400, "A senha atual (temporária) não confere.");
+        }
+        if (cur.equals(next)) throw new ApiException(400, "A nova senha precisa ser diferente da temporária.");
+        String bad = Auth.checkPassword(next, (String) user.get("email"));
+        if (bad != null) throw new ApiException(400, bad);
+        String salt = Auth.newSalt();
+        Db.update("UPDATE users SET password_hash = ?, salt = ?, must_change = FALSE WHERE id = ?", Auth.hash(next, salt), salt, user.get("id"));
+        Audit.log(req, (String) user.get("email"), "SENHA_ALTERADA", "troca obrigatória do primeiro acesso", true);
+        return Map.of("ok", true);
+    }
+
+    /** Verificação em duas etapas da própria conta: status, ativar (start/enable), desativar e novos códigos de recuperação. */
+    private Object twofa(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+        long id = ((Number) user.get("id")).longValue();
+        String act = s.size() > 2 ? s.get(2) : "";
+        Map<String, Object> row = Db.one("SELECT * FROM users WHERE id = ?", id);
+        boolean enabled = Boolean.TRUE.equals(row.get("totp_enabled")), required = Boolean.TRUE.equals(row.get("totp_required"));
+        if (m.equals("GET") && act.isEmpty()) {
+            long left = ((Number) Db.one("SELECT COUNT(*) c FROM recovery_codes WHERE user_id = ?", id).get("c")).longValue();
+            return Map.of("enabled", enabled, "required", required, "recovery_left", left);
+        }
+        if (!m.equals("POST")) throw new ApiException(405, "Operação não suportada.");
+        HttpSession ses = req.getSession(false);
+        String key = "2fa|" + id;
+        long now = System.currentTimeMillis();
+        if (lockedUntil(key, now) > 0) throw new ApiException(429, "Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+        String email = (String) user.get("email");
+        switch (act) {
+            case "start": {
+                if (enabled) throw new ApiException(400, "A verificação em duas etapas já está ativa.");
+                String secret = Totp.newSecret();
+                ses.setAttribute("totp_pending", secret);
+                return Map.of("secret", secret, "uri", Totp.uri("SysAttack", email, secret));
+            }
+            case "enable": {
+                if (enabled) throw new ApiException(400, "A verificação em duas etapas já está ativa.");
+                String secret = (String) ses.getAttribute("totp_pending");
+                if (secret == null) throw new ApiException(400, "Comece a ativação de novo (a chave expirou).");
+                long step = Totp.verify(secret, str(body(req), "code", "Código", 10, true).replaceAll("\\s", ""), 0);
+                if (step < 0) {
+                    registerFail(key, 8, LOCK_MS, now);
+                    throw new ApiException(400, "Código incorreto. Confira a hora do celular e tente de novo.");
+                }
+                Db.update("UPDATE users SET totp_secret_enc = ?, totp_enabled = TRUE, totp_last_step = ? WHERE id = ?", AiConfig.encrypt(secret), step, id);
+                ses.removeAttribute("totp_pending");
+                Audit.log(req, email, "2FA_ATIVADO", "", true);
+                return Map.of("ok", true, "recovery_codes", newRecoveryCodes(id));
+            }
+            case "disable":
+            case "recovery": {
+                if (!enabled) throw new ApiException(400, "A verificação em duas etapas não está ativa.");
+                if (act.equals("disable") && required) throw new ApiException(403, "O administrador exige a verificação em duas etapas para a sua conta. Não é possível desativá-la.");
+                JsonObject b = body(req);
+                String pw = str(b, "password", "Senha", 200, true), code = str(b, "code", "Código", 40, true);
+                if (!Auth.verify(pw, (String) row.get("salt"), (String) row.get("password_hash")) || !checkSecondFactor(id, code)) {
+                    registerFail(key, 5, LOCK_MS, now);
+                    throw new ApiException(400, "Senha ou código incorretos.");
+                }
+                if (act.equals("recovery")) {
+                    Audit.log(req, email, "2FA_CODIGOS_NOVOS", "", true);
+                    return Map.of("ok", true, "recovery_codes", newRecoveryCodes(id));
+                }
+                Db.update("UPDATE users SET totp_secret_enc = '', totp_enabled = FALSE, totp_last_step = 0 WHERE id = ?", id);
+                Db.update("DELETE FROM recovery_codes WHERE user_id = ?", id);
+                Audit.log(req, email, "2FA_DESATIVADO", "", true);
+                return Map.of("ok", true);
+            }
+            default: throw new ApiException(404, "Rota inexistente.");
+        }
     }
 
     private static Map<String, Object> startSession(HttpServletRequest req, Map<String, Object> row) {
@@ -296,6 +449,48 @@ public class ApiServlet extends HttpServlet {
         Db.afterCommit(Db::markInitialized);
         Audit.log(req, (String) row.get("username"), "SETUP", "administrador inicial criado", true);
         return startSession(req, row);
+    }
+
+    /** Cadastro pelo administrador: sem senha (a pessoa cria a própria pelo link enviado por e-mail). */
+    private static Map<String, Object> createInvitedUser(JsonObject b, String role) throws SQLException {
+        String name = str(b, "name", "Nome", 120, true);
+        String email = str(b, "email", "E-mail", 120, true).toLowerCase();
+        String job = str(b, "job_title", "Cargo", 80, false);
+        boolean need2fa = bool(b, "totp_required");
+        if (!Auth.isEmail(email)) throw new ApiException(400, "Informe um e-mail válido.");
+        if (Db.one("SELECT id FROM users WHERE username = ?", email) != null) {
+            throw new ApiException(400, "Já existe um usuário com este e-mail.");
+        }
+        byte[] r = new byte[24];
+        RANDOM.nextBytes(r);
+        String salt = Auth.newSalt();
+        long id = Db.insert("INSERT INTO users(username,name,password_hash,salt,role,job_title,invite_pending,totp_required) VALUES(?,?,?,?,?,?,TRUE,?)",
+                email, name, Auth.hash(java.util.Base64.getEncoder().encodeToString(r), salt), salt, role, job, need2fa);
+        return Db.one("SELECT * FROM users WHERE id = ?", id);
+    }
+
+    /** Público (sem sessão): valida o link de criação de senha (GET) e grava a senha escolhida (POST). */
+    private Object invite(String m, List<String> s, HttpServletRequest req) throws Exception {
+        if (s.size() != 2) throw new ApiException(404, "Rota inexistente.");
+        String key = "inv|" + req.getRemoteAddr();
+        long now = System.currentTimeMillis();
+        if (lockedUntil(key, now) > 0) throw new ApiException(429, "Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+        Map<String, Object> u = Invites.find(s.get(1));
+        if (u == null || !Boolean.TRUE.equals(u.get("active"))) {
+            registerFail(key, 15, LOCK_MS, now);
+            throw new ApiException(410, "Este link não é mais válido (expirou ou já foi usado). Peça um novo convite ao administrador.");
+        }
+        if (m.equals("GET")) return Map.of("name", u.get("name"), "email", u.get("email"));
+        if (!m.equals("POST")) throw new ApiException(405, "Operação não suportada.");
+        String pw = str(body(req), "password", "Senha", 200, true);
+        String bad = Auth.checkPassword(pw, (String) u.get("email"));
+        if (bad != null) throw new ApiException(400, bad);
+        String salt = Auth.newSalt();
+        Db.update("UPDATE users SET password_hash = ?, salt = ?, invite_pending = FALSE, must_change = FALSE WHERE id = ?", Auth.hash(pw, salt), salt, u.get("id"));
+        Db.update("DELETE FROM user_tokens WHERE user_id = ?", u.get("id"));
+        ATTEMPTS.remove("acct|" + u.get("email")); // zera travas de login da conta
+        Audit.log(req, (String) u.get("email"), "SENHA_DEFINIDA", "pelo link do convite", true);
+        return Map.of("ok", true);
     }
 
     private static Map<String, Object> createUser(JsonObject b, String role) throws SQLException {
@@ -402,7 +597,7 @@ public class ApiServlet extends HttpServlet {
         }
     }
 
-    private static final String USER_SQL = "SELECT id, username email, name, role, active FROM users";
+    private static final String USER_SQL = "SELECT id, username email, name, role, active, job_title, invite_pending, totp_enabled, totp_required FROM users";
 
     private static boolean pwSet(JsonObject b) {
         JsonElement p = b.get("password");
@@ -416,9 +611,14 @@ public class ApiServlet extends HttpServlet {
                 JsonObject b = body(req);
                 String role = str(b, "role", "Perfil", 10, true);
                 if (!role.equals("ADMIN") && !role.equals("USER")) throw new ApiException(400, "Perfil inválido.");
-                Map<String, Object> row = createUser(b, role);
-                Audit.log(req, (String) me.get("email"), "USUARIO_CRIADO", row.get("username") + " (" + role + ")", true);
-                return Db.one(USER_SQL + " WHERE id = ?", row.get("id"));
+                Map<String, Object> row = createInvitedUser(b, role);
+                Map<String, Object> created = Db.one(USER_SQL + " WHERE id = ?", row.get("id"));
+                Map<String, Object> inv = Invites.sendInvite(req, created, (String) me.get("name"), true);
+                Audit.log(req, (String) me.get("email"), "USUARIO_CRIADO", row.get("username") + " (" + role + "), convite "
+                        + (Boolean.TRUE.equals(inv.get("sent")) ? "enviado" : "NÃO enviado"), true);
+                Map<String, Object> out = new LinkedHashMap<>(created);
+                out.put("invite", inv);
+                return out;
             }
         } else if (s.size() == 2) {
             long id = Long.parseLong(s.get(1));
@@ -433,13 +633,14 @@ public class ApiServlet extends HttpServlet {
                 if (!role.equals("ADMIN") && !role.equals("USER")) throw new ApiException(400, "Perfil inválido.");
                 if (lastAdmin && !role.equals("ADMIN")) throw new ApiException(400, "Deve existir ao menos um administrador.");
                 String pw = str(b, "password", "Senha", 200, false);
-                Db.update("UPDATE users SET name = ?, role = ? WHERE id = ?", name, role, id);
+                String job = str(b, "job_title", "Cargo", 80, false);
+                Db.update("UPDATE users SET name = ?, role = ?, job_title = ?, totp_required = ? WHERE id = ?", name, role, job, bool(b, "totp_required"), id);
                 Audit.log(req, (String) me.get("email"), "USUARIO_ALTERADO", target.get("email") + " perfil=" + role + (pwSet(b) ? ", senha redefinida" : ""), true);
                 if (!pw.isEmpty()) {
                     String bad = Auth.checkPassword(pw, (String) target.get("email"));
                     if (bad != null) throw new ApiException(400, bad);
                     String salt = Auth.newSalt();
-                    Db.update("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", Auth.hash(pw, salt), salt, id);
+                    Db.update("UPDATE users SET password_hash = ?, salt = ?, invite_pending = FALSE, must_change = TRUE WHERE id = ?", Auth.hash(pw, salt), salt, id);
                 }
                 return Db.one(USER_SQL + " WHERE id = ?", id);
             }
@@ -450,6 +651,23 @@ public class ApiServlet extends HttpServlet {
                 Audit.log(req, (String) me.get("email"), "USUARIO_EXCLUIDO", String.valueOf(target.get("email")), true);
                 return Map.of("ok", true);
             }
+        } else if (s.size() == 3 && s.get(2).equals("invite") && m.equals("POST")) {
+            long id = Long.parseLong(s.get(1));
+            Map<String, Object> target = Db.one(USER_SQL + " WHERE id = ?", id);
+            if (target == null) throw new ApiException(404, "Usuário não encontrado.");
+            if (!Boolean.TRUE.equals(target.get("active"))) throw new ApiException(400, "Ative o usuário antes de enviar o convite.");
+            boolean welcome = Boolean.TRUE.equals(target.get("invite_pending"));
+            Map<String, Object> inv = Invites.sendInvite(req, target, (String) me.get("name"), welcome);
+            Audit.log(req, (String) me.get("email"), welcome ? "CONVITE_REENVIADO" : "LINK_SENHA_ENVIADO", target.get("email") + (Boolean.TRUE.equals(inv.get("sent")) ? "" : " (NÃO enviado)"), true);
+            return inv;
+        } else if (s.size() == 3 && s.get(2).equals("2fa-reset") && m.equals("POST")) {
+            long id = Long.parseLong(s.get(1));
+            Map<String, Object> target = Db.one(USER_SQL + " WHERE id = ?", id);
+            if (target == null) throw new ApiException(404, "Usuário não encontrado.");
+            Db.update("UPDATE users SET totp_secret_enc = '', totp_enabled = FALSE, totp_last_step = 0 WHERE id = ?", id);
+            Db.update("DELETE FROM recovery_codes WHERE user_id = ?", id);
+            Audit.log(req, (String) me.get("email"), "2FA_REDEFINIDO", String.valueOf(target.get("email")), true);
+            return Db.one(USER_SQL + " WHERE id = ?", id);
         } else if (s.size() == 3 && s.get(2).equals("active") && m.equals("PUT")) {
             long id = Long.parseLong(s.get(1));
             Map<String, Object> target = Db.one(USER_SQL + " WHERE id = ?", id);
