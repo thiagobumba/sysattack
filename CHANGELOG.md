@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot: botão "Copiar projeto" (na lista e na tela do projeto), disponível só para contratos recorrentes. Copia nome, cliente, fornecedor/equipe, modelo e horas fixadas, participantes e destinatários; início, data final, observação de faturamento e descrição ficam em branco, e a situação vem sempre como Ativo. Demandas, horas, ações e relatórios não são copiados.
+
 - Projetos Spot: o período do projeto é sempre a vigência do contrato (início até a data final). A visão do período, os apontamentos, o resumo e os relatórios passam a olhar a vigência, em vez do mês corrente; a aba de horas ganhou o filtro "De / Até" limitado à vigência. Lançamentos de horas e a data de referência dos relatórios só aceitam datas dentro da vigência. Novo botão "Voltar" na tela do projeto.
 
 - Projetos Spot: a lista mostra "Saldo atual" no lugar de "Saldo projetado". Projeto encerrado só pode ser alterado por administrador, com justificativa obrigatória (mínimo de 10 caracteres) que fica no histórico da aba Resumo; usuários comuns só consultam. O envio do relatório por e-mail ganhou CC e CCO, e aceita vários endereços separados por ponto e vírgula.

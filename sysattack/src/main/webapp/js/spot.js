@@ -94,8 +94,8 @@ const Spot = (() => {
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>
-          ${p.status === 'ENCERRADO' && !isAdmin() ? '<td></td>' : `<td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
-          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button></td>`}</tr>`).join('')}</tbody></table>`
+          <td class="acts">${p.recurring ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
+          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table>`
         : empty('Nenhum projeto spot ainda', 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
   }
 
@@ -109,7 +109,7 @@ const Spot = (() => {
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, MODEL[p.hours_model] + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
- <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
+ <a class="btn btn-sm" href="#/spot">← Voltar</a>${p.recurring ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
         ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
@@ -185,10 +185,18 @@ const Spot = (() => {
   }
 
   // ------------------------------------------------------------------ formulários
-  function projectForm(id) {
+  /** Cópia de um contrato recorrente: leva só o cabeçalho; início, final e observação ficam em branco, situação volta a Ativo. */
+  async function copyTemplate(fromId) {
+    const o = await api('GET', 'spot/' + fromId);
+    if (!o.recurring) throw new Error('Só é possível copiar projetos do tipo contrato recorrente.');
+    return { name: o.name, client: o.client, provider: o.provider, description: '', hours_model: o.hours_model, contracted_hours: o.contracted_hours,
+      start_date: '', end_date: '', recurring: true, status: 'ATIVO', participants: o.participants, recipients: o.recipients, billing_note: '' };
+  }
+
+  function projectForm(id, copyFrom) {
     return (async () => {
-      const p = id ? await api('GET', 'spot/' + id) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: false, status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
-      A().openDialog(id ? 'Editar projeto spot' : 'Novo projeto spot', `
+      const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: false, status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
+      A().openDialog(id ? 'Editar projeto spot' : copyFrom ? 'Copiar projeto spot' : 'Novo projeto spot', `
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
@@ -202,6 +210,7 @@ const Spot = (() => {
         <div class="field full"><label for="sr">Destinatários dos relatórios (e-mails)</label><input id="sr" name="recipients" maxlength="1000" value="${esc(p.recipients)}" placeholder="gestor1@empresa.com, gestor2@empresa.com"></div>
         <div class="field full"><label for="sb">Observação de faturamento</label><input id="sb" name="billing_note" maxlength="1000" value="${esc(p.billing_note)}" placeholder="Ex.: excedentes de agosto serão faturados à parte"></div>
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
+        ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
         async d => { const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, recurring: !!d.recurring, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
     })();
@@ -477,6 +486,7 @@ const Spot = (() => {
     const del = async (path, msg) => { if (confirm(msg)) { await api('DELETE', path); A().toast('Excluído.'); await A().route(); } };
     switch (a) {
       case 'sp-new': await projectForm(); break;
+      case 'sp-copy-project': await projectForm(null, id); break;
       case 'sp-edit-project': await projectForm(id); break;
       case 'sp-del-project': await del('spot/' + id, 'Excluir este projeto spot com todas as horas, demandas e relatórios?'); break;
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
