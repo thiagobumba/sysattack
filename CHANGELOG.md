@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Novo visual em todas as telas, no estilo da tela de entrada: menu lateral escuro com o degradê industrial no topo e item ativo em laranja, faixa de título de cada página com o mesmo degradê (título leve em creme, caminho e botão Sair em branco), fundo quente, cartões com sombra suave, tabelas com realce ao passar o mouse, foco laranja nos campos e marca d'água mais discreta. Responsivo: no celular e tablet estreito o menu vira uma barra no topo com botão que abre o menu (fecha ao escolher uma tela ou com Esc, com rótulos acessíveis), alvos de toque de 44 px e cabeçalho compacto. Também respeita "reduzir movimento" e tem estilo próprio para impressão. Tudo fica em css/theme.css, carregado depois do style.css (para voltar ao visual antigo basta remover esse arquivo do index.html).
+
 - Tela de entrada: removido o link "Site Momesso" do topo (o link "Site" do rodapé continua).
 
 - Direitos autorais e marca d'água: declaração "© <ano> - Momesso Indústria de Máquinas - Todos os direitos reservados" no rodapé de todas as telas (sistema, entrada e Política de Privacidade; o ano atualiza sozinho) e marca d'água discreta com o logotipo da Momesso no canto da tela do sistema (aparece também na impressão). Correção: a Política de Privacidade (privacidade.html) usava script dentro da página, que a nova política de segurança (CSP) bloquearia; o script foi para js/privacidade.js.

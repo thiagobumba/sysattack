@@ -728,6 +728,14 @@
 
   window.App = { get me() { return me; }, get main() { return main; }, dlg, api, openDialog, toast, pageHead, route };
   window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+  // menu do celular: abre/fecha, fecha ao navegar e com Esc
+  const sidebar = document.querySelector('.sidebar'), menuBtn = document.getElementById('menu-btn');
+  if (sidebar && menuBtn) {
+    const setMenu = open => { sidebar.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); menuBtn.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu'); };
+    menuBtn.addEventListener('click', () => setMenu(!sidebar.classList.contains('open')));
+    window.addEventListener('hashchange', () => setMenu(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && sidebar.classList.contains('open')) { setMenu(false); menuBtn.focus(); } });
+  }
   (async () => {
     try {
       me = await api('GET', 'me'); // sem sessão (401) o api() já redireciona para login.html
