@@ -48,6 +48,8 @@ final class ProjectFileReader {
         LocalDateTime start, finish;
         int percent;
         boolean summary, milestone;
+        String responsible = "";
+        boolean msFlag; // marco declarado no arquivo (JSON/CSV)
         final List<Link> preds = new ArrayList<>();
     }
 
@@ -67,6 +69,7 @@ final class ProjectFileReader {
             if (data.length >= 3 && (data[0] & 0xff) == 0xEF && (data[1] & 0xff) == 0xBB && (data[2] & 0xff) == 0xBF) p0 = 3; // BOM
             while (p0 < data.length && (data[p0] == ' ' || data[p0] == '\n' || data[p0] == '\r' || data[p0] == '\t')) p0++;
             if (p0 < data.length && (data[p0] == '{' || data[p0] == '[')) return parseJson(data);
+            if (looksLikeCsv(data)) return parseCsv(data);
             if (data.length < 64) throw bad("O arquivo está vazio ou incompleto.");
             if ((data[0] & 0xff) == 0xD0 && (data[1] & 0xff) == 0xCF) return parseMpp(data);
             String head = new String(data, 0, Math.min(data.length, 400), StandardCharsets.UTF_8);
@@ -270,7 +273,9 @@ final class ProjectFileReader {
             Row r = all.get(i);
             r.summary = i + 1 < all.size() && all.get(i + 1).level > r.level;
             if (r.start != null && r.finish != null && r.finish.isBefore(r.start)) r.finish = r.start;
-            r.milestone = !r.summary && r.start != null && r.start.equals(r.finish);
+            r.milestone = res.format.equals("json") || res.format.equals("csv") ? r.msFlag && !r.summary
+                    : !r.summary && r.start != null && r.start.equals(r.finish);
+            if (r.milestone && r.start != null && r.finish == null) r.finish = r.start;
         }
         for (int i = all.size() - 1; i >= 0; i--) { // resumo sem datas (comum em JSON): usa o intervalo das filhas
             Row r = all.get(i);
@@ -351,6 +356,23 @@ final class ProjectFileReader {
             if (all.size() > MAX_ROWS) throw bad("O cronograma tem tarefas demais para importar (limite de " + MAX_ROWS + ").");
         }
         if (all.isEmpty()) throw bad("O XML não tem tarefas.");
+        Map<Integer, String> resNames = new HashMap<>();
+        NodeList resList = root.getElementsByTagName("Resource");
+        for (int i = 0; i < resList.getLength(); i++) {
+            Element re = (Element) resList.item(i);
+            String rn = text(re, "Name");
+            if (!rn.isEmpty()) resNames.put(num(text(re, "UID"), -1), rn);
+        }
+        Map<Integer, List<String>> byTask = new HashMap<>();
+        NodeList asg = root.getElementsByTagName("Assignment");
+        for (int i = 0; i < asg.getLength(); i++) {
+            Element ae = (Element) asg.item(i);
+            String rn = resNames.get(num(text(ae, "ResourceUID"), -1));
+            if (rn == null) continue;
+            List<String> l = byTask.computeIfAbsent(num(text(ae, "TaskUID"), -1), k -> new ArrayList<>());
+            if (!l.contains(rn)) l.add(rn);
+        }
+        for (Row r : all) { List<String> l = byTask.get(r.uid); if (l != null) r.responsible = String.join(", ", l); }
         all.sort((a, b) -> Integer.compare(a.id, b.id));
         finish(all, res);
         // descarta ligações para tarefas inexistentes
@@ -403,6 +425,7 @@ final class ProjectFileReader {
         if (root.isJsonArray()) arr = root.getAsJsonArray();
         else if (root.isJsonObject()) {
             JsonObject ro = root.getAsJsonObject();
+            if (ro.has("tasklists") && ro.get("tasklists").isJsonArray()) return parseTeamwork(ro);
             res.projectName = jstr(ro, new String[] {"project", "projeto", "name", "nome", "title"});
             JsonElement te = jget(ro, J_TASKS);
             if (te != null && te.isJsonArray()) arr = te.getAsJsonArray();
@@ -452,10 +475,182 @@ final class ProjectFileReader {
             r.finish = jdate(jstr(o, J_END));
             String pc = jstr(o, J_PCT).replace("%", "").replace(',', '.');
             try { r.percent = Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(pc)))); } catch (NumberFormatException e) { r.percent = 0; }
+            JsonElement mf = jget(o, new String[] {"milestone", "marco", "is_milestone"});
+            r.msFlag = (mf != null && mf.isJsonPrimitive() && (mf.getAsString().equalsIgnoreCase("true") || mf.getAsString().equals("1")))
+                    || jstr(o, new String[] {"type", "tipo"}).toLowerCase().matches("marco|milestone");
             all.add(r);
             predSrc.add(jget(o, J_PREDS));
             JsonElement kids = jget(o, J_KIDS);
             if (kids != null && kids.isJsonArray()) jsonWalk(kids.getAsJsonArray(), depth + 1, all, uids, predSrc);
         }
+    }
+
+    // ------------------------------------------------------------------ JSON exportado do Teamwork (listas, tarefas, subtarefas, marcos)
+
+    private static Result parseTeamwork(JsonObject ro) {
+        Result res = new Result();
+        res.format = "json";
+        JsonElement pj = ro.get("project");
+        if (pj != null && pj.isJsonObject()) res.projectName = jstr(pj.getAsJsonObject(), J_NAME);
+        Map<String, JsonObject> miles = new HashMap<>();
+        JsonElement me = ro.get("milestones");
+        if (me != null && me.isJsonArray()) for (JsonElement m : me.getAsJsonArray()) if (m.isJsonObject()) miles.put(jstr(m.getAsJsonObject(), new String[] {"teamworkId"}), m.getAsJsonObject());
+        List<Row> all = new ArrayList<>();
+        Set<String> milesUsed = new HashSet<>();
+        for (JsonElement le : ro.getAsJsonArray("tasklists")) {
+            if (!le.isJsonObject()) continue;
+            JsonObject list = le.getAsJsonObject();
+            Row lr = new Row();
+            lr.id = all.size() + 1; lr.uid = lr.id; lr.level = 1; lr.name = jstr(list, J_NAME);
+            all.add(lr);
+            String mid = jstr(list, new String[] {"milestoneId"});
+            JsonObject ms = miles.get(mid);
+            LocalDateTime msDate = ms == null ? null : jdate(jstr(ms, new String[] {"deadline"}));
+            JsonElement te = list.get("tasks");
+            int before = all.size();
+            if (te != null && te.isJsonArray()) twWalk(te.getAsJsonArray(), 2, msDate, all);
+            boolean allDone = all.size() > before;
+            for (int i = before; i < all.size(); i++) if (all.get(i).percent < 100) allDone = false;
+            lr.percent = allDone ? 100 : 0;
+            if (ms != null && msDate != null && milesUsed.add(mid)) {
+                Row mr = new Row();
+                mr.id = all.size() + 1; mr.uid = mr.id; mr.level = 2; mr.name = jstr(ms, J_NAME);
+                mr.start = msDate; mr.finish = msDate; mr.percent = lr.percent; mr.msFlag = true;
+                all.add(mr);
+            }
+        }
+        if (all.size() > MAX_ROWS) throw bad("O cronograma tem tarefas demais para importar (limite de " + MAX_ROWS + ").");
+        if (all.isEmpty()) throw bad("O JSON não tem tarefas.");
+        for (int i = 0; i < all.size(); i++) all.get(i).summary = i + 1 < all.size() && all.get(i + 1).level > all.get(i).level;
+        for (int i = all.size() - 1; i >= 0; i--) { // resumo = intervalo das filhas (de baixo para cima)
+            Row r = all.get(i);
+            if (!r.summary) continue;
+            LocalDateTime mn = null, mx = null;
+            for (int j = i + 1; j < all.size() && all.get(j).level > r.level; j++) {
+                Row k = all.get(j);
+                if (k.start != null && (mn == null || k.start.isBefore(mn))) mn = k.start;
+                if (k.finish != null && (mx == null || k.finish.isAfter(mx))) mx = k.finish;
+            }
+            if (mn != null) r.start = mn;
+            if (mx != null) r.finish = mx;
+        }
+        finish(all, res);
+        return res;
+    }
+
+    private static void twWalk(JsonArray arr, int depth, LocalDateTime msDate, List<Row> all) {
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject o = el.getAsJsonObject();
+            if (all.size() >= MAX_ROWS) throw bad("O cronograma tem tarefas demais para importar (limite de " + MAX_ROWS + ").");
+            Row r = new Row();
+            r.id = all.size() + 1; r.uid = r.id; r.level = depth; r.name = jstr(o, J_NAME);
+            r.start = jdate(jstr(o, new String[] {"startDate"}));
+            r.finish = jdate(jstr(o, new String[] {"dueDate"}));
+            if (r.start == null && r.finish == null && msDate != null && "true".equals(jstr(o, new String[] {"dueDateFromMilestone"}))) { r.start = msDate; r.finish = msDate; }
+            if (r.start == null) r.start = r.finish;
+            if (r.finish == null) r.finish = r.start;
+            String pc = jstr(o, new String[] {"progress"});
+            try { r.percent = Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(pc)))); } catch (NumberFormatException e) { r.percent = "completed".equals(jstr(o, new String[] {"status"})) ? 100 : 0; }
+            JsonElement as = o.get("assignees");
+            if (as != null && as.isJsonArray()) {
+                List<String> names = new ArrayList<>();
+                for (JsonElement a : as.getAsJsonArray()) if (a.isJsonPrimitive() && !a.getAsString().isBlank()) names.add(a.getAsString().trim());
+                r.responsible = String.join(", ", names);
+            }
+            all.add(r);
+            JsonElement kids = o.get("subtasks");
+            if (kids != null && kids.isJsonArray()) twWalk(kids.getAsJsonArray(), depth + 1, msDate, all);
+        }
+    }
+
+    // ------------------------------------------------------------------ CSV (colunas Nome, Nível, Início, Término, % concluído, Responsável, Tipo)
+
+    private static List<List<String>> csvRows(String text, char d) {
+        List<List<String>> out = new ArrayList<>();
+        List<String> row = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean q = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (q) {
+                if (c == '"') { if (i + 1 < text.length() && text.charAt(i + 1) == '"') { sb.append('"'); i++; } else q = false; }
+                else sb.append(c);
+            } else if (c == '"') q = true;
+            else if (c == d) { row.add(sb.toString()); sb.setLength(0); }
+            else if (c == '\n' || c == '\r') {
+                if (c == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n') i++;
+                row.add(sb.toString()); sb.setLength(0);
+                if (!(row.size() == 1 && row.get(0).isEmpty())) out.add(row);
+                row = new ArrayList<>();
+            } else sb.append(c);
+            if (out.size() > MAX_ROWS + 1) throw bad("O arquivo tem linhas demais para importar (limite de " + MAX_ROWS + ").");
+        }
+        if (sb.length() > 0 || !row.isEmpty()) { row.add(sb.toString()); out.add(row); }
+        return out;
+    }
+
+    private static int csvCol(List<String> head, String... names) {
+        for (int i = 0; i < head.size(); i++) {
+            String h = head.get(i).trim().toLowerCase().replace("\uFEFF", "");
+            for (String n : names) if (h.equals(n)) return i;
+        }
+        return -1;
+    }
+
+    private static char csvDelim(String firstLine) {
+        char best = ';'; int bn = -1;
+        for (char c : new char[] {';', ',', '\t'}) { int n = 0; for (char x : firstLine.toCharArray()) if (x == c) n++; if (n > bn) { bn = n; best = c; } }
+        return best;
+    }
+
+    private static boolean looksLikeCsv(byte[] data) {
+        String head = new String(data, 0, Math.min(data.length, 2000), StandardCharsets.UTF_8).replace("\uFEFF", "");
+        int nl = head.indexOf('\n');
+        String first = nl < 0 ? head : head.substring(0, nl);
+        if (first.indexOf('<') >= 0 || first.indexOf('{') >= 0) return false;
+        List<List<String>> h = csvRows(first, csvDelim(first));
+        return !h.isEmpty() && csvCol(h.get(0), "nome", "name", "tarefa", "título", "titulo", "title") >= 0;
+    }
+
+    private static Result parseCsv(byte[] data) {
+        String text = new String(data, StandardCharsets.UTF_8).replace("\uFEFF", "");
+        int nl = text.indexOf('\n');
+        List<List<String>> rows = csvRows(text, csvDelim(nl < 0 ? text : text.substring(0, nl)));
+        if (rows.size() < 2) throw bad("O CSV não tem tarefas.");
+        List<String> h = rows.get(0);
+        int cName = csvCol(h, "nome", "name", "tarefa", "título", "titulo", "title");
+        int cLevel = csvCol(h, "nível", "nivel", "level"), cWbs = csvCol(h, "wbs", "eap");
+        int cType = csvCol(h, "tipo", "type");
+        int cStart = csvCol(h, "início", "inicio", "start", "start_date");
+        int cEnd = csvCol(h, "término", "termino", "fim", "end", "finish", "end_date");
+        int cPct = csvCol(h, "% concluído", "% concluido", "percent", "progress", "progresso", "%");
+        int cResp = csvCol(h, "responsável", "responsavel", "assignee", "assignees", "resource");
+        Result res = new Result();
+        res.format = "csv";
+        List<Row> all = new ArrayList<>();
+        for (int i = 1; i < rows.size(); i++) {
+            List<String> c = rows.get(i);
+            String name = cName < c.size() ? c.get(cName).trim() : "";
+            if (name.isEmpty()) continue;
+            Row r = new Row();
+            r.id = all.size() + 1; r.uid = r.id; r.name = name;
+            String lv = cLevel >= 0 && cLevel < c.size() ? c.get(cLevel).trim() : "";
+            if (lv.matches("\\d{1,2}")) r.level = Math.max(1, Integer.parseInt(lv));
+            else if (cWbs >= 0 && cWbs < c.size() && !c.get(cWbs).trim().isEmpty()) r.level = c.get(cWbs).trim().split("\\.").length;
+            else r.level = 1;
+            r.start = cStart >= 0 && cStart < c.size() ? jdate(c.get(cStart).trim()) : null;
+            r.finish = cEnd >= 0 && cEnd < c.size() ? jdate(c.get(cEnd).trim()) : null;
+            if (r.start == null) r.start = r.finish;
+            if (r.finish == null) r.finish = r.start;
+            String pc = cPct >= 0 && cPct < c.size() ? c.get(cPct).replace("%", "").replace(',', '.').trim() : "";
+            try { r.percent = Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(pc)))); } catch (NumberFormatException e) { r.percent = 0; }
+            if (cResp >= 0 && cResp < c.size()) r.responsible = c.get(cResp).trim();
+            r.msFlag = cType >= 0 && cType < c.size() && c.get(cType).trim().toLowerCase().matches("marco|milestone");
+            all.add(r);
+        }
+        if (all.isEmpty()) throw bad("O CSV não tem tarefas.");
+        finish(all, res);
+        return res;
     }
 }

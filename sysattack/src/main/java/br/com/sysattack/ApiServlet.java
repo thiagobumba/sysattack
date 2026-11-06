@@ -942,6 +942,7 @@ public class ApiServlet extends HttpServlet {
             o.put("percent", x.percent);
             o.put("summary", x.summary);
             o.put("milestone", x.milestone);
+            o.put("responsible", x.responsible);
             List<Map<String, Object>> preds = new ArrayList<>();
             for (ProjectFileReader.Link l : x.preds) {
                 Map<String, Object> pl = new LinkedHashMap<>();
@@ -1000,7 +1001,7 @@ public class ApiServlet extends HttpServlet {
             }
             String desc = str(t, "description", "Descrição", 4000, false);
             long newId = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, "", start, end, progress, status, null, parent, milestone);
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, str(t, "responsible", "Responsável", 120, false), start, end, progress, status, null, parent, milestone);
             refToId.put(ref, newId);
             created++;
             if (parent != null) parents.add(parent);

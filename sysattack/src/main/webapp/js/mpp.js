@@ -22,8 +22,8 @@ const Mpp = (() => {
   function open(projectId) {
     st = { projectId };
     const dlg = dlgShell('Importar tarefas', `
-      <p class="hint" style="margin-bottom:14px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo), o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML) ou um <b>JSON</b> de tarefas. Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
-      <div class="field full"><label for="mpp-f">Arquivo do Project</label><input id="mpp-f" type="file" accept=".mpp,.xml,.json"></div>
+      <p class="hint" style="margin-bottom:14px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo), o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML), um <b>JSON</b> (inclusive o exportado do Teamwork) ou um <b>CSV</b> de tarefas. Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
+      <div class="field full"><label for="mpp-f">Arquivo do Project</label><input id="mpp-f" type="file" accept=".mpp,.xml,.json,.csv"></div>
       <div class="form-error" id="mpp-err" role="alert" hidden></div>
       <div class="form-actions"><button type="button" class="btn" data-action="close">Cancelar</button><button type="button" class="btn btn-primary" id="mpp-read">Ler arquivo</button></div>`);
     const err = dlg.querySelector('#mpp-err'), go = dlg.querySelector('#mpp-read');
@@ -144,8 +144,8 @@ const Mpp = (() => {
     const incUids = new Set(inc.map(p => p.row.uid));
     const hasKids = new Set(inc.filter(p => p.parent).map(p => p.parent));
     const tasks = inc.map(p => {
-      const r = p.row, t = { ref: r.uid, parent: p.parent, name: p.name.slice(0, 160), start_date: r.start, end_date: r.end, progress: r.percent, milestone: r.milestone,
-        description: `Importado do Project (linha ${r.id})` };
+      const r = p.row, t = { ref: r.uid, parent: p.parent, name: p.name.slice(0, 160), start_date: r.start, end_date: r.end, progress: r.percent, milestone: r.milestone, responsible: (r.responsible || '').slice(0, 120),
+        description: `Importado de arquivo (linha ${r.id})` };
       if (st.deps && !hasKids.has(r.uid)) {
         const pr = r.preds.find(l => incUids.has(l.uid) && !hasKids.has(l.uid) && l.uid !== r.uid);
         if (pr) t.depends = pr.uid;
