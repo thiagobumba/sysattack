@@ -181,7 +181,7 @@ public class ApiServlet extends HttpServlet {
             case "documents": return documents(m, s, req, resp, user);
             case "ai": requireAdmin(user); return ai(m, s, req, user);
             case "ai-status": return AiConfig.availability();
-            case "email": return EmailService.handle(m, s, req, user);
+            case "email": return EmailService.handle(m, s, req, resp, user);
             case "changes": return ChangeService.handle(m, s, req, user);
             case "reports": return ChangeService.reports(m);
             case "spot": return SpotService.handle(m, s, req, resp, user);

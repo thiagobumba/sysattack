@@ -101,6 +101,9 @@ public final class Mailer {
         Transport.send(m);
     }
 
+    /** Quando preenchido (na thread atual), a conversa SMTP é gravada aqui (sem credenciais) para o log do teste. */
+    static final ThreadLocal<java.io.PrintStream> DEBUG_OUT = new ThreadLocal<>();
+
     /** Monta a sessão SMTP a partir do config.properties; null se o servidor não estiver configurado. */
     private static Session session(Properties c) {
         String host = c.getProperty("smtp.host", "").trim();
@@ -150,6 +153,10 @@ public final class Mailer {
 
     static boolean sendHtml(Properties c, java.util.List<String> to, java.util.List<String> cc, java.util.List<String> bcc, String subject, String html, String replyTo) throws Exception {
         Session session = session(c);
+        if (session != null && DEBUG_OUT.get() != null) {
+            session.setDebug(true);
+            session.setDebugOut(DEBUG_OUT.get());
+        }
         if (session == null) {
             if ("true".equalsIgnoreCase(c.getProperty("smtp.dev", "").trim())) {
                 LOG.warning("[SysAttack][MODO TESTE] E-mail NÃO enviado. Para: " + to + (cc.isEmpty() ? "" : " | CC: " + cc) + (bcc.isEmpty() ? "" : " | CCO: " + bcc) + " | Assunto: " + subject);

@@ -32,10 +32,20 @@ const Mail = (() => {
         <td><span class="badge ${L_STATUS[l.status][1]}">${L_STATUS[l.status][0]}</span>${l.error ? `<span class="small">${esc(l.error)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  function testLogsTable(logs, dir) {
+    if (!logs.length) return '';
+    return `<h3 style="margin:22px 0 8px;font-size:15px">Logs dos testes de envio</h3>
+      <p class="hint" style="margin:0 0 8px">Cada tentativa gera um arquivo .log (sem senha), guardado no banco e também na pasta <code>${esc(dir || '')}</code> do servidor, para extração.</p>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>Quando</th><th>Por</th><th>Destino</th><th>Resultado</th><th></th></tr></thead><tbody>
+      ${logs.map(l => `<tr><td>${esc(String(l.created_at).slice(0, 16).replace('T', ' '))}</td><td>${esc(l.created_by)}</td><td>${esc(l.recipient)}</td>
+        <td><span class="badge ${l.ok ? 'b-green' : 'b-red'}">${l.ok ? 'OK' : 'Falhou'}</span><span class="small">${esc(l.summary)}</span></td>
+        <td class="acts"><a class="btn btn-sm" href="api/email/settings/test-logs/${l.id}/download" download>Baixar</a></td></tr>`).join('')}</tbody></table></div>`;
+  }
+
   // ------------------------------------------------------------------ página de configurações
   async function view() {
     await load();
-    const [st, rules, log] = await Promise.all([api('GET', 'email/settings'), api('GET', 'email/rules'), api('GET', 'email/log')]);
+    const [st, rules, log, tlogs] = await Promise.all([api('GET', 'email/settings'), api('GET', 'email/rules'), api('GET', 'email/log'), api('GET', 'email/settings/test-logs')]);
     const test = st.last_test_at ? `${st.last_test_ok ? '<span class="badge b-green">OK</span>' : '<span class="badge b-red">Falhou</span>'} <span class="small" style="display:inline">${esc(String(st.last_test_at).slice(0, 16).replace('T', ' '))} · ${esc(st.last_test_msg || '')}</span>` : '<span class="small" style="display:inline">Ainda não testado</span>';
     A().main.innerHTML = A().pageHead(['SysAttack', 'Configurações de E-mail'], 'Configurações de E-mail', 'E-mail de saída do SysAttack e gatilhos que avisam pessoas sobre o andamento dos projetos.') + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">E-mail de saída (SMTP)</h2>
@@ -56,7 +66,8 @@ const Mail = (() => {
         ${st.configured ? `<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
           <div class="field" style="max-width:520px"><label for="em-t">Enviar e-mail de teste para</label><div class="ai-row"><input id="em-t" type="email" placeholder="deixe vazio para enviar para você">
             <button class="btn btn-sm btn-primary" data-action="em-test">Enviar teste</button></div></div>
-          <p style="margin:14px 0 0"><b>Último teste:</b> ${test}</p>` : ''}</section>
+          <p style="margin:14px 0 0"><b>Último teste:</b> ${test}${tlogs.length ? ` <a class="btn btn-sm" href="api/email/settings/test-logs/${tlogs[0].id}/download" download>Baixar log</a>` : ''}</p>
+          ${testLogsTable(tlogs, st.log_dir)}` : ''}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Gatilhos de e-mail (todos os projetos)</h2>
         <button class="btn btn-primary btn-sm" data-action="em-new-rule" data-global="1">+ Novo gatilho</button></div>${rulesTable(rules, true)}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Histórico de envios</h2></div>${logTable(log, true)}</section>`;
@@ -109,7 +120,11 @@ const Mail = (() => {
       case 'em-del-rule': if (confirm('Excluir este gatilho?')) { await api('DELETE', 'email/rules/' + id); A().toast('Gatilho excluído.'); await A().route(); } break;
       case 'em-test': {
         el.disabled = true;
-        try { const r = await api('POST', 'email/settings/test', { to: document.getElementById('em-t').value.trim() }); A().toast(r.last_test_ok ? 'Teste enviado.' : 'Teste falhou: ' + r.last_test_msg); await A().route(); }
+        try { const r = await api('POST', 'email/settings/test', { to: document.getElementById('em-t').value.trim() }); A().toast(r.last_test_ok ? 'Teste enviado. Log baixado.' : 'Teste falhou: ' + r.last_test_msg + ' (log baixado)');
+          // baixa o log da tentativa que acabou de ser feita
+          const logs = await api('GET', 'email/settings/test-logs');
+          if (logs.length) { const a = document.createElement('a'); a.href = 'api/email/settings/test-logs/' + logs[0].id + '/download'; a.download = logs[0].file_name; document.body.appendChild(a); a.click(); a.remove(); }
+          await A().route(); }
         finally { el.disabled = false; }
         break;
       }

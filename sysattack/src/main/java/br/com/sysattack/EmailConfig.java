@@ -28,6 +28,7 @@ final class EmailConfig {
         }
         out.put("configured", true);
         out.putAll(row);
+        out.put("log_dir", new java.io.File(Db.dataDir(), "email-logs").getAbsolutePath());
         return out;
     }
 
@@ -95,19 +96,81 @@ final class EmailConfig {
         if (r == null) throw new ApiServlet.ApiException(400, "Salve a configuração antes de testar.");
         boolean ok;
         String msg;
+        String subject = "SysAttack · teste de e-mail";
+        java.time.ZonedDateTime started = java.time.ZonedDateTime.now();
+        long t0 = System.nanoTime();
+        java.io.ByteArrayOutputStream dialog = new java.io.ByteArrayOutputStream();
+        Throwable error = null;
         try {
-            boolean sent = Mailer.sendHtml(toProps(r), List.of(to), "SysAttack · teste de e-mail",
+            Mailer.DEBUG_OUT.set(new java.io.PrintStream(dialog, true, "UTF-8"));
+            boolean sent = Mailer.sendHtml(toProps(r), List.of(to), subject,
                     "<p style=\"font-family:Arial,sans-serif\">Este é um e-mail de teste do <b>SysAttack</b>, enviado por " + EmailTriggers.h(by)
                     + ".<br>Se você recebeu, o e-mail de saída está funcionando.</p>", null);
             ok = sent;
             msg = sent ? "Enviado para " + to + "." : "Modo de teste: nada foi enviado.";
         } catch (Exception e) {
             ok = false;
+            error = e;
             msg = shorten(rootMessage(e));
             LOG.warning("Teste de e-mail falhou: " + e);
+        } finally {
+            Mailer.DEBUG_OUT.remove();
         }
+        long ms = (System.nanoTime() - t0) / 1_000_000;
         Db.update("UPDATE email_settings SET last_test_at = CURRENT_TIMESTAMP, last_test_ok = ?, last_test_msg = ? WHERE id = 1", ok, msg);
+        try {
+            saveTestLog(r, to, by, subject, started, ms, ok, msg, error, dialog.toString("UTF-8"));
+        } catch (Exception e) {
+            LOG.warning("Não foi possível gravar o log do teste de e-mail: " + e); // o log nunca pode derrubar o teste
+        }
         return status();
+    }
+
+    /** Monta o texto do log (sem senha), grava no banco e numa pasta de logs para extração. */
+    private static void saveTestLog(Map<String, Object> r, String to, String by, String subject, java.time.ZonedDateTime started, long ms,
+                                    boolean ok, String msg, Throwable error, String dialog) throws Exception {
+        String stamp = started.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        StringBuilder b = new StringBuilder();
+        b.append("SysAttack · LOG DE TESTE DE E-MAIL\n").append("=".repeat(60)).append('\n');
+        b.append("Data/hora      : ").append(started.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss xxx"))).append('\n');
+        b.append("Disparado por  : ").append(by).append('\n');
+        b.append("Resultado      : ").append(ok ? "SUCESSO" : "FALHA").append(" — ").append(msg).append('\n');
+        b.append("Duração        : ").append(ms).append(" ms\n\n");
+        b.append("[Mensagem]\n");
+        b.append("Para           : ").append(to).append('\n');
+        b.append("Assunto        : ").append(subject).append("\n\n");
+        b.append("[Configuração SMTP usada] (a senha nunca é gravada)\n");
+        b.append("Servidor       : ").append(r.get("host")).append('\n');
+        b.append("Porta          : ").append(r.get("port")).append('\n');
+        b.append("Segurança      : ").append(r.get("security")).append('\n');
+        b.append("Usuário        : ").append(r.get("username")).append('\n');
+        b.append("Autenticação   : ").append(((String) r.get("username")).isEmpty() ? "não" : "sim").append('\n');
+        b.append("Remetente      : ").append(r.get("from_name")).append(" <").append(r.get("from_email")).append(">\n");
+        b.append("Envio ativo    : ").append(Boolean.TRUE.equals(r.get("enabled")) ? "sim" : "não").append("\n\n");
+        b.append("[Ambiente]\n");
+        b.append("Java           : ").append(System.getProperty("java.version")).append('\n');
+        b.append("Servidor de app: ").append(System.getProperty("catalina.base", "—")).append("\n\n");
+        b.append("[Conversa com o servidor SMTP]\n");
+        b.append(dialog.isBlank() ? "(sem registro: a conexão não chegou a ser aberta)\n" : dialog.trim() + "\n").append('\n');
+        if (error != null) {
+            b.append("[Erro]\n");
+            int depth = 0;
+            for (Throwable t = error; t != null && depth < 8; t = t.getCause() == t ? null : t.getCause(), depth++) {
+                b.append(depth == 0 ? "Exceção       : " : "Causada por   : ").append(t.getClass().getName()).append(": ").append(t.getMessage()).append('\n');
+            }
+            java.io.StringWriter sw = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(sw));
+            String st = sw.toString();
+            b.append("\n[Stack trace]\n").append(st.length() > 12000 ? st.substring(0, 12000) + "\n…(cortado)" : st).append('\n');
+        }
+        b.append("\n").append("=".repeat(60)).append("\nFim do log.\n");
+        String text = b.toString();
+        if (text.length() > 400000) text = text.substring(0, 400000);
+        String fileName = "email-teste-" + stamp + (ok ? "-ok" : "-falha") + ".log";
+        Db.insert("INSERT INTO email_test_log(created_by,recipient,ok,summary,file_name,log) VALUES(?,?,?,?,?,?)", by, to, ok, msg, fileName, text);
+        java.io.File dir = new java.io.File(Db.dataDir(), "email-logs");
+        dir.mkdirs();
+        java.nio.file.Files.write(new java.io.File(dir, fileName).toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private static String rootMessage(Throwable e) {

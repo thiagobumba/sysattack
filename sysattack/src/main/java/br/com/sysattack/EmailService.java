@@ -15,11 +15,11 @@ final class EmailService {
     private static final Set<String> SECURITY = Set.of("starttls", "ssl", "none");
     private EmailService() {}
 
-    static Object handle(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+    static Object handle(String m, List<String> s, HttpServletRequest req, javax.servlet.http.HttpServletResponse resp, Map<String, Object> user) throws Exception {
         ApiServlet.requireAdmin(user);
         String what = s.size() > 1 ? s.get(1) : "";
         switch (what) {
-            case "settings": return settings(m, s, req, user);
+            case "settings": return settings(m, s, req, resp, user);
             case "events": {
                 List<Map<String, String>> out = new ArrayList<>();
                 EmailTriggers.EVENTS.forEach((k, v) -> out.add(Map.of("key", k, "label", v)));
@@ -38,7 +38,7 @@ final class EmailService {
     }
 
     // ------------------------------------------------------------------ SMTP
-    private static Object settings(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+    private static Object settings(String m, List<String> s, HttpServletRequest req, javax.servlet.http.HttpServletResponse resp, Map<String, Object> user) throws Exception {
         if (s.size() == 2) {
             if (m.equals("GET")) return EmailConfig.status();
             if (m.equals("DELETE")) return EmailConfig.remove();
@@ -60,6 +60,16 @@ final class EmailService {
                 return EmailConfig.save(host, (int) port, security, username, password, from,
                         fromName.isEmpty() ? "SysAttack" : fromName.replaceAll("[\\r\\n]+", " "), enabled, (String) user.get("name"));
             }
+        } else if (s.size() == 3 && s.get(2).equals("test-logs") && m.equals("GET")) {
+            return Db.query("SELECT id, created_at, created_by, recipient, ok, summary, file_name FROM email_test_log ORDER BY id DESC LIMIT 50");
+        } else if (s.size() == 5 && s.get(2).equals("test-logs") && s.get(4).equals("download") && m.equals("GET")) {
+            Map<String, Object> l = Db.one("SELECT file_name, log FROM email_test_log WHERE id = ?", Long.parseLong(s.get(3)));
+            if (l == null) throw new ApiException(404, "Log não encontrado.");
+            resp.setContentType("text/plain; charset=UTF-8");
+            resp.setHeader("Content-Disposition", "attachment; filename=\"" + l.get("file_name") + "\"");
+            resp.setHeader("X-Content-Type-Options", "nosniff");
+            resp.getWriter().write((String) l.get("log"));
+            return ApiServlet.FILE_SENT;
         } else if (s.size() == 3 && s.get(2).equals("test") && m.equals("POST")) {
             String to = ApiServlet.str(ApiServlet.body(req), "to", "Enviar teste para", 200, false).toLowerCase();
             if (to.isEmpty()) to = (String) user.get("email");

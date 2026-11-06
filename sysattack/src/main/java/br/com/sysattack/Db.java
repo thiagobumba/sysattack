@@ -217,6 +217,15 @@ public final class Db {
                     + "error VARCHAR(300) NOT NULL DEFAULT '',"
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_email_log_rule ON email_log(rule_id, ref_key)");
+            s.execute("CREATE TABLE IF NOT EXISTS email_test_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "recipient VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "ok BOOLEAN NOT NULL,"
+                    + "summary VARCHAR(500) NOT NULL DEFAULT '',"
+                    + "file_name VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "log VARCHAR(500000) NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS project_changes ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,"
