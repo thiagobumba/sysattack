@@ -543,3 +543,24 @@ a.btn { text-decoration: none; color: var(--ink); }
 .fgrid input:disabled, .fgrid select:disabled, .fgrid textarea:disabled { background: #ececec; color: #9a9a9a; cursor: not-allowed; }
 .tbl .num .small { text-align: right; white-space: nowrap; }
 @media (max-width: 1500px) { .tbl th, .tbl td { padding-left: 12px; padding-right: 12px; } .pbar { min-width: 110px; } }
+
+/* Relatório tradicional (preenchimento na tela) */
+.mr input, .mr select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); background: #fff; min-width: 0; width: 100%; }
+.mr input:focus, .mr select:focus { outline: 2px solid var(--orange); outline-offset: -1px; }
+.mr-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 4px; }
+.mr-top .field:nth-child(2), .mr-top .field:nth-child(3) { grid-column: 1 / -1; }
+.mr-card { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--line); padding: 14px 16px; margin-bottom: 14px; }
+.mr-card.mr-red { border-left-color: #b8332f; }
+.mr-card h4 { margin: 0 0 10px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .07em; }
+.mr-card .mr-h { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 12.5px; margin-bottom: 4px; }
+.mr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.mr-two .mr-card { margin-bottom: 14px; }
+.mr-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.mr-row .mr-w { flex: 1 1 180px; } .mr-row .mr-m { flex: 0 0 150px; } .mr-row .mr-s { flex: 0 0 90px; text-align: right; }
+.mr-kpis .mr-s, .mr-row.mr-kpis .mr-s { text-align: left; }
+.mr-row.mr-acoes { flex-wrap: wrap; } .mr-row.mr-acoes .mr-w { flex: 1 1 200px; }
+.mr-add { margin-top: 4px; }
+.mr-total { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.mr-total input { max-width: 200px; font-weight: 700; } .mr-total b { padding-right: 46px; }
+.mr-note { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; } .mr-note input:first-child { flex: 0 0 220px; } .mr-note input:last-child { flex: 1 1 200px; }
+@media (max-width: 900px) { .mr-two, .mr-top { grid-template-columns: 1fr; } }

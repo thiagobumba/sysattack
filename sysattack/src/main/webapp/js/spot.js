@@ -157,7 +157,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
+        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('tradicional', 'Relatório tradicional')}${tab('relatorios', 'Relatórios com Claude')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -166,7 +166,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), financeiro: b('sp-new-invoice', '+ Lançar nota'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), financeiro: b('sp-new-invoice', '+ Lançar nota'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), tradicional: b('sp-new-manual', '+ Novo relatório'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -242,6 +242,15 @@ const Spot = (() => {
       host.innerHTML = vigLine() + (st.actions.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead><tbody>
         ${st.actions.map(a => `<tr><td>${KIND[a.kind]}</td><td class="strong">${esc(a.description)}${a.note ? `<span class="small">${esc(a.note)}</span>` : ''}</td><td>${esc(a.responsible || '—')}</td><td>${badge(A_STATUS, a.status)}</td>${iconBtns('action', a.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nada registrado', 'Registre as ações do último comitê e as pendências (da Momesso ou do cliente).'));
+    } else if (st.tab === 'tradicional') {
+      st.reports = await api('GET', `spot/${id}/reports?kind=manual`);
+      host.innerHTML = `${vigLine()}<p class="hint" style="margin:0 0 12px">Relatório preenchido por você na tela, sem o Claude, no mesmo formato do Status Report da Fábrica. Abra, edite, imprima ou envie por e-mail.</p>
+        ${st.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Referência</th><th>Criado por</th><th>Envio</th><th></th></tr></thead><tbody>
+        ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
+          <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
+          <td>${r.sent_at ? `<span class="badge b-green">Enviado</span><span class="small">${fmt(String(r.sent_at).slice(0, 10))}</span>` : '<span class="badge b-grey">Não enviado</span>'}</td>
+          <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar relatório" data-action="sp-edit-manual" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhum relatório tradicional', 'Clique em “+ Novo relatório”: a tela já vem com os dados do projeto e você completa o restante.')}`;
     } else {
       st.reports = await api('GET', `spot/${id}/reports`);
       const ai = await api('GET', 'ai-status').catch(() => ({ connected: false }));
@@ -356,7 +365,7 @@ const Spot = (() => {
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(r.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
       <iframe class="preview" id="sp-frame" src="api/spot/reports/${r.id}/html" title="${esc(r.title)}" style="height:60vh"></iframe>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
-        ${r.model === 'importado' ? '' : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
+        ${r.model === 'importado' ? '' : r.model === 'manual' ? `<button class="btn btn-sm" data-action="sp-edit-manual" data-id="${r.id}">Editar relatório</button>` : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
         <button class="btn btn-sm" data-action="sp-print-report">Imprimir / salvar PDF</button>
         <button class="btn btn-sm btn-primary" data-action="sp-send-report" data-id="${r.id}">Enviar por e-mail</button></div></div>`;
     dlg.showModal();
@@ -621,6 +630,107 @@ const Spot = (() => {
     });
   }
 
+  // ------------------------------------------------------------------ relatório tradicional (preenchido na tela, sem Claude)
+  const MR_STATUS = ['Concluído', 'Parcial', 'Em andamento', 'A confirmar', 'Pendente', 'Bloqueado'];
+  const MR_HEADS = { hConsumo: 'Consumo do período por demanda', hChat: 'Detalhamento', hAcoes: 'Ações do último comitê', hAnd: 'Demandas em andamento', hPrev: 'Previsão para o próximo período', hDefs: 'Definições necessárias da Momesso', totLbl1: 'Total', totLbl2: 'Total realizado' };
+  const MR_LISTS = {
+    kpis: { fixed: true, cols: [['n', 'Valor', 'mr-s'], ['l', 'Descrição', 'mr-w']] },
+    consumo: { add: '+ Adicionar demanda', cols: [['d', 'Demanda', 'mr-w'], ['h', 'Horas', 'mr-s']] },
+    chat: { add: '+ Adicionar alteração', cols: [['d', 'Alteração', 'mr-w'], ['h', 'Horas', 'mr-s']] },
+    acoes: { add: '+ Adicionar ação', cols: [['a', 'Ação', 'mr-w'], ['r', 'Responsável', 'mr-m'], ['s', 'Status', 'mr-m', MR_STATUS], ['t', 'Observação', 'mr-w']] },
+    andamento: { add: '+ Adicionar demanda', cols: [['t', 'Tema', 'mr-m'], ['d', 'Detalhe', 'mr-w']] },
+    previsao: { add: '+ Adicionar item', cols: [['t', 'Tema', 'mr-m'], ['d', 'Detalhe', 'mr-w']] },
+    defs: { add: '+ Adicionar definição', cols: [['t', 'Tema', 'mr-m'], ['d', 'Detalhe', 'mr-w']] }
+  };
+  const mrNum = v => { let t = String(v || '').trim(); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? 0 : n; };
+  const mrFmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  function mrRow(list, row) {
+    const cfg = MR_LISTS[list];
+    return `<div class="mr-row mr-${list}">${cfg.cols.map(([f, ph, cls, opts]) => opts
+      ? `<select class="${cls}" data-f="${f}" aria-label="${ph}">${opts.map(o => `<option${o === row[f] ? ' selected' : ''}>${o}</option>`).join('')}</select>`
+      : `<input class="${cls}" data-f="${f}" maxlength="400" placeholder="${ph}" aria-label="${ph}" value="${esc(row[f] || '')}">`).join('')}${cfg.fixed ? '' : `<button type="button" class="icon-btn del" data-mr-rm title="Remover linha" aria-label="Remover linha">${ic('trash')}</button>`}</div>`;
+  }
+  const mrList = (list, rows) => `<div class="mr-list" data-list="${list}">${rows.map(r => mrRow(list, r)).join('')}</div>${MR_LISTS[list].fixed ? '' : `<button type="button" class="btn btn-sm mr-add" data-mr-add="${list}">${MR_LISTS[list].add}</button>`}`;
+  const mrText = (k, label, v, ph) => `<div class="field"><label>${label}</label><input data-k="${k}" maxlength="1000" value="${esc(v || '')}"${ph ? ` placeholder="${ph}"` : ''}></div>`;
+
+  /** Dados iniciais de um relatório novo: o que o SysAttack já sabe do projeto; o resto é preenchido por você. */
+  async function manualDefaults() {
+    const p = st.data, s = p.summary || {}, today = fmt(todayIso());
+    const d = { titulo: 'Status Report · ' + p.name, meta: `${today} · Comitê semanal${p.participants ? ' · ' + p.participants : ''}`, destaques: '', ...MR_HEADS, pillChat: '', notaChat: '', notaPrev: '', rodape: (p.provider ? p.provider + ' · ' : '') + 'Material do comitê.' };
+    if (p.closed_scope) {
+      const sc = p.scope, f = p.finance;
+      d.kpis = [{ n: String(sc.total), l: 'Demandas do escopo' }, { n: String(sc.delivered), l: 'Entregues (com apontamento)' }, { n: sc.pct + '%', l: 'Entregue do escopo' }, { n: brl(f.invoiced), l: 'Faturado de ' + brl(f.project_value) }];
+      const dem = await api('GET', `spot/${st.id}/demands`);
+      d.consumo = dem.filter(x => x.status !== 'CANCELADA').map(x => ({ d: x.name, h: '' }));
+      d.hConsumo = 'Demandas do escopo';
+    } else {
+      const k = s.kpi || {}, n = h;
+      d.kpis = [{ n: n(k.contracted), l: p.hours_model === 'MENSAL' ? 'Franquia mensal' : 'Pacote de horas' }, { n: n(k.consumed), l: 'Consumido no período' }, { n: n(k.balance), l: 'Saldo atual' }, { n: '', l: '' }];
+      d.consumo = (s.by_item || []).map(x => ({ d: x.label, h: String(x.hours).replace('.', ',') }));
+    }
+    d.chat = [];
+    const ac = await api('GET', `spot/${st.id}/actions`);
+    const map = { PENDENTE: 'Pendente', A_CONFIRMAR: 'A confirmar', PARCIAL: 'Parcial', CONCLUIDO: 'Concluído' };
+    d.acoes = ac.filter(x => x.kind === 'ACAO').map(x => ({ a: x.description, r: x.responsible || '', s: map[x.status] || 'Pendente', t: x.note || '' }));
+    d.defs = ac.filter(x => x.kind === 'PENDENCIA' && x.status !== 'CONCLUIDO').map(x => ({ t: x.description, d: x.responsible ? 'responsável: ' + x.responsible : '' }));
+    d.andamento = []; d.previsao = [];
+    return d;
+  }
+
+  async function manualForm(id) {
+    let d, r = null;
+    if (id) { r = await api('GET', 'spot/reports/' + id); d = r.data; } else d = await manualDefaults();
+    const card = (cls, head, body) => `<section class="mr-card ${cls || ''}"><h4>${head}</h4>${body}</section>`;
+    const hd = (k, label) => `<input class="mr-h" data-k="${k}" maxlength="200" value="${esc(d[k] || '')}" aria-label="${label}">`;
+    const total = (k, label, list) => `<div class="mr-total"><input data-k="${k}" maxlength="60" value="${esc(d[k] || 'Total')}" aria-label="${label}"><b data-total="${list}">0,0</b></div>`;
+    const f = A().openDialog(id ? 'Editar relatório tradicional' : 'Novo relatório tradicional', `
+      <div class="field full mr">
+        <div class="mr-top">${mrText('titulo', 'Título', d.titulo)}${mrText('meta', 'Data · tipo de comitê · participantes', d.meta)}${mrText('destaques', 'Destaques', d.destaques, 'Principais destaques do período')}
+          ${id ? '' : `<div class="field"><label>Data de referência</label><input data-ref type="date" min="${st.data.start_date}" max="${st.data.end_date && st.data.end_date < todayIso() ? st.data.end_date : todayIso()}" value="${clampDate(todayIso(), st.data)}"></div>`}</div>
+        <p class="hint">Os totais de horas são somados automaticamente. Linhas em branco não aparecem no relatório.</p>
+        ${card('', 'Indicadores', mrList('kpis', d.kpis))}
+        <div class="mr-two">
+          ${card('', hd('hConsumo', 'Título do quadro'), mrList('consumo', d.consumo) + total('totLbl1', 'Rótulo do total', 'consumo'))}
+          ${card('', hd('hChat', 'Título do quadro'), mrList('chat', d.chat) + total('totLbl2', 'Rótulo do total', 'chat')
+            + `<div class="mr-note"><input data-k="pillChat" maxlength="80" placeholder="Etiqueta (ex.: +3h sobre o aprovado)" value="${esc(d.pillChat)}"><input data-k="notaChat" maxlength="400" placeholder="Observação" value="${esc(d.notaChat)}"></div>`)}
+        </div>
+        ${card('', hd('hAcoes', 'Título do quadro'), mrList('acoes', d.acoes))}
+        <div class="mr-two">
+          ${card('', hd('hAnd', 'Título do quadro'), mrList('andamento', d.andamento))}
+          ${card('', hd('hPrev', 'Título do quadro'), mrList('previsao', d.previsao) + `<div class="mr-note"><input data-k="notaPrev" maxlength="400" placeholder="Observação" value="${esc(d.notaPrev)}"></div>`)}
+        </div>
+        ${card('mr-red', hd('hDefs', 'Título do quadro'), mrList('defs', d.defs))}
+        <div class="field" style="margin-top:14px"><label>Rodapé</label><input data-k="rodape" maxlength="400" value="${esc(d.rodape)}"></div>
+      </div>`, async () => {
+      const out = {};
+      host.querySelectorAll('[data-k]').forEach(i => { out[i.dataset.k] = i.value.trim(); });
+      host.querySelectorAll('[data-list]').forEach(l => {
+        out[l.dataset.list] = [...l.querySelectorAll('.mr-row')].map(row => Object.fromEntries([...row.querySelectorAll('[data-f]')].map(i => [i.dataset.f, i.value.trim()])))
+          .filter(row => l.dataset.list === 'kpis' ? row.n || row.l : Object.entries(row).some(([k, v]) => v && !(k === 's')));
+      });
+      if (!out.titulo) throw new Error('Informe o título do relatório.');
+      let rep;
+      if (id) rep = await api('PUT', 'spot/reports/' + id, out);
+      else rep = await api('POST', `spot/${st.id}/reports/manual`, { ...out, ref_date: host.querySelector('[data-ref]').value });
+      A().toast('Relatório salvo.');
+      setTimeout(() => openReport(rep.id), 300);
+    }, 'Salvar e visualizar');
+    const dlg = document.getElementById('dlg'), host = f.querySelector('.mr');
+    dlg.className = 'wide';
+    const totals = () => ['consumo', 'chat'].forEach(l => { host.querySelector(`[data-total="${l}"]`).textContent = mrFmt([...host.querySelectorAll(`[data-list="${l}"] [data-f="h"]`)].reduce((a, i) => a + mrNum(i.value), 0)); });
+    host.addEventListener('input', totals);
+    host.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); });
+    host.addEventListener('click', e => {
+      const add = e.target.closest('[data-mr-add]'), rm = e.target.closest('[data-mr-rm]');
+      if (add) {
+        const l = host.querySelector(`[data-list="${add.dataset.mrAdd}"]`);
+        l.insertAdjacentHTML('beforeend', mrRow(add.dataset.mrAdd, add.dataset.mrAdd === 'acoes' ? { s: 'Pendente' } : {}));
+        l.lastElementChild.querySelector('input').focus();
+      } else if (rm) { rm.closest('.mr-row').remove(); totals(); }
+    });
+    totals();
+  }
+
   // ------------------------------------------------------------------ ações
   async function action(el) {
     const id = Number(el.dataset.id), a = el.dataset.action, dlg = document.getElementById('dlg');
@@ -633,6 +743,8 @@ const Spot = (() => {
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
       case 'sp-vig-all': st.from = null; st.to = null; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
+      case 'sp-new-manual': await manualForm(); break;
+      case 'sp-edit-manual': dlg.close(); await manualForm(id); break;
       case 'sp-new-invoice': invoiceForm(); break;
       case 'sp-edit-invoice': invoiceForm(id); break;
       case 'sp-del-invoice': await del('spot/invoices/' + id, 'Excluir esta nota?'); break;

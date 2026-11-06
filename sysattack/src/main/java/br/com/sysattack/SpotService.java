@@ -134,14 +134,16 @@ final class SpotService {
                         break;
                     case "reports":
                         if (m.equals("GET")) return Db.query("SELECT id, spot_id, title, ref_date, model, created_by, created_at, sent_at, sent_to, sent_by"
-                                + " FROM spot_reports WHERE spot_id = ? ORDER BY created_at DESC, id DESC", id);
+                                + " FROM spot_reports WHERE spot_id = ? AND model " + ("manual".equals(req.getParameter("kind")) ? "=" : "<>") + " 'manual' ORDER BY created_at DESC, id DESC", id);
                         break;
                     default: break;
                 }
             } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("generate") && m.equals("POST")) {
                 return generate(id, ApiServlet.body(req), user);
             } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("import") && m.equals("POST")) {
-                return importStatusReport(id, ApiServlet.body(req), user);
+                return importStatusReport(id, ApiServlet.body(req), user, "importado");
+            } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("manual") && m.equals("POST")) {
+                return importStatusReport(id, ApiServlet.body(req), user, "manual");
             }
         }
         throw new ApiException(405, "Operação não suportada.");
@@ -684,7 +686,8 @@ final class SpotService {
         Map<String, Object> r = reportRow(id);
         JsonObject snap = JsonParser.parseString((String) r.remove("snapshot")).getAsJsonObject();
         r.put("narrative", JsonParser.parseString((String) r.get("narrative")));
-        r.put("demands", isImported(r) ? new com.google.gson.JsonArray() : snap.get("demands"));
+        r.put("demands", statusLayout(r) ? new com.google.gson.JsonArray() : snap.get("demands"));
+        if (statusLayout(r)) r.put("data", snap);
         return r;
     }
 
@@ -698,6 +701,14 @@ final class SpotService {
             if (m.equals("PUT")) {
                 if (isImported(r)) throw new ApiException(400, "Relatórios importados não têm o texto editável aqui; importe o HTML novamente.");
                 JsonObject b = ApiServlet.body(req);
+                if (isManual(r)) {
+                    JsonObject data = ImportedReportHtml.normalize(b);
+                    String json = GSON.toJson(data);
+                    if (json.length() > 150000) throw new ApiException(400, "Relatório grande demais.");
+                    String t = data.get("titulo").getAsString();
+                    Db.update("UPDATE spot_reports SET title = ?, snapshot = ? WHERE id = ?", t.isEmpty() ? "Status Report" : t.length() > 200 ? t.substring(0, 200) : t, json, id);
+                    return reportView(id);
+                }
                 String title = ApiServlet.str(b, "title", "Título", 200, true);
                 JsonElement ne = b.get("narrative");
                 if (ne == null || !ne.isJsonObject()) throw new ApiException(400, "Texto do relatório inválido.");
@@ -721,8 +732,17 @@ final class SpotService {
         return "importado".equals(r.get("model"));
     }
 
+    /** Relatório tradicional: preenchido à mão na tela, sem Claude, no mesmo formato do Status Report da Fábrica. */
+    private static boolean isManual(Map<String, Object> r) {
+        return "manual".equals(r.get("model"));
+    }
+
+    private static boolean statusLayout(Map<String, Object> r) {
+        return isImported(r) || isManual(r);
+    }
+
     /** Guarda um Status Report importado de HTML (mesmo conteúdo do arquivo), sem passar pelo Claude. */
-    private static Object importStatusReport(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+    private static Object importStatusReport(long spotId, JsonObject b, Map<String, Object> user, String model) throws SQLException {
         JsonObject data = ImportedReportHtml.normalize(b);
         String title = data.get("titulo").getAsString();
         if (title.isEmpty()) title = "Status Report da Fábrica";
@@ -733,12 +753,12 @@ final class SpotService {
         String json = GSON.toJson(data);
         if (json.length() > 150000) throw new ApiException(400, "Relatório grande demais para importar.");
         long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
-                spotId, title, ref, json, "{}", "importado", user.get("name"));
+                spotId, title, ref, json, "{}", model, user.get("name"));
         return reportView(id);
     }
 
     private static String renderReport(Map<String, Object> r, boolean email) {
-        if (isImported(r)) return ImportedReportHtml.render(JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject());
+        if (statusLayout(r)) return ImportedReportHtml.render(JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject());
         JsonObject snap = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
         JsonObject narr = JsonParser.parseString((String) r.get("narrative")).getAsJsonObject();
         return SpotReportHtml.render((String) r.get("title"), (String) r.get("created_by"), (String) r.get("created_at"), snap, narr,
