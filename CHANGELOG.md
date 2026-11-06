@@ -5,7 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
-- Projetos Spot: nova aba "Relatório tradicional" (sem Claude). A tela de preenchimento segue o formato do Status Report da Fábrica (indicadores, consumo por demanda, detalhamento, ações do comitê, demandas em andamento, previsão, definições e rodapé), já vem com os dados do projeto (horas, ações, pendências) e soma os totais de horas sozinha. Ao salvar, o sistema gera o HTML formatado igual ao relatório de referência, que pode ser editado, impresso/PDF e enviado por e-mail (CC/CCO). Fica separado da aba "Relatórios com Claude".
+- Projetos Spot: nova aba "Relatório tradicional" (sem Claude), exibida somente em projetos de escopo fechado (projetos de horas não têm a opção). A tela de preenchimento segue o formato do Status Report da Fábrica (indicadores, consumo por demanda, detalhamento, ações do comitê, demandas em andamento, previsão, definições e rodapé), já vem com os dados do projeto (horas, ações, pendências) e soma os totais de horas sozinha. Ao salvar, o sistema gera o HTML formatado igual ao relatório de referência, que pode ser editado, impresso/PDF e enviado por e-mail (CC/CCO). Fica separado da aba "Relatórios com Claude".
 
 - Lista de escopo fechado: Valor e Faturado agora ficam numa só coluna "Financeiro" e o cabeçalho "Arquivos" foi encurtado, para a tabela caber na tela sem rolagem lateral.
 

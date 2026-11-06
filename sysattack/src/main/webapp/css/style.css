@@ -564,3 +564,4 @@ a.btn { text-decoration: none; color: var(--ink); }
 .mr-total input { max-width: 200px; font-weight: 700; } .mr-total b { padding-right: 46px; }
 .mr-note { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; } .mr-note input:first-child { flex: 0 0 220px; } .mr-note input:last-child { flex: 1 1 200px; }
 @media (max-width: 900px) { .mr-two, .mr-top { grid-template-columns: 1fr; } }
+.mr-row.mr-kpis .mr-s { flex: 0 0 140px; }

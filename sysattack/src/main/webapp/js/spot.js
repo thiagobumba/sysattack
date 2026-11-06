@@ -157,7 +157,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('tradicional', 'Relatório tradicional')}${tab('relatorios', 'Relatórios com Claude')}</div>
+        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${p.closed_scope ? tab('tradicional', 'Relatório tradicional') : ''}${tab('relatorios', 'Relatórios com Claude')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -655,19 +655,13 @@ const Spot = (() => {
 
   /** Dados iniciais de um relatório novo: o que o SysAttack já sabe do projeto; o resto é preenchido por você. */
   async function manualDefaults() {
-    const p = st.data, s = p.summary || {}, today = fmt(todayIso());
+    const p = st.data, today = fmt(todayIso());
     const d = { titulo: 'Status Report · ' + p.name, meta: `${today} · Comitê semanal${p.participants ? ' · ' + p.participants : ''}`, destaques: '', ...MR_HEADS, pillChat: '', notaChat: '', notaPrev: '', rodape: (p.provider ? p.provider + ' · ' : '') + 'Material do comitê.' };
-    if (p.closed_scope) {
-      const sc = p.scope, f = p.finance;
-      d.kpis = [{ n: String(sc.total), l: 'Demandas do escopo' }, { n: String(sc.delivered), l: 'Entregues (com apontamento)' }, { n: sc.pct + '%', l: 'Entregue do escopo' }, { n: brl(f.invoiced), l: 'Faturado de ' + brl(f.project_value) }];
-      const dem = await api('GET', `spot/${st.id}/demands`);
-      d.consumo = dem.filter(x => x.status !== 'CANCELADA').map(x => ({ d: x.name, h: '' }));
-      d.hConsumo = 'Demandas do escopo';
-    } else {
-      const k = s.kpi || {}, n = h;
-      d.kpis = [{ n: n(k.contracted), l: p.hours_model === 'MENSAL' ? 'Franquia mensal' : 'Pacote de horas' }, { n: n(k.consumed), l: 'Consumido no período' }, { n: n(k.balance), l: 'Saldo atual' }, { n: '', l: '' }];
-      d.consumo = (s.by_item || []).map(x => ({ d: x.label, h: String(x.hours).replace('.', ',') }));
-    }
+    const sc = p.scope, f = p.finance;
+    d.kpis = [{ n: String(sc.total), l: 'Demandas do escopo' }, { n: String(sc.delivered), l: 'Entregues (com apontamento)' }, { n: sc.pct + '%', l: 'Entregue do escopo' }, { n: brl(f.invoiced), l: 'Faturado de ' + brl(f.project_value) }];
+    const dem = await api('GET', `spot/${st.id}/demands`);
+    d.consumo = dem.filter(x => x.status !== 'CANCELADA').map(x => ({ d: x.name, h: '' }));
+    d.hConsumo = 'Demandas do escopo';
     d.chat = [];
     const ac = await api('GET', `spot/${st.id}/actions`);
     const map = { PENDENTE: 'Pendente', A_CONFIRMAR: 'A confirmar', PARCIAL: 'Parcial', CONCLUIDO: 'Concluído' };

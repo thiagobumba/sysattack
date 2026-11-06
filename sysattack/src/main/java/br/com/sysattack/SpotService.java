@@ -747,6 +747,8 @@ final class SpotService {
         String title = data.get("titulo").getAsString();
         if (title.isEmpty()) title = "Status Report da Fábrica";
         if (title.length() > 200) title = title.substring(0, 200);
+        if ("manual".equals(model) && !Boolean.TRUE.equals(project(spotId).get("closed_scope")))
+            throw new ApiException(400, "O relatório tradicional é só para projetos de escopo fechado.");
         LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
         if (ref == null) ref = LocalDate.now();
         ref = SpotCalc.clampRef(project(spotId), ref); // dentro da vigência do contrato
