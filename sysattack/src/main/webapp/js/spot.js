@@ -77,15 +77,16 @@ const Spot = (() => {
       <div class="mini ${projNeg ? 'neg' : ''}"><span>Saldo projetado</span><b>${h(k.projected)}</b></div></div>`;
   }
 
+  /** Escopo fechado: a demanda só é "entregue" quando tem apontamento vinculado a ela. */
   function scopeCards(sc) {
-    const b = sc.by_status || {}, n = (...k) => k.reduce((a, x) => a + (b[x] || 0), 0);
     return `<div class="mini-kpis">
       <div class="mini"><span>Demandas do escopo</span><b>${sc.total}</b></div>
-      <div class="mini accent"><span>Entregues (concluídas)</span><b>${sc.done}</b></div>
-      <div class="mini"><span>Em andamento / homologação</span><b>${n('EM_ANDAMENTO', 'EM_HOMOLOGACAO')}</b></div>
-      <div class="mini"><span>A iniciar / em espera</span><b>${n('EM_ANALISE', 'APROVADO', 'EM_ESPERA')}</b></div>
+      <div class="mini accent"><span>Entregues (com apontamento)</span><b>${sc.delivered}</b></div>
+      <div class="mini"><span>Sem apontamento</span><b>${sc.no_entry}</b></div>
+      <div class="mini ${sc.done_no_entry ? 'neg' : ''}"><span>Concluídas sem apontamento</span><b>${sc.done_no_entry}</b></div>
       <div class="mini"><span>Entregue do escopo</span><b>${sc.pct}%</b></div></div>`;
   }
+  const entryBadge = d => Number(d.entries) > 0 ? '<span class="badge b-green">Entregue</span>' : '<span class="badge b-grey">Sem apontamento</span>';
 
   // ------------------------------------------------------------------ vigência
   const overdue = p => p.end_date && p.status === 'ATIVO' && p.end_date < todayIso();
@@ -117,7 +118,7 @@ const Spot = (() => {
     const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Arquivos do escopo</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
-          <td>${pct(p.scope.pct)}<span class="small">${p.scope.done} de ${p.scope.total} demanda(s) concluída(s)</span></td>
+          <td>${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
@@ -159,11 +160,16 @@ const Spot = (() => {
     if (st.tab === 'resumo') {
       const s = st.data.summary;
       if (closedScope()) {
-        const sc = st.data.scope, ST_ORDER = ['CONCLUIDA', 'EM_HOMOLOGACAO', 'EM_ANDAMENTO', 'APROVADO', 'EM_ANALISE', 'EM_ESPERA', 'CANCELADA'];
+        const sc = st.data.scope;
+        st.demands = await api('GET', `spot/${id}/demands`);
+        const live = st.demands.filter(d => d.status !== 'CANCELADA');
         host.innerHTML = `${vigLine()}<h3 style="margin:0 0 10px;font-size:15px">Entrega do escopo</h3>${pct(sc.pct)}
-          <div class="table-wrap" style="margin-top:14px"><table class="tbl"><thead><tr><th>Situação das demandas</th><th class="num">Quantidade</th></tr></thead><tbody>
-          ${ST_ORDER.filter(k => (sc.by_status || {})[k]).map(k => `<tr><td>${badge(D_STATUS, k)}</td><td class="num">${sc.by_status[k]}</td></tr>`).join('') || '<tr><td colspan="2" class="small">Nenhuma demanda cadastrada.</td></tr>'}</tbody></table></div>
-          <p class="hint" style="margin-top:14px">${sc.files} arquivo(s) do escopo anexado(s) na aba “Escopo”. Este projeto não controla horas.</p>`;
+          <p class="hint" style="margin:10px 0 14px">Cada demanda só conta como entregue quando existe um apontamento vinculado a ela (aba Apontamentos). Este projeto não controla horas.</p>
+          ${live.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th class="num">Apontamentos</th><th>Entrega</th></tr></thead><tbody>
+          ${live.map(d => `<tr><td class="strong">${esc(d.name)}</td><td>${badge(D_STATUS, d.status)}</td><td class="num">${d.entries}</td>
+            <td>${entryBadge(d)}${d.status === 'CONCLUIDA' && !Number(d.entries) ? '<span class="small late-txt">Concluída, mas sem apontamento</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`
+          : empty('Nenhuma demanda cadastrada', 'Cadastre as demandas do escopo na aba Demandas.')}
+          <p class="hint" style="margin-top:14px">${sc.files} arquivo(s) do escopo anexado(s) na aba “Escopo”.</p>`;
       } else
       host.innerHTML = `${vigLine()}${s.by_item.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Frente</th><th>Atividade</th><th class="num">Horas</th></tr></thead><tbody>
         ${s.by_item.map(i => `<tr><td>${esc(i.front || '—')}</td><td class="strong">${esc(i.label)}</td><td class="num">${h(i.hours)}</td></tr>`).join('')}</tbody></table></div>`
@@ -183,10 +189,10 @@ const Spot = (() => {
       host.innerHTML = `${vigLine()}<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><label for="sp-f" class="hint">De</label>
         <input id="sp-f" type="date" value="${from}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}"><label for="sp-t" class="hint">Até</label>
         <input id="sp-t" type="date" value="${to}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}">
-        <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} ${cs ? 'apontamento(s)' : `lançamento(s) · <b>${h(total)}</b>`}</span></div>
+        <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} ${cs ? 'apontamento(s) · cada um entrega uma demanda' : `lançamento(s) · <b>${h(total)}</b>`}</span></div>
         ${st.hours.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Frente</th><th>Atividade</th><th>Demanda</th>${cs ? '' : '<th class="num">Horas</th>'}<th></th></tr></thead><tbody>
         ${st.hours.map(x => `<tr><td>${fmt(x.work_date)}</td><td>${esc(x.front || '—')}</td><td class="strong">${esc(x.activity)}</td><td>${esc(x.demand_name || '—')}</td>${cs ? '' : `<td class="num">${h(x.hours)}</td>`}${iconBtns('hour', x.id)}</tr>`).join('')}</tbody></table></div>`
-        : cs ? empty('Nenhum apontamento neste filtro', 'Use “+ Novo apontamento” para registrar o que foi feito e entregue.') : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
+        : cs ? empty('Nenhum apontamento neste filtro', 'Use “+ Novo apontamento” e vincule cada apontamento à demanda que ele entrega.') : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
       const rangeChanged = () => {
         const f = document.getElementById('sp-f').value, t = document.getElementById('sp-t').value;
         if (f && t && f > t) { A().toast('A data inicial não pode ser depois da final.'); return; }
@@ -206,9 +212,9 @@ const Spot = (() => {
         : empty('Nenhum arquivo do escopo', 'Use “+ Anexar arquivo do escopo” para guardar o PDF ou o arquivo do projeto.')}`;
     } else if (st.tab === 'demandas') {
       st.demands = await api('GET', `spot/${id}/demands`);
-      host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th>${closedScope() ? '' : '<th class="num">Aprovado</th><th class="num">Realizado</th>'}<th></th></tr></thead><tbody>
+      host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th>${closedScope() ? '<th class="num">Apontamentos</th><th>Entrega</th>' : '<th class="num">Aprovado</th><th class="num">Realizado</th>'}<th></th></tr></thead><tbody>
         ${st.demands.map(d => `<tr><td class="strong">${esc(d.name)}${d.notes ? `<span class="small">${esc(d.notes)}</span>` : ''}</td><td>${badge(D_STATUS, d.status)}</td><td>${esc(d.next_step || '—')}</td>
-          ${closedScope() ? '' : `<td class="num">${Number(d.approved_hours) > 0 ? h(d.approved_hours) : '—'}</td>
+          ${closedScope() ? `<td class="num">${d.entries}</td><td>${entryBadge(d)}</td>` : `<td class="num">${Number(d.approved_hours) > 0 ? h(d.approved_hours) : '—'}</td>
           <td class="num ${Number(d.approved_hours) > 0 && Number(d.hours_total) > Number(d.approved_hours) ? 'late-txt' : ''}">${h(d.hours_total)}</td>`}${iconBtns('demand', d.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhuma demanda', closedScope() ? 'Cadastre as demandas do escopo e acompanhe a entrega de cada uma.' : 'Cadastre as demandas (com horas aprovadas) para comparar realizado × aprovado.'));
     } else if (st.tab === 'acoes') {
@@ -278,7 +284,7 @@ const Spot = (() => {
       <div class="field"><label for="hd">Data</label><input id="hd" name="work_date" type="date" value="${x.work_date}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
       ${closedScope() ? '' : `<div class="field"><label for="hh">Horas</label><input id="hh" name="hours" type="number" min="0.1" step="0.1" value="${x.hours}" required></div>`}
       <div class="field"><label for="hf">Frente</label><input id="hf" name="front" maxlength="80" value="${esc(x.front)}" placeholder="Ex.: Suporte, Chatbot"></div>
-      <div class="field"><label for="hm">Demanda</label><select id="hm" name="demand_id"><option value="">— nenhuma —</option>${demands.map(d => `<option value="${d.id}"${d.id === x.demand_id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field${closedScope() ? ' full' : ''}"><label for="hm">${closedScope() ? 'Qual demanda este apontamento entrega?' : 'Demanda'}</label><select id="hm" name="demand_id"${closedScope() ? ' required' : ''}><option value="">${closedScope() ? '— escolha a demanda —' : '— nenhuma —'}</option>${demands.filter(d => !closedScope() || d.status !== 'CANCELADA').map(d => `<option value="${d.id}"${d.id === x.demand_id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
       <div class="field full"><label for="ha">Atividade</label><input id="ha" name="activity" maxlength="300" value="${esc(x.activity)}" required></div>`,
       async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/hours/' + id : `spot/${st.id}/hours`, d); A().toast(closedScope() ? 'Apontamento salvo.' : 'Horas salvas.'); });
   }

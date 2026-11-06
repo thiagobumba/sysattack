@@ -105,7 +105,7 @@ final class SpotService {
                         if (m.equals("POST")) return saveHour(null, id, ApiServlet.body(req), user);
                         break;
                     case "demands":
-                        if (m.equals("GET")) return Db.query("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total"
+                        if (m.equals("GET")) return Db.query("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total, (SELECT COUNT(*) FROM spot_hours h WHERE h.demand_id = d.id) entries"
                                 + " FROM spot_demands d WHERE d.spot_id = ? ORDER BY CASE WHEN d.status IN ('CONCLUIDA','CANCELADA') THEN 1 ELSE 0 END, d.id", id);
                         if (m.equals("POST")) return saveDemand(null, id, ApiServlet.body(req));
                         break;
@@ -171,16 +171,22 @@ final class SpotService {
     private static Map<String, Object> scopeSummary(long id) throws SQLException {
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Object> by = new LinkedHashMap<>();
-        int total = 0, done = 0;
-        for (Map<String, Object> r : Db.query("SELECT status, COUNT(*) c FROM spot_demands WHERE spot_id = ? GROUP BY status", id)) {
-            int c = ((Number) r.get("c")).intValue();
-            by.put((String) r.get("status"), c);
-            if (!"CANCELADA".equals(r.get("status"))) total += c;
-            if ("CONCLUIDA".equals(r.get("status"))) done += c;
+        // regra do escopo fechado: a demanda só conta como ENTREGUE quando tem ao menos um apontamento vinculado a ela
+        int total = 0, delivered = 0, doneNoEntry = 0;
+        for (Map<String, Object> r : Db.query("SELECT d.status, (SELECT COUNT(*) FROM spot_hours h WHERE h.demand_id = d.id) n FROM spot_demands d WHERE d.spot_id = ?", id)) {
+            String stt = (String) r.get("status");
+            by.merge(stt, 1, (a, c) -> (Integer) a + 1);
+            if ("CANCELADA".equals(stt)) continue;
+            boolean has = ((Number) r.get("n")).intValue() > 0;
+            total++;
+            if (has) delivered++;
+            else if ("CONCLUIDA".equals(stt)) doneNoEntry++;
         }
         out.put("total", total);
-        out.put("done", done);
-        out.put("pct", total == 0 ? 0 : Math.round(done * 100.0 / total));
+        out.put("delivered", delivered);
+        out.put("no_entry", total - delivered);
+        out.put("done_no_entry", doneNoEntry);
+        out.put("pct", total == 0 ? 0 : Math.round(delivered * 100.0 / total));
         out.put("by_status", by);
         out.put("files", ((Number) Db.one("SELECT COUNT(*) c FROM spot_files WHERE spot_id = ?", id).get("c")).intValue());
         return out;
@@ -338,6 +344,7 @@ final class SpotService {
         Long demand = ApiServlet.optLong(b, "demand_id");
         Map<String, Object> sp = project(spotId);
         boolean noHours = Boolean.TRUE.equals(sp.get("closed_scope")); // escopo fechado: apontamento sem controle de horas
+        if (noHours && demand == null) throw new ApiException(400, "Informe qual demanda este apontamento entrega.");
         BigDecimal hours = ApiServlet.money(b, "hours", "Horas", !noHours);
         if (!noHours && (hours.signum() <= 0 || hours.compareTo(new BigDecimal("9999")) > 0)) throw new ApiException(400, "Informe horas maiores que zero (máximo 9999).");
         if (noHours && hours.compareTo(new BigDecimal("9999")) > 0) throw new ApiException(400, "Horas inválidas.");
@@ -371,7 +378,7 @@ final class SpotService {
         } else {
             Db.update("UPDATE spot_demands SET name=?, status=?, next_step=?, approved_hours=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", name, status, next, approved, notes, id);
         }
-        return Db.one("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total FROM spot_demands d WHERE d.id = ?", id);
+        return Db.one("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total, (SELECT COUNT(*) FROM spot_hours h WHERE h.demand_id = d.id) entries FROM spot_demands d WHERE d.id = ?", id);
     }
 
     /** Importa demandas e horas de um relatório: demandas por nome (atualiza se já existir), horas sem duplicar. */
