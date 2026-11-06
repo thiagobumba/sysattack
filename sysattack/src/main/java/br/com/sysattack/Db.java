@@ -114,6 +114,8 @@ public final class Db {
                     + "recipients VARCHAR(1000) NOT NULL DEFAULT '',"
                     + "billing_note VARCHAR(1000) NOT NULL DEFAULT '',"
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS end_date DATE");
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS recurring BOOLEAN DEFAULT FALSE NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS spot_demands ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

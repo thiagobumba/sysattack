@@ -532,3 +532,6 @@ h1 { font-size: 38px; margin: 6px 0 6px; }
 @media (max-width: 860px) { .evm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .warn-txt { color: #b87400; font-weight: 600; }
+
+.badge.rec { margin-left: 6px; font-size: 9.5px; padding: 3px 6px; vertical-align: 2px; }
+.field label .opt { font-weight: 400; color: #8a8a8a; }

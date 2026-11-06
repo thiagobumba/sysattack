@@ -128,19 +128,22 @@ final class SpotService {
         String model = ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
         BigDecimal hours = ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
         LocalDate start = ApiServlet.date(b, "start_date", "Início");
+        LocalDate end = ApiServlet.optDate(b, "end_date", "Data final");
+        boolean recurring = ApiServlet.bool(b, "recurring");
         String status = ApiServlet.str(b, "status", "Situação", 12, true);
         String participants = ApiServlet.str(b, "participants", "Participantes", 1000, false);
         String recipients = normalizeRecipients(ApiServlet.str(b, "recipients", "Destinatários", 1000, false));
         String billing = ApiServlet.str(b, "billing_note", "Observação de faturamento", 1000, false);
+        if (end != null && end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior ao início.");
         if (!HOURS_MODEL.contains(model)) throw new ApiException(400, "Modelo de horas inválido.");
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,status,participants,recipients,billing_note)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, status, participants, recipients, billing);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing);
         } else {
-            Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=? WHERE id=?", name, client, provider, desc, model, hours, start, status, participants, recipients, billing, id);
+            Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
+                    + " participants=?, recipients=?, billing_note=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, id);
         }
         return project(id);
     }

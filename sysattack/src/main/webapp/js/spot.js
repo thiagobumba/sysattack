@@ -27,6 +27,11 @@ const Spot = (() => {
       <div class="mini ${projNeg ? 'neg' : ''}"><span>Saldo projetado</span><b>${h(k.projected)}</b></div></div>`;
   }
 
+  // ------------------------------------------------------------------ vigência
+  const overdue = p => p.end_date && p.status === 'ATIVO' && p.end_date < todayIso();
+  const vigencia = p => p.end_date ? `<span class="small ${overdue(p) ? 'late-txt' : ''}">até ${fmt(p.end_date)}${overdue(p) ? ' · vigência encerrada' : ''}</span>` : '';
+  const endedNote = p => overdue(p) ? '<span class="small late-txt">Vigência encerrada: encerre o projeto ou ajuste a data.</span>' : '';
+
   // ------------------------------------------------------------------ lista
   async function viewList() {
     const list = await api('GET', 'spot');
@@ -34,8 +39,8 @@ const Spot = (() => {
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira spot</h2>
         <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
         <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo projetado</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${list.map(p => `<tr class="click" data-go="#/spot/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.client || '—')}</span></td>
-          <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span></td>
+        ${list.map(p => `<tr class="click" data-go="#/spot/${p.id}"><td class="strong">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></td>
+          <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.projected) < 0 ? 'late-txt' : ''}">${h(p.kpi.projected)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>
@@ -56,7 +61,7 @@ const Spot = (() => {
         <button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button></div></div>
         ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
-        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Contrato</dt><dd>${p.recurring ? '<span class="badge b-dark">Recorrente</span>' : 'Avulso'}</dd></div><div><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div><dt>Destinatários</dt><dd>${esc(p.recipients || '—')}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
@@ -116,7 +121,7 @@ const Spot = (() => {
   // ------------------------------------------------------------------ formulários
   function projectForm(id) {
     return (async () => {
-      const p = id ? await api('GET', 'spot/' + id) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
+      const p = id ? await api('GET', 'spot/' + id) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: false, status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
       A().openDialog(id ? 'Editar projeto spot' : 'Novo projeto spot', `
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
@@ -124,13 +129,15 @@ const Spot = (() => {
         <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
         <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
+        <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
+        <div class="field full"><label class="check"><input type="checkbox" name="recurring" ${p.recurring ? 'checked' : ''}> <b>Contrato recorrente</b> — repete a cada período (ex.: franquia mensal). O cadastro continua o mesmo; muda só o que é registrado nas demandas.</label></div>
         <div class="field full"><label for="spa">Participantes do comitê</label><input id="spa" name="participants" maxlength="1000" value="${esc(p.participants)}" placeholder="Nomes separados por vírgula"></div>
         <div class="field full"><label for="sr">Destinatários dos relatórios (e-mails)</label><input id="sr" name="recipients" maxlength="1000" value="${esc(p.recipients)}" placeholder="gestor1@empresa.com, gestor2@empresa.com"></div>
         <div class="field full"><label for="sb">Observação de faturamento</label><input id="sb" name="billing_note" maxlength="1000" value="${esc(p.billing_note)}" placeholder="Ex.: excedentes de agosto serão faturados à parte"></div>
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', d); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, recurring: !!d.recurring, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
     })();
   }
 
