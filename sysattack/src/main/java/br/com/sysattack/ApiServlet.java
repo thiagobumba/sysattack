@@ -22,6 +22,8 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -742,6 +744,8 @@ public class ApiServlet extends HttpServlet {
                     return Db.query(TASK_SQL + " WHERE t.project_id = ? ORDER BY t.start_date, t.id", id);
                 }
                 if (sub.equals("finance") && m.equals("GET")) return projectFinance(id);
+                if (sub.equals("import-preview") && m.equals("POST")) { projectOr404(id); return importPreview(req); }
+                if (sub.equals("import-tasks") && m.equals("POST")) { projectOr404(id); return importTasks(id, req, user); }
                 if (sub.equals("documents")) {
                     projectOr404(id);
                     if (m.equals("GET")) return Db.query(DOC_SQL + " WHERE project_id = ? ORDER BY uploaded_at DESC, id DESC", id);
@@ -898,6 +902,135 @@ public class ApiServlet extends HttpServlet {
         Map<String, Object> saved = Db.one(TASK_SQL + " WHERE t.id = ?", id);
         taskEvents(existing, saved);
         return saved;
+    }
+
+    // ------------------------------------------------------------------ importação de cronograma do Microsoft Project
+
+    /** Lê o .mpp (ou XML do Project) enviado "cru" no corpo e devolve as linhas para a pré-visualização. Não grava nada. */
+    private Object importPreview(HttpServletRequest req) throws IOException {
+        long declared = req.getContentLengthLong();
+        if (declared > MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[65536];
+        try (InputStream in = req.getInputStream()) {
+            int n;
+            while ((n = in.read(chunk)) > 0) {
+                buf.write(chunk, 0, n);
+                if (buf.size() > MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+            }
+        }
+        ProjectFileReader.Result r = ProjectFileReader.parse(buf.toByteArray());
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (ProjectFileReader.Row x : r.rows) {
+            Map<String, Object> o = new LinkedHashMap<>();
+            o.put("uid", x.uid);
+            o.put("id", x.id);
+            o.put("level", x.level);
+            o.put("name", x.name);
+            o.put("start", x.start == null ? null : x.start.toLocalDate().toString());
+            o.put("end", x.finish == null ? null : x.finish.toLocalDate().toString());
+            o.put("percent", x.percent);
+            o.put("summary", x.summary);
+            o.put("milestone", x.milestone);
+            List<Map<String, Object>> preds = new ArrayList<>();
+            for (ProjectFileReader.Link l : x.preds) {
+                Map<String, Object> pl = new LinkedHashMap<>();
+                pl.put("uid", l.pred); pl.put("type", l.type); pl.put("lag_days", Math.round(l.lagDays * 10) / 10.0);
+                preds.add(pl);
+            }
+            o.put("preds", preds);
+            rows.add(o);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("format", r.format);
+        out.put("project_name", r.projectName);
+        out.put("rows", rows);
+        return out;
+    }
+
+    /**
+     * Cria as tarefas escolhidas na pré-visualização. Cada item: ref (número), parent (ref de outra tarefa da lista ou nulo),
+     * name, start_date, end_date, progress, milestone, depends (ref ou nulo). Não dispara e-mails de gatilho (são dezenas de tarefas de uma vez).
+     */
+    private Object importTasks(long projectId, HttpServletRequest req, Map<String, Object> user) throws SQLException, IOException {
+        JsonObject b = body(req);
+        JsonElement te = b.get("tasks");
+        if (te == null || !te.isJsonArray() || te.getAsJsonArray().size() == 0) throw new ApiException(400, "Nenhuma tarefa selecionada para importar.");
+        if (te.getAsJsonArray().size() > 5000) throw new ApiException(400, "Tarefas demais de uma vez (limite de 5000).");
+        Map<Long, Long> refToId = new HashMap<>();
+        Map<Long, Long> pendingDep = new LinkedHashMap<>(); // id criado -> ref da predecessora
+        Set<Long> parents = new java.util.LinkedHashSet<>();
+        Set<Long> parentRefs = new HashSet<>();
+        LocalDate min = null, max = null;
+        int created = 0;
+        // 1ª volta: descobre quais refs são pais (precisam de dados vindos das filhas)
+        for (JsonElement e : te.getAsJsonArray()) {
+            JsonObject t = e.getAsJsonObject();
+            if (t.has("parent") && !t.get("parent").isJsonNull()) parentRefs.add(t.get("parent").getAsLong());
+        }
+        for (JsonElement e : te.getAsJsonArray()) {
+            if (!e.isJsonObject()) throw new ApiException(400, "Lista de tarefas inválida.");
+            JsonObject t = e.getAsJsonObject();
+            long ref = longOf(t, "ref", "Referência");
+            String name = str(t, "name", "Nome da tarefa", 160, true);
+            LocalDate start = date(t, "start_date", "Início");
+            LocalDate end = date(t, "end_date", "Fim");
+            boolean milestone = bool(t, "milestone");
+            if (milestone) end = start;
+            if (end.isBefore(start)) end = start;
+            if (start.getYear() < 1990 || end.getYear() > 2100) throw new ApiException(400, "Data fora do intervalo aceito na tarefa: " + name + ".");
+            int progress = 0;
+            JsonElement pe = t.get("progress");
+            if (pe != null && !pe.isJsonNull()) progress = Math.max(0, Math.min(100, pe.getAsInt()));
+            String status = progress >= 100 ? "CONCLUIDA" : progress > 0 ? "EM_ANDAMENTO" : "A_FAZER";
+            Long parent = null;
+            if (t.has("parent") && !t.get("parent").isJsonNull()) {
+                parent = refToId.get(t.get("parent").getAsLong());
+                if (parent == null) throw new ApiException(400, "A tarefa pai de \"" + name + "\" não veio antes dela na lista.");
+            }
+            String desc = str(t, "description", "Descrição", 4000, false);
+            long newId = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, "", start, end, progress, status, null, parent, milestone);
+            refToId.put(ref, newId);
+            created++;
+            if (parent != null) parents.add(parent);
+            if (t.has("depends") && !t.get("depends").isJsonNull() && !parentRefs.contains(ref)) pendingDep.put(newId, t.get("depends").getAsLong());
+            if (min == null || start.isBefore(min)) min = start;
+            if (max == null || end.isAfter(max)) max = end;
+        }
+        // 2ª volta: predecessoras (só entre tarefas importadas; ciclos e inválidas são ignoradas e contadas)
+        int deps = 0, skipped = 0;
+        for (Map.Entry<Long, Long> d : pendingDep.entrySet()) {
+            Long target = refToId.get(d.getValue());
+            if (target == null || target.equals(d.getKey())) { skipped++; continue; }
+            try {
+                checkDependency(d.getKey(), projectId, target);
+                Db.update("UPDATE tasks SET depends_on = ? WHERE id = ?", target, d.getKey());
+                deps++;
+            } catch (ApiException ex) {
+                skipped++;
+            }
+        }
+        for (Long p : parents) TaskRules.rollup(p);
+        // opcional: estende as datas do projeto para caber no cronograma importado
+        boolean adjusted = false;
+        if (bool(b, "adjust_project") && min != null) {
+            Map<String, Object> pr = Db.one("SELECT start_date, end_date FROM projects WHERE id = ?", projectId);
+            LocalDate ps = LocalDate.parse(String.valueOf(pr.get("start_date"))), pe2 = LocalDate.parse(String.valueOf(pr.get("end_date")));
+            LocalDate ns = min.isBefore(ps) ? min : ps, ne = max.isAfter(pe2) ? max : pe2;
+            if (!ns.equals(ps) || !ne.equals(pe2)) {
+                Db.update("UPDATE projects SET start_date = ?, end_date = ? WHERE id = ?", ns, ne, projectId);
+                adjusted = true;
+            }
+        }
+        String src = str(b, "source", "Arquivo", 200, false);
+        Audit.log(req, String.valueOf(user.get("email")), "CRONOGRAMA_IMPORTADO", "projeto " + projectId + ": " + created + " tarefa(s) de " + src, true);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("created", created);
+        out.put("dependencies", deps);
+        out.put("dependencies_skipped", skipped);
+        out.put("project_adjusted", adjusted);
+        return out;
     }
 
     /** A predecessora precisa ser do mesmo projeto e não pode formar ciclo. */

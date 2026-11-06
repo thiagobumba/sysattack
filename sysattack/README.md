@@ -101,6 +101,13 @@ Alternativa manual: extraia `database/script.sql.zip` e rode `java -cp h2-2.2.22
 
 **Segurança.** Veja `SEGURANCA.md`. Para recomeçar do zero, pare o Tomcat e apague a pasta de dados (e o arquivo `.initialized`, senão o primeiro acesso é recusado de propósito).
 
+## Importar cronograma do Microsoft Project
+No projeto (abas Cronograma ou Tarefas) clique em **Importar do Project** e envie o `.mpp` (Project 2010 ou mais novo) ou o XML do Project
+(Arquivo > Salvar como > XML). A tela mostra o que seria criado, com uma caixa por linha; só depois de **Importar** algo é gravado.
+Regras: o nível escolhido vira tarefa principal e o que está abaixo vira subtarefa (o SysAttack tem 2 níveis); marcos viram marcos;
+datas são só o dia; a predecessora importada é a primeira da lista (o SysAttack guarda uma por tarefa). Não importa responsáveis nem calendários.
+Código: `ProjectFileReader.java` (leitor) e `js/mpp.js` (tela). Para outras versões do Project, prefira o XML.
+
 ## Estrutura
 - `src/main/java/br/com/sysattack` — `ApiServlet` (API JSON), `Db`, `BackupService`, `Auth`, `Audit`, `SecurityFilter`, `Mailer`, `AiConfig`, `TaskRules`, `AppListener`
 - `src/main/webapp` — `login.html`, `index.html`, `css/`, `js/`, `img/`, `favicon.ico`

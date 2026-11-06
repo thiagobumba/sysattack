@@ -205,7 +205,7 @@
       : t === 'changes' ? btn('rp-new-change', '+ Nova change')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
-      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false);
+      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar do Project', `data-project="${view.projectId}"`, false);
     if (t === 'gantt') {
       const p = view.project;
       Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
@@ -714,6 +714,7 @@
       if (el.dataset.action.startsWith('em-')) { await Mail.action(el); return; }
       if (el.dataset.action.startsWith('sys-')) { await Sys.action(el); return; }
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
+      if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
         case 'close': dlg.close(); break;
