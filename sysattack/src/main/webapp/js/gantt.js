@@ -97,7 +97,7 @@ const Gantt = (() => {
         + `${dia}<span class="g-nm" title="${esc(r.name)}">${esc(r.name)}</span><span class="g-pc">${r.progress}%</span></div>`;
       if (r.kind === 'project') bands += `<div class="g-band" style="top:${i * ROW_H}px;height:${ROW_H}px"></div>`;
 
-      const dur = e - s + 1, late = r.late, cls = r.status === 'CONCLUIDA' ? 'done' : late ? 'late' : '';
+      const dur = e - s + 1, late = r.late, cls = r.status === 'CANCELADA' ? 'cancel' : r.status === 'CONCLUIDA' ? 'done' : late ? 'late' : '';
       const who = shortName(r.sub);
       const tip = `${r.name} · ${fmt(r.start)}${s === e ? '' : ' a ' + fmt(r.end)} · ${r.progress}%${late ? ' · atrasada' : ''}`;
       if (r.kind === 'milestone') {

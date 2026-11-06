@@ -22,11 +22,14 @@ public final class TaskRules {
         LocalDate min = null, max = null;
         long weight = 0, sum = 0;
         boolean allDone = true, started = false;
+        boolean anyActive = false;
         for (Map<String, Object> k : kids) {
             LocalDate s = LocalDate.parse((String) k.get("start_date"));
             LocalDate e = LocalDate.parse((String) k.get("end_date"));
             int p = ((Number) k.get("progress")).intValue();
             String st = (String) k.get("status");
+            if ("CANCELADA".equals(st)) continue; // filha cancelada não entra no cálculo do pai
+            anyActive = true;
             if (min == null || s.isBefore(min)) min = s;
             if (max == null || e.isAfter(max)) max = e;
             long dur = ChronoUnit.DAYS.between(s, e) + 1;
@@ -34,6 +37,10 @@ public final class TaskRules {
             sum += dur * p;
             if (!"CONCLUIDA".equals(st)) allDone = false;
             if (p > 0 || "EM_ANDAMENTO".equals(st) || "CONCLUIDA".equals(st)) started = true;
+        }
+        if (!anyActive) { // todas as filhas canceladas: o pai também é considerado cancelado
+            Db.update("UPDATE tasks SET status = 'CANCELADA' WHERE id = ?", parentId);
+            return;
         }
         int progress = (int) Math.round((double) sum / Math.max(1, weight));
         String status = allDone ? "CONCLUIDA" : started ? "EM_ANDAMENTO" : "A_FAZER";

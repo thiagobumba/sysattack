@@ -13,7 +13,7 @@
   const prioBadge = p => goalBadge(p) + badge(PRIORITY, p.priority || 'MEDIA');
   const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}" title="${esc((h.reasons || []).join(' · ') || h.label)}"><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
   const byUrgency = (a, b) => ((b.company_goal ? 1 : 0) - (a.company_goal ? 1 : 0)) || (PRIO_RANK[a.priority || 'MEDIA'] - PRIO_RANK[b.priority || 'MEDIA']) || ((H_RANK[a.health.level] ?? 9) - (H_RANK[b.health.level] ?? 9)) || a.name.localeCompare(b.name);
-  const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'] };
+  const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'], CANCELADA: ['Cancelada', 'b-light'] };
   const ROLES = { ADMIN: 'Administrador', USER: 'Usuário' };
   const FIN_KIND = { NF_SERVICO: ['Nota fiscal de serviço', 'b-dark'], FATURA: ['Fatura', 'b-grey'] };
   const DOC_CAT = { ESPECIFICACAO: 'Especificação', CONTRATO: 'Contrato', PROPOSTA: 'Proposta', DESENHO: 'Desenho / projeto', NOTA_FISCAL: 'Nota fiscal', OUTRO: 'Outro' };
@@ -25,7 +25,7 @@
 
   const money = n => BRL.format(Number(n) || 0);
   const isAdmin = () => me.role === 'ADMIN';
-  const isLate = t => t.status !== 'CONCLUIDA' && t.end_date < todayIso();
+  const isLate = t => t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA' && t.end_date < todayIso();
   const badge = (map, k) => `<span class="badge ${map[k][1]}">${map[k][0]}</span>`;
   const taskBadge = t => isLate(t) ? '<span class="badge b-red">Atrasada</span>' : badge(T_STATUS, t.status);
   const pbar = (p, done) => `<div class="pbar"><div class="pbar-track"><div class="pbar-fill${done ? ' done' : ''}" style="width:${p}%"></div></div><span>${p}%</span></div>`;
@@ -692,7 +692,8 @@
     ms.addEventListener('change', syncMs); syncMs();
     rng.addEventListener('input', () => {
       form.querySelector('#tgo').textContent = rng.value + '%';
-      if (rng.value === '100') st.value = 'CONCLUIDA';
+      if (st.value === 'CANCELADA') { /* cancelada mantém a situação */ }
+      else if (rng.value === '100') st.value = 'CONCLUIDA';
       else if (st.value === 'CONCLUIDA') st.value = 'EM_ANDAMENTO';
       else if (rng.value > 0 && st.value === 'A_FAZER') st.value = 'EM_ANDAMENTO';
     });

@@ -34,7 +34,7 @@ final class HealthCalc {
         if (projects.isEmpty()) return;
         LocalDate today = LocalDate.now();
         Map<Long, List<Map<String, Object>>> tasks = group(Db.query("SELECT t.project_id, t.start_date, t.end_date, t.progress, t.status, t.is_milestone"
-                + " FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)"));
+                + " FROM tasks t WHERE t.status <> 'CANCELADA' AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)"));
         Map<Long, List<Map<String, Object>>> changes = group(Db.query("SELECT project_id, status, change_date, impact_days FROM project_changes"));
         Map<Long, BigDecimal> cost = new HashMap<>();
         for (Map<String, Object> r : Db.query("SELECT project_id, COALESCE(SUM(amount), 0) total FROM finance_entries GROUP BY project_id")) {

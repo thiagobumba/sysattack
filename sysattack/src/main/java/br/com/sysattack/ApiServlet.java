@@ -50,7 +50,7 @@ public class ApiServlet extends HttpServlet {
     private static final Gson GSON = new Gson();
     private static final Set<String> PROJECT_PRIORITY = Set.of("CRITICA", "ALTA", "MEDIA", "BAIXA");
     private static final Set<String> PROJECT_STATUS = Set.of("PLANEJAMENTO", "EM_ANDAMENTO", "CONCLUIDO", "PAUSADO");
-    private static final Set<String> TASK_STATUS = Set.of("A_FAZER", "EM_ANDAMENTO", "CONCLUIDA", "BLOQUEADA");
+    private static final Set<String> TASK_STATUS = Set.of("A_FAZER", "EM_ANDAMENTO", "CONCLUIDA", "BLOQUEADA", "CANCELADA");
 
     private static final Set<String> FIN_KIND = Set.of("NF_SERVICO", "FATURA");
     private static final Set<String> FIN_STATUS = Set.of("PENDENTE", "PAGO");
@@ -76,10 +76,10 @@ public class ApiServlet extends HttpServlet {
 
     private static final String PROJECT_SQL =
             "SELECT p.*,"
-          + " (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND " + NO_CHILDREN + ") task_count,"
+          + " (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status <> 'CANCELADA' AND " + NO_CHILDREN + ") task_count,"
           + " (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND " + NO_CHILDREN
-          + "   AND t.status <> 'CONCLUIDA' AND t.end_date < CURRENT_DATE) late_count,"
-          + " CAST(COALESCE((SELECT AVG(t.progress) FROM tasks t WHERE t.project_id = p.id AND t.parent_id IS NULL), 0) AS INT) progress,"
+          + "   AND t.status NOT IN ('CONCLUIDA','CANCELADA') AND t.end_date < CURRENT_DATE) late_count,"
+          + " CAST(COALESCE((SELECT AVG(t.progress) FROM tasks t WHERE t.project_id = p.id AND t.parent_id IS NULL AND t.status <> 'CANCELADA'), 0) AS INT) progress,"
           + " (SELECT COUNT(*) FROM documents d WHERE d.project_id = p.id) doc_count,"
           + " (SELECT COUNT(*) FROM finance_entries f WHERE f.project_id = p.id) fin_count"
           + " FROM projects p";
@@ -700,17 +700,17 @@ public class ApiServlet extends HttpServlet {
                 + " (SELECT COUNT(*) FROM projects WHERE status = 'EM_ANDAMENTO') projects_active,"
                 + " COUNT(*) tasks_total,"
                 + " COALESCE(SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END), 0) tasks_done,"
-                + " COALESCE(SUM(CASE WHEN t.status <> 'CONCLUIDA' AND t.end_date < CURRENT_DATE THEN 1 ELSE 0 END), 0) tasks_late,"
+                + " COALESCE(SUM(CASE WHEN t.status NOT IN ('CONCLUIDA','CANCELADA') AND t.end_date < CURRENT_DATE THEN 1 ELSE 0 END), 0) tasks_late,"
                 + " CAST(COALESCE(AVG(t.progress), 0) AS INT) avg_progress"
-                + " FROM tasks t WHERE " + NO_CHILDREN));
-        out.put("attention", Db.query(TASK_SQL + " WHERE t.status <> 'CONCLUIDA' AND " + NO_CHILDREN
+                + " FROM tasks t WHERE t.status <> 'CANCELADA' AND " + NO_CHILDREN));
+        out.put("attention", Db.query(TASK_SQL + " WHERE t.status NOT IN ('CONCLUIDA','CANCELADA') AND " + NO_CHILDREN
                 + " ORDER BY t.end_date, t.id LIMIT 8"));
         out.put("portfolio", Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.id"));
         HealthCalc.attach((List<Map<String, Object>>) out.get("portfolio"));
         out.put("by_responsible", Db.query("SELECT responsible, COUNT(*) total,"
                 + " SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) done FROM"
                 + " (SELECT COALESCE(NULLIF(t.responsible, ''), 'Sem responsável') responsible, t.status FROM tasks t"
-                + "  WHERE " + NO_CHILDREN + " AND t.is_milestone = FALSE)"
+                + "  WHERE " + NO_CHILDREN + " AND t.is_milestone = FALSE AND t.status <> 'CANCELADA')"
                 + " GROUP BY responsible ORDER BY total DESC, responsible"));
         return out;
     }
@@ -883,8 +883,10 @@ public class ApiServlet extends HttpServlet {
             if (!TASK_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
             if (end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior à inicial.");
             if (progress < 0 || progress > 100) throw new ApiException(400, "O progresso deve estar entre 0 e 100.");
-            if (progress == 100) status = "CONCLUIDA";
-            if (status.equals("CONCLUIDA")) progress = 100;
+            if (!status.equals("CANCELADA")) { // tarefa cancelada mantém a situação e o progresso informados
+                if (progress == 100) status = "CONCLUIDA";
+                if (status.equals("CONCLUIDA")) progress = 100;
+            }
         }
 
         Long dep = optLong(b, "depends_on");

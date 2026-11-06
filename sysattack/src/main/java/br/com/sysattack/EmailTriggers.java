@@ -137,7 +137,7 @@ final class EmailTriggers {
             Db.update("DELETE FROM email_log WHERE created_at < DATEADD('DAY', -90, CURRENT_TIMESTAMP)");
             if (Db.one("SELECT id FROM email_rules WHERE enabled = TRUE AND event = 'TASK_LATE'") == null) return;
             List<Map<String, Object>> late = Db.query("SELECT t.id, t.project_id, t.name, t.responsible, t.end_date, t.is_milestone FROM tasks t"
-                    + " WHERE t.status <> 'CONCLUIDA' AND t.end_date < CURRENT_DATE"
+                    + " WHERE t.status NOT IN ('CONCLUIDA','CANCELADA') AND t.end_date < CURRENT_DATE"
                     + " AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)");
             for (Map<String, Object> t : late) {
                 Map<String, String> info = new LinkedHashMap<>();

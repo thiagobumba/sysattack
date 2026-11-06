@@ -249,6 +249,7 @@ dialog::backdrop { background: rgba(20,20,20,.6); }
 .g-bar:hover, .g-ms:hover, .g-sum:hover { outline: 2px solid var(--ink); }
 .g-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--orange); }
 .g-bar.done { background: #d6d6d6; } .g-bar.done .g-fill { background: var(--ink); }
+.g-bar.cancel { background: #ececec; opacity: .7; background-image: repeating-linear-gradient(135deg, transparent 0 4px, #d0d0d0 4px 5px); } .g-bar.cancel .g-fill { background: #999; }
 .g-bar.late { background: #efc3bf; } .g-bar.late .g-fill { background: var(--red); }
 .g-pct { position: relative; z-index: 1; padding: 0 6px; font-size: 10.5px; font-weight: 700; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.5); }
 .g-sum { position: absolute; height: 8px; background: #7d7d7d; cursor: pointer; z-index: 2; }
@@ -257,6 +258,7 @@ dialog::backdrop { background: rgba(20,20,20,.6); }
 .g-sum.parent::before, .g-sum.parent::after { border-top-color: #9a9a9a; }
 .g-sum::before { left: 0; } .g-sum::after { right: 0; }
 .g-ms { position: absolute; width: 16px; height: 16px; transform: rotate(45deg) scale(.82); background: #fff; border: 3px solid var(--orange); cursor: pointer; z-index: 3; }
+.g-ms.cancel { background: #ddd; border-color: #aaa; opacity: .7; }
 .g-ms.done { background: var(--ink); border-color: var(--ink); }
 .g-ms.late { border-color: var(--red); }
 .g-lbl { position: absolute; font-size: 11.5px; color: #666; white-space: nowrap; line-height: 18px; pointer-events: none; }

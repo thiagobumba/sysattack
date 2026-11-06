@@ -42,13 +42,13 @@ const Rep = (() => {
     let rows = [];
     if (projects.length === 1) {
       const p = projects[0];
-      d.tasks.filter(t => t.project_id === p.id && !t.parent_id).forEach(t => rows.push({ label: t.name, sub: t.responsible, s: t.start_date, e: t.end_date, ms: !!t.is_milestone, progress: t.progress, late: t.status !== 'CONCLUIDA' && dayNum(t.end_date) < today }));
+      d.tasks.filter(t => t.project_id === p.id && !t.parent_id).forEach(t => rows.push({ label: t.name, sub: t.responsible, s: t.start_date, e: t.end_date, ms: !!t.is_milestone, progress: t.progress, late: t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA' && dayNum(t.end_date) < today }));
       if (!rows.length) rows.push({ label: p.name, sub: p.owner, s: p.start_date, e: p.end_date, ms: false, progress: 0, late: false });
     } else {
       projects.forEach(p => {
         const pa = plannedActual(d, p.id);
         rows.push({ label: p.name, sub: p.owner, s: p.start_date, e: p.end_date, ms: false, progress: pa.actual, late: false, project: true });
-        d.tasks.filter(t => t.project_id === p.id && t.is_milestone).forEach(t => rows.push({ label: '◆ ' + t.name, sub: '', s: t.start_date, e: t.end_date, ms: true, progress: t.progress, late: t.status !== 'CONCLUIDA' && dayNum(t.end_date) < today }));
+        d.tasks.filter(t => t.project_id === p.id && t.is_milestone).forEach(t => rows.push({ label: '◆ ' + t.name, sub: '', s: t.start_date, e: t.end_date, ms: true, progress: t.progress, late: t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA' && dayNum(t.end_date) < today }));
       });
     }
     if (!rows.length) return empty('Sem dados para a linha do tempo', 'Cadastre projetos e tarefas.');
@@ -73,7 +73,7 @@ const Rep = (() => {
 
   function repLate(d, projects) {
     const ids = new Set(projects.map(p => p.id)), today = dayNum(d.today), pn = Object.fromEntries(d.projects.map(p => [p.id, p.name]));
-    const late = d.tasks.filter(t => ids.has(t.project_id) && !t.child_count && t.status !== 'CONCLUIDA' && dayNum(t.end_date) < today)
+    const late = d.tasks.filter(t => ids.has(t.project_id) && !t.child_count && t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA' && dayNum(t.end_date) < today)
       .map(t => ({ ...t, days: today - dayNum(t.end_date) })).sort((a, b) => b.days - a.days);
     if (!late.length) return empty('Nenhum item em atraso', 'Todas as tarefas e marcos abertos estão dentro do prazo.');
     return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Item</th><th>Projeto</th><th>Responsável</th><th>Prazo</th><th class="num">Dias de atraso</th><th class="num">Progresso</th></tr></thead><tbody>
