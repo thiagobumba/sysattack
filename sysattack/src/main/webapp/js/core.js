@@ -65,5 +65,7 @@ const SA = (() => {
     } catch (e) { return ''; }
   };
 
+  document.querySelectorAll('[data-year]').forEach(e => { e.textContent = new Date().getFullYear(); });
+
   return { versionLabel, rulesHtml, bindRules, esc, api, todayIso, fmt, dayNum, isoOf, addDays, duration, ic };
 })();

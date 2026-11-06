@@ -567,3 +567,12 @@ a.btn { text-decoration: none; color: var(--ink); }
   .mr-row { flex-wrap: wrap; } .mr-row .mr-m, .mr-row .mr-s { flex: 1 1 120px; }
   .mr-tabs { overflow-x: auto; flex-wrap: nowrap; } .mr-tab { white-space: nowrap; }
 }
+
+/* ---------- direitos autorais e marca d'água ---------- */
+.main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main-col > .content { flex: 1 0 auto; width: 100%; }
+.app-copy { padding: 18px 44px 26px; text-align: center; font-size: 12.5px; color: var(--muted); }
+.watermark { position: fixed; right: 28px; bottom: 56px; width: min(300px, 40vw); height: auto; opacity: .055; pointer-events: none; user-select: none; z-index: 5; }
+body > .app-copy { max-width: 900px; margin: 0 auto; }
+@media (max-width: 860px) { .app-copy { padding: 16px 16px 24px; } .watermark { width: 180px; right: 12px; bottom: 28px; } }
+@media print { .watermark { opacity: .08; } .app-copy { color: #666; } }

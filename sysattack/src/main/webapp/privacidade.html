@@ -6,16 +6,15 @@
   <title>Política de Privacidade · SysAttack</title>
   <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png?v=13">
   <link rel="icon" href="favicon.ico?v=13" sizes="any">
-  <link rel="stylesheet" href="css/style.css?v=41">
+  <link rel="stylesheet" href="css/style.css?v=42">
 </head>
 <body>
   <main class="content" style="max-width:900px;margin:0 auto">
     <header class="page-head"><div><nav class="crumbs"><a href="./">SysAttack</a> / Política de Privacidade</nav><h1>Política de Privacidade</h1></div></header>
     <section class="panel policy" id="policy"><p class="hint">Carregando…</p></section>
   </main>
-  <script>
-    fetch('privacidade-texto.html', { cache: 'no-store' }).then(r => r.text()).then(t => { document.getElementById('policy').innerHTML = t; })
-      .catch(() => { document.getElementById('policy').textContent = 'Não foi possível carregar o texto. Tente novamente.'; });
-  </script>
+  <footer class="app-copy"><span>© <span data-year>2026</span> - Momesso Indústria de Máquinas - Todos os direitos reservados</span></footer>
+  <script src="js/core.js?v=42"></script>
+  <script src="js/privacidade.js?v=42"></script>
 </body>
 </html>
