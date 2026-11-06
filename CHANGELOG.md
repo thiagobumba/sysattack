@@ -5,7 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
-- Projetos Spot: importação do Status Report da Fábrica (HTML), com prévia para revisão. Na aba "Apontamentos de horas" importa só as horas consumidas (o detalhamento do chatbot substitui a linha agregada); horas já lançadas não duplicam. Na aba "Demandas" importa só as demandas em andamento e previstas, com situação sugerida e editável; demandas de mesmo nome são atualizadas.
+- Projetos Spot: importação do Status Report da Fábrica (HTML), sempre com prévia para revisão e em cada aba: Apontamentos de horas (só as horas; o detalhamento do chatbot substitui a linha agregada), Demandas (só as demandas, com situação sugerida e editável), Ações e pendências (ações do comitê e definições da Momesso) e Relatórios (o relatório completo, com o mesmo conteúdo e organização do arquivo, sem usar o Claude, pronto para abrir, imprimir ou enviar por e-mail). Itens já existentes são atualizados ou ignorados, nunca duplicados. A visão do período (horas consumidas, saldo) agora acompanha o mês escolhido em Apontamentos de horas. Corrigido o corte do campo Destinatários.
 
 - Projetos Spot: novo campo "Data final" (opcional, validada contra o início) e a marca "Contrato recorrente". A lista mostra o selo Recorrente e a vigência; projeto ativo com a data final vencida é sinalizado. Projetos existentes ficam sem data final e como não recorrentes.
 

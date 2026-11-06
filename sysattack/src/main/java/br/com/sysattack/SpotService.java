@@ -80,6 +80,8 @@ final class SpotService {
                 }
             } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("generate") && m.equals("POST")) {
                 return generate(id, ApiServlet.body(req), user);
+            } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("import") && m.equals("POST")) {
+                return importStatusReport(id, ApiServlet.body(req), user);
             }
         }
         throw new ApiException(405, "Operação não suportada.");
@@ -226,8 +228,10 @@ final class SpotService {
     private static Object importReport(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
         com.google.gson.JsonArray dem = b.has("demands") && b.get("demands").isJsonArray() ? b.getAsJsonArray("demands") : new com.google.gson.JsonArray();
         com.google.gson.JsonArray hrs = b.has("hours") && b.get("hours").isJsonArray() ? b.getAsJsonArray("hours") : new com.google.gson.JsonArray();
+        com.google.gson.JsonArray act = b.has("actions") && b.get("actions").isJsonArray() ? b.getAsJsonArray("actions") : new com.google.gson.JsonArray();
+        if (act.size() > 200) throw new ApiException(400, "Relatório grande demais para importar.");
         if (dem.size() > 200 || hrs.size() > 500) throw new ApiException(400, "Relatório grande demais para importar.");
-        if (dem.size() == 0 && hrs.size() == 0) throw new ApiException(400, "Nada para importar.");
+        if (dem.size() == 0 && hrs.size() == 0 && act.size() == 0) throw new ApiException(400, "Nada para importar.");
         Map<String, Long> ids = new HashMap<>();
         for (Map<String, Object> d : Db.query("SELECT id, name FROM spot_demands WHERE spot_id = ?", spotId)) {
             ids.put(String.valueOf(d.get("name")).trim().toLowerCase(), ((Number) d.get("id")).longValue());
@@ -255,7 +259,17 @@ final class SpotService {
             saveHour(null, spotId, h, user);
             hNew++;
         }
+        int aNew = 0, aUpd = 0;
+        for (JsonElement e : act) {
+            JsonObject o = e.getAsJsonObject();
+            String kind = ApiServlet.str(o, "kind", "Tipo", 10, true);
+            String desc = ApiServlet.str(o, "description", "Descrição", 500, true);
+            Map<String, Object> ex = Db.one("SELECT id FROM spot_actions WHERE spot_id = ? AND kind = ? AND LOWER(description) = ?", spotId, kind, desc.toLowerCase());
+            saveAction(ex == null ? null : ((Number) ex.get("id")).longValue(), spotId, o);
+            if (ex == null) aNew++; else aUpd++;
+        }
         Map<String, Object> r = new LinkedHashMap<>();
+        r.put("actions_created", aNew); r.put("actions_updated", aUpd);
         r.put("demands_created", dNew); r.put("demands_updated", dUpd);
         r.put("hours_created", hNew); r.put("hours_skipped", hSkip);
         return r;
@@ -399,7 +413,7 @@ final class SpotService {
         Map<String, Object> r = reportRow(id);
         JsonObject snap = JsonParser.parseString((String) r.remove("snapshot")).getAsJsonObject();
         r.put("narrative", JsonParser.parseString((String) r.get("narrative")));
-        r.put("demands", snap.get("demands"));
+        r.put("demands", isImported(r) ? new com.google.gson.JsonArray() : snap.get("demands"));
         return r;
     }
 
@@ -411,6 +425,7 @@ final class SpotService {
             if (m.equals("GET")) return reportView(id);
             if (m.equals("DELETE")) { Db.update("DELETE FROM spot_reports WHERE id = ?", id); return Map.of("ok", true); }
             if (m.equals("PUT")) {
+                if (isImported(r)) throw new ApiException(400, "Relatórios importados não têm o texto editável aqui; importe o HTML novamente.");
                 JsonObject b = ApiServlet.body(req);
                 String title = ApiServlet.str(b, "title", "Título", 200, true);
                 JsonElement ne = b.get("narrative");
@@ -431,7 +446,27 @@ final class SpotService {
         throw new ApiException(405, "Operação não suportada.");
     }
 
+    private static boolean isImported(Map<String, Object> r) {
+        return "importado".equals(r.get("model"));
+    }
+
+    /** Guarda um Status Report importado de HTML (mesmo conteúdo do arquivo), sem passar pelo Claude. */
+    private static Object importStatusReport(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+        JsonObject data = ImportedReportHtml.normalize(b);
+        String title = data.get("titulo").getAsString();
+        if (title.isEmpty()) title = "Status Report da Fábrica";
+        if (title.length() > 200) title = title.substring(0, 200);
+        LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
+        if (ref == null) ref = LocalDate.now();
+        String json = GSON.toJson(data);
+        if (json.length() > 150000) throw new ApiException(400, "Relatório grande demais para importar.");
+        long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
+                spotId, title, ref, json, "{}", "importado", user.get("name"));
+        return reportView(id);
+    }
+
     private static String renderReport(Map<String, Object> r, boolean email) {
+        if (isImported(r)) return ImportedReportHtml.render(JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject());
         JsonObject snap = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
         JsonObject narr = JsonParser.parseString((String) r.get("narrative")).getAsJsonObject();
         return SpotReportHtml.render((String) r.get("title"), (String) r.get("created_by"), (String) r.get("created_at"), snap, narr,

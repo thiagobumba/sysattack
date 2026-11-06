@@ -52,7 +52,13 @@ const Spot = (() => {
   // ------------------------------------------------------------------ detalhe
   async function viewDetail(id) {
     if (st.id !== id) st = { id, tab: 'resumo', month: todayIso().slice(0, 7), data: null, hours: [], demands: [], actions: [], reports: [] };
-    const p = await api('GET', 'spot/' + id);
+    // a visão do período acompanha o mês escolhido em "Apontamentos de horas" (mês anterior = último dia do mês)
+    let q = '';
+    if (/^\d{4}-\d{2}$/.test(st.month) && st.month !== todayIso().slice(0, 7)) {
+      const [y, m] = st.month.split('-').map(Number);
+      q = '?ref=' + st.month + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+    }
+    const p = await api('GET', 'spot/' + id + q);
     st.data = p;
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
@@ -61,8 +67,8 @@ const Spot = (() => {
         <button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button></div></div>
         ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
-        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Contrato</dt><dd>${p.recurring ? '<span class="badge b-dark">Recorrente</span>' : 'Avulso'}</dd></div><div><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
-        <div><dt>Destinatários</dt><dd>${esc(p.recipients || '—')}</dd></div></dl>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Contrato</dt><dd>${p.recurring ? '<span class="badge b-dark">Recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
+        <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
         ${tab('resumo', 'Resumo')}${tab('horas', 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
@@ -74,7 +80,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -92,7 +98,7 @@ const Spot = (() => {
         ${st.hours.map(x => `<tr><td>${fmt(x.work_date)}</td><td>${esc(x.front || '—')}</td><td class="strong">${esc(x.activity)}</td><td>${esc(x.demand_name || '—')}</td><td class="num">${h(x.hours)}</td>${iconBtns('hour', x.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
       const m = document.getElementById('sp-m');
-      m.addEventListener('change', () => { st.month = m.value || 'all'; renderTab(); });
+      m.addEventListener('change', () => { st.month = m.value || 'all'; viewDetail(st.id); });
     } else if (st.tab === 'demandas') {
       st.demands = await api('GET', `spot/${id}/demands`);
       host.innerHTML = st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th><th class="num">Aprovado</th><th class="num">Realizado</th><th></th></tr></thead><tbody>
@@ -197,7 +203,7 @@ const Spot = (() => {
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(r.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
       <iframe class="preview" id="sp-frame" src="api/spot/reports/${r.id}/html" title="${esc(r.title)}" style="height:60vh"></iframe>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
-        <button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>
+        ${r.model === 'importado' ? '' : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
         <button class="btn btn-sm" data-action="sp-print-report">Imprimir / salvar PDF</button>
         <button class="btn btn-sm btn-primary" data-action="sp-send-report" data-id="${r.id}">Enviar por e-mail</button></div></div>`;
     dlg.showModal();
@@ -235,9 +241,9 @@ const Spot = (() => {
 
   // ------------------------------------------------------------------ importação do Status Report (HTML da Fábrica)
   /** Extrai o literal de array `s.<nome>=[...]` do script do relatório (sem eval: só JSON.parse). */
-  function literalArray(src, name) {
+  function literalText(src, name) {
     const m = new RegExp('\\bs\\.' + name + '\\s*=\\s*\\[').exec(src);
-    if (!m) return [];
+    if (!m) return '';
     const start = m.index + m[0].length - 1;
     let depth = 0, inStr = false;
     for (let i = start; i < src.length; i++) {
@@ -245,11 +251,19 @@ const Spot = (() => {
       if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
       if (c === '"') inStr = true;
       else if (c === '[') depth++;
-      else if (c === ']' && --depth === 0) {
-        try { const v = JSON.parse(src.slice(start, i + 1)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
-      }
+      else if (c === ']' && --depth === 0) return src.slice(start, i + 1);
     }
-    return [];
+    return '';
+  }
+  function literalArray(src, name) {
+    try { const v = JSON.parse(literalText(src, name)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  /** Texto de um campo do relatório: `s.chave="..."` (conteúdo) ou o padrão `chave:"..."` do cabeçalho HD. */
+  function strProp(src, key) {
+    const q = '"((?:[^"\\\\]|\\\\.)*)"';
+    const m = new RegExp('\\bs\\.' + key + '\\s*=\\s*' + q).exec(src) || new RegExp('[{,]\\s*' + key + '\\s*:\\s*' + q).exec(src);
+    if (!m) return '';
+    try { return JSON.parse('"' + m[1] + '"'); } catch (e) { return m[1]; }
   }
   const num = v => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -266,6 +280,7 @@ const Spot = (() => {
   function parseReport(src) {
     const consumo = literalArray(src, 'consumo'), chat = literalArray(src, 'chat');
     const andamento = literalArray(src, 'andamento'), previsao = literalArray(src, 'previsao');
+    const acoesRaw = literalArray(src, 'acoes'), defsRaw = literalArray(src, 'defs');
     if (!consumo.length) throw new Error('Não encontrei a tabela “Consumo por demanda” neste arquivo. Use o HTML do Status Report da Fábrica.');
     const meta = (/\bs\.meta\s*=\s*"([^"]*)"/.exec(src) || [])[1] || '';
     const year = (/(\d{2})\/(\d{2})\/(\d{4})/.exec(meta) || [])[3] || '2026';
@@ -295,7 +310,19 @@ const Spot = (() => {
       if (d) x.demand = d.name;
     });
     const total = (/s\.kpis\s*=[^;]*?n:"(\d+(?:,\d+)?)h"[^;]*?n:"(\d+(?:,\d+)?)h"/.exec(src) || [])[2];
-    return { date, hours, demands, reportTotal: total ? num(total) : null };
+    const lb = (() => { const m = /\bvar LB\s*=\s*(\[[^\]]*\])/.exec(src); try { return JSON.parse(m[1]); } catch (e) { return []; } })();
+    const ns = [...literalText(src, 'kpis').matchAll(/n:\s*"([^"]*)"\s*,\s*l:\s*(?:LB\[(\d+)\]|"([^"]*)")/g)];
+    const kpis = ns.map(k => ({ n: k[1], l: k[3] != null ? k[3] : (lb[Number(k[2])] || '') }));
+    const full = { ref_date: (/(\d{2})\/(\d{2})\/(\d{4})/.exec(meta) || []).slice(1).reverse().join('-') || date, kpis,
+      consumo: consumo.map(r => ({ d: r[0], h: r[1] })), chat: chat.map(r => ({ d: r[0], h: r[1] })),
+      acoes: acoesRaw.map(r => ({ a: r[0], r: r[1], s: r[2], t: r[3] || '' })),
+      andamento: andamento.map(r => ({ t: r[0], d: r[1] })), previsao: previsao.map(r => ({ t: r[0], d: r[1] })), defs: defsRaw.map(r => ({ t: r[0], d: r[1] })) };
+    ['titulo', 'meta', 'destaques', 'hConsumo', 'hChat', 'hAcoes', 'hAnd', 'hPrev', 'hDefs', 'totLbl1', 'totLbl2', 'pillChat', 'notaChat', 'notaPrev', 'rodape'].forEach(k => { full[k] = strProp(src, k); });
+    const ST = { 'Concluído': 'CONCLUIDO', Parcial: 'PARCIAL', 'A confirmar': 'A_CONFIRMAR', Pendente: 'PENDENTE', 'Em andamento': 'PARCIAL', Bloqueado: 'PENDENTE' };
+    const actions = [
+      ...acoesRaw.map(r => ({ kind: 'ACAO', description: r[0], responsible: r[1], status: ST[r[2]] || 'PENDENTE', note: r[3] || '' })),
+      ...defsRaw.map(r => ({ kind: 'PENDENCIA', description: (r[0] + (r[1] ? ': ' + r[1] : '')).slice(0, 500), responsible: 'Momesso', status: 'PENDENTE', note: '' }))];
+    return { date, hours, demands, actions, full, reportTotal: total ? num(total) : null };
   }
 
   function importDialog(rep, mode) {
@@ -335,6 +362,36 @@ const Spot = (() => {
     return f;
   }
 
+  function actionsDialog(rep) {
+    const rows = rep.actions.map((a, i) => `<tr><td><input type="checkbox" name="ac${i}" checked aria-label="Importar item"></td>
+      <td>${KIND[a.kind]}</td><td class="strong">${esc(a.description)}${a.note ? `<span class="small">${esc(a.note)}</span>` : ''}</td><td>${esc(a.responsible || '—')}</td>
+      <td><select name="as${i}" aria-label="Situação">${opts(A_STATUS, a.status)}</select></td></tr>`).join('');
+    if (!rep.actions.length) throw new Error('Não encontrei ações nem definições neste arquivo.');
+    A().openDialog('Importar ações e pendências do relatório', `
+      <p class="hint full">Revise os itens. As ações vêm de “Ações do último comitê” e as pendências de “Definições necessárias da Momesso”. Itens com a mesma descrição são atualizados; os demais são criados.</p>
+      <div class="full"><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table></div></div>`, async d => {
+      const actions = rep.actions.map((a, i) => d['ac' + i] ? { ...a, status: d['as' + i] } : null).filter(Boolean);
+      if (!actions.length) throw new Error('Marque ao menos um item.');
+      const r = await api('POST', `spot/${st.id}/import`, { actions });
+      A().toast(`Importado: ${r.actions_created} item(ns) novo(s), ${r.actions_updated} atualizado(s).`);
+    }, 'Importar');
+    document.getElementById('dlg').className = 'wide';
+  }
+
+  function reportDialog(rep) {
+    const f = rep.full, count = (a, t) => `${a.length} ${t}`;
+    A().openDialog('Importar relatório completo', `
+      <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar o Claude. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
+      <div class="field full"><label for="ir-t">Título</label><input id="ir-t" name="titulo" maxlength="200" value="${esc(f.titulo)}" required></div>
+      <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(f.ref_date)}" required></div>
+      <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
+      <div class="field full"><label>Meta</label><div class="small">${esc(f.meta)}</div></div>`, async d => {
+      const r = await api('POST', `spot/${st.id}/reports/import`, { ...f, titulo: d.titulo, ref_date: d.ref_date });
+      A().toast('Relatório importado.');
+      setTimeout(() => openReport(r.id), 300);
+    }, 'Importar');
+  }
+
   function pickReport(mode) {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = '.html,.htm,text/html'; inp.id = 'sp-imp-file'; inp.hidden = true;
@@ -344,7 +401,8 @@ const Spot = (() => {
         const f = inp.files[0];
         if (!f) return;
         if (f.size > 3 * 1024 * 1024) throw new Error('Arquivo grande demais para um relatório.');
-        importDialog(parseReport(await f.text()), mode);
+        const rep = parseReport(await f.text());
+        if (mode === 'acoes') actionsDialog(rep); else if (mode === 'relatorio') reportDialog(rep); else importDialog(rep, mode);
       } catch (e) { A().toast(e.message); }
       inp.remove();
     });
@@ -360,10 +418,12 @@ const Spot = (() => {
       case 'sp-edit-project': await projectForm(id); break;
       case 'sp-del-project': await del('spot/' + id, 'Excluir este projeto spot com todas as horas, demandas e relatórios?'); break;
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
-      case 'sp-month-all': st.month = 'all'; await renderTab(); break;
+      case 'sp-month-all': st.month = 'all'; await viewDetail(st.id); break;
       case 'sp-new-hour': await hourForm(); break;
       case 'sp-import': pickReport('horas'); break;
       case 'sp-import-demand': pickReport('demandas'); break;
+      case 'sp-import-action': pickReport('acoes'); break;
+      case 'sp-import-report': pickReport('relatorio'); break;
       case 'sp-edit-hour': await hourForm(id); break;
       case 'sp-del-hour': await del('spot/hours/' + id, 'Excluir este lançamento de horas?'); break;
       case 'sp-new-demand': demandForm(); break;

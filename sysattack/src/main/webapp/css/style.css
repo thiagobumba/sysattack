@@ -157,7 +157,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 22px; margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); align-items: start; }
 .meta-grid dt { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #777; margin-bottom: 4px; }
 .meta-grid > div { min-width: 0; }
-.meta-grid dd { margin: 0; font-size: 18px; font-weight: 300; overflow-wrap: anywhere; }
+.meta-grid dd { margin: 0; font-size: 18px; font-weight: 300; overflow-wrap: break-word; }
+.meta-grid > .wide { grid-column: span 2; }
 .meta-grid dd .small { display: block; margin-top: 4px; font-size: 13px; font-weight: 600; line-height: 1.35; }
 .scope-text { white-space: pre-wrap; max-width: 80ch; color: #333; margin: 0; }
 .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 22px; }
@@ -537,3 +538,4 @@ h1 { font-size: 38px; margin: 6px 0 6px; }
 
 .badge.rec { margin-left: 6px; font-size: 9.5px; padding: 3px 6px; vertical-align: 2px; }
 .field label .opt { font-weight: 400; color: #8a8a8a; }
+@media (max-width: 560px) { .meta-grid > .wide { grid-column: auto; } }
