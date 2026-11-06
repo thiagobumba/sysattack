@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- E-mail de boas-vindas: texto do botão "Criar minha senha" forçado para branco (alguns clientes de e-mail o pintavam de roxo).
+
 - Usuários: **cargo** (texto livre, escolhido pelo administrador; aparece na lista e no menu, com sugestão dos cargos já usados). **Novo usuário sem senha inicial**: a pessoa recebe um e-mail de boas-vindas com o endereço do sistema, as políticas de uso e um botão para criar a própria senha (link de uso único, válido por 72 horas, guardado só como hash). Se o e-mail não puder ser enviado, o usuário é criado e o administrador vê o aviso e usa o botão de e-mail na lista para reenviar o convite (ou enviar link de nova senha). Nova página definir-senha.html. Toda senha definida pelo administrador na edição obriga a troca no primeiro acesso (tela que não pode ser fechada). Endereço do sistema no e-mail: `app.url` no config.properties (ou `-Dsysattack.url`/`SYSATTACK_URL`); sem isso usa o endereço da requisição.
 - **Verificação em duas etapas (2FA)** com aplicativo autenticador (TOTP, RFC 6238): cada pessoa ativa em "Segurança da conta" (QR code + chave manual), recebe 8 códigos de recuperação de uso único, pode gerar novos ou desativar (senha + código). O administrador pode **exigir 2FA** na edição do usuário, depois de criado (a pessoa configura no próximo acesso) e redefinir o 2FA de quem perdeu o celular. O login ganhou a etapa do código; códigos repetidos são recusados e há bloqueio por tentativas. Segredo guardado criptografado (AES-GCM). Novas ações na auditoria.
 
