@@ -89,7 +89,7 @@ final class ScopeReportHtml {
                     String n = str(k, "n", 1000);
                     int p = pct(n);
                     b.append("<div style=\"background:").append(SOFT).append(";border-radius:6px;padding:12px 14px;min-height:62px\"><div style=\"font-size:12.5px;color:").append(MUTED)
-                            .append(";line-height:1.3\">").append(h(str(k, "l", 1000))).append("</div><div style=\"font-size:21px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums;line-height:1.2\">")
+                            .append(";line-height:1.3\">").append(h(str(k, "l", 1000))).append("</div><div style=\"font-size:" + (n.length() > 13 ? 16 : n.length() > 11 ? 18 : 21) + "px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums;line-height:1.2;word-break:break-word\">")
                             .append(h(n)).append("</div>");
                     if (p >= 0) {
                         b.append("<div style=\"height:6px;background:#dcdce0;border-radius:3px;margin-top:9px\"><div style=\"height:6px;width:").append(p).append("%;background:")

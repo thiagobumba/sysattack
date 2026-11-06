@@ -89,7 +89,7 @@ const Spot = (() => {
   const brl = n => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const I_STATUS = { EMITIDA: ['Emitida', 'b-orange'], PAGA: ['Paga', 'b-green'], CANCELADA: ['Cancelada', 'b-grey'] };
   function financeCards(f) {
-    return `<div class="mini-kpis">
+    return `<div class="mini-kpis fin">
       <div class="mini accent"><span>Valor Projeto (R$)</span><b>${brl(f.project_value)}</b></div>
       <div class="mini"><span>Faturado</span><b>${brl(f.invoiced)}</b></div>
       <div class="mini ${Number(f.to_invoice) < 0 ? 'neg' : ''}"><span>A faturar</span><b>${brl(f.to_invoice)}</b></div>

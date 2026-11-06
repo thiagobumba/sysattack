@@ -572,3 +572,27 @@ a.btn { text-decoration: none; color: var(--ink); }
 .mr-dem textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); resize: vertical; min-height: 52px; }
 .mr-row.mr-notas { flex-wrap: wrap; } .mr-row.mr-notas .mr-w { flex: 1 1 100%; }
 .mr-pane[hidden] { display: none; }
+/* cartões: valores em R$ não podem vazar do cartão */
+.mini { min-width: 0; overflow: hidden; }
+.mini b { font-size: clamp(16px, 1.55vw, 22px); overflow: hidden; text-overflow: ellipsis; }
+.mini-kpis.fin { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+/* responsivo: cartões, guias e tabelas do projeto spot */
+@media (max-width: 900px) {
+  .mini-kpis, .mini-kpis.fin { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .mini { padding: 10px 12px; }
+  .mini span { font-size: 10.5px; letter-spacing: .04em; }
+  .mini b { font-size: clamp(15px, 4.4vw, 20px); }
+}
+@media (max-width: 640px) {
+  .panel { padding: 18px 14px 20px; }
+  .panel-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .panel-head .tabs { width: 100%; flex: none !important; margin-bottom: 0 !important; }
+  .tab { padding: 12px 14px; white-space: nowrap; }
+  .panel-head > .btn, .panel-head > div > .btn { align-self: flex-start; }
+  .tbl th, .tbl td { padding: 10px 8px; }
+  .tbl th { font-size: 11px; letter-spacing: .05em; }
+  .mr-two, .mr-top { grid-template-columns: 1fr; }
+  .mr-row { flex-wrap: wrap; } .mr-row .mr-m, .mr-row .mr-s { flex: 1 1 120px; }
+  .mr-tabs { overflow-x: auto; flex-wrap: nowrap; } .mr-tab { white-space: nowrap; }
+}

@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Financeiro e visão do projeto spot: os valores em R$ não vazam mais dos cartões (fonte ajusta à largura, cartões financeiros mais largos) e a tela ficou responsiva: cartões em 2 colunas no tablet/celular, guias com rolagem lateral, botão de ação abaixo das guias e tabelas mais compactas. O mesmo vale para o relatório tradicional (valores longos reduzem a fonte).
+
 - Relatório tradicional (escopo fechado): visual do HTML refeito para leitura profissional: cabeçalho com situação e destaques, cartões de indicadores com barra de progresso nas porcentagens, informações em grade, demandas em blocos com seus apontamentos (data e atividade), tabela de notas com etiquetas de situação, ajuste para impressão/PDF (sem quebrar blocos) e para telas pequenas.
 
 - Projetos Spot (escopo fechado): nova aba "Relatório tradicional" (sem Claude), exibida somente em projetos de escopo fechado. O título vem do nome do projeto e a tela de preenchimento tem três guias já preenchidas com os dados do sistema: Visão do projeto (indicadores e informações), Demandas e apontamentos (cada demanda com os apontamentos vinculados a ela) e Financeiro (valor do projeto, faturado, a faturar, recebido e as notas). Ao salvar, o sistema gera o HTML formatado, que pode ser editado, impresso/PDF e enviado por e-mail (CC/CCO). Fica separado da aba "Relatórios com Claude".
