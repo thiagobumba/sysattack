@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot: a lista é ordenada pela data de início (a menor em cima, a maior embaixo), depois pela data final e pelo nome.
+
 - E-mail: cada teste de envio (Configurações de E-mail) gera um arquivo .log, baixado na hora, com data, quem disparou, destino, configuração SMTP usada (sem senha), a conversa com o servidor SMTP, o resultado e, na falha, a cadeia de erros e o stack trace. O log fica no banco (lista "Logs dos testes de envio", com botão Baixar) e também na pasta `email-logs` dentro da pasta de dados do servidor, para extração.
 
 - Projetos Spot: botão "Copiar projeto" (na lista e na tela do projeto), disponível só para contratos recorrentes. Copia nome, cliente, fornecedor/equipe, modelo e horas fixadas, participantes e destinatários; início, data final, observação de faturamento e descrição ficam em branco, e a situação vem sempre como Ativo. Demandas, horas, ações e relatórios não são copiados.

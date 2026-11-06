@@ -141,7 +141,7 @@ final class SpotService {
     }
 
     private static Object list() throws SQLException {
-        List<Map<String, Object>> rows = Db.query(PROJECT_SQL + " ORDER BY CASE p.status WHEN 'ATIVO' THEN 0 WHEN 'PAUSADO' THEN 1 ELSE 2 END, p.name");
+        List<Map<String, Object>> rows = Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.end_date, p.name, p.id"); // menor data de início em cima
         for (Map<String, Object> p : rows) {
             Map<String, Object> snap = SpotCalc.snapshot(p, LocalDate.now());
             p.put("kpi", snap.get("kpi"));
