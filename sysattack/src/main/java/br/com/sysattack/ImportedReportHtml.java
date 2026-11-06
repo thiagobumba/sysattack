@@ -44,11 +44,11 @@ final class ImportedReportHtml {
     static JsonObject normalize(JsonObject in) {
         JsonObject o = new JsonObject();
         o.addProperty("imported", true);
-        for (String k : new String[] {"titulo", "meta", "destaques", "hConsumo", "hChat", "hAcoes", "hAnd", "hPrev", "hDefs", "totLbl1", "totLbl2",
+        for (String k : new String[] {"titulo", "meta", "destaques", "hConsumo", "hChat", "hDec", "hAcoes", "hAnd", "hPrev", "hDefs", "totLbl1", "totLbl2",
                 "pillChat", "notaChat", "notaPrev", "rodape"}) {
             o.addProperty(k, str(in, k));
         }
-        String[][] shapes = {{"kpis", "n", "l"}, {"consumo", "d", "h"}, {"chat", "d", "h"}, {"acoes", "a", "r", "s", "t"}, {"andamento", "t", "d"}, {"previsao", "t", "d"}, {"defs", "t", "d"}};
+        String[][] shapes = {{"kpis", "n", "l"}, {"consumo", "d", "h"}, {"chat", "d", "h"}, {"acoes", "a", "r", "s", "t"}, {"decisoes", "t", "d"}, {"andamento", "t", "d"}, {"previsao", "t", "d"}, {"defs", "t", "d"}};
         for (String[] sh : shapes) {
             JsonArray src = arr(in, sh[0]), out = new JsonArray();
             if (src.size() > 60) throw new ApiServlet.ApiException(400, "Relatório com linhas demais em “" + sh[0] + "”.");
@@ -90,6 +90,11 @@ final class ImportedReportHtml {
     }
 
     private static String hoursTable(String head, JsonArray rows, String col, String totalLabel) {
+        return hoursTable(head, rows, col, totalLabel, null, "");
+    }
+
+    /** Com {@code franquia} (ex.: "40h"), acrescenta a linha de saldo = franquia − total. */
+    private static String hoursTable(String head, JsonArray rows, String col, String totalLabel, String franquia, String saldoLabel) {
         double total = 0;
         StringBuilder b = new StringBuilder("<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;font-size:13.5px\"><tr>"
                 + "<th align=\"left\" style=\"font-size:13px;color:" + MUTED + ";padding:4px 8px 8px 0;border-bottom:1px solid " + LINE + "\">" + h(col) + "</th>"
@@ -102,8 +107,19 @@ final class ImportedReportHtml {
                     .append(h(str(r, "h"))).append("</td></tr>");
         }
         b.append("<tr><td style=\"padding:8px 8px 0 0;font-weight:700\">").append(h(totalLabel.isEmpty() ? "Total" : totalLabel))
-                .append("</td><td align=\"right\" style=\"padding:8px 6px 0 0;font-weight:700\">").append(fmt(total)).append("</td></tr></table>");
-        return b.toString();
+                .append("</td><td align=\"right\" style=\"padding:8px 6px 0 0;font-weight:700\">").append(fmt(total)).append("</td></tr>");
+        double f = franquia == null ? Double.NaN : parseNum(franquia);
+        if (!Double.isNaN(f)) {
+            b.append("<tr><td style=\"padding:8px 8px 0 0;font-weight:700\">").append(h(saldoLabel.isEmpty() ? "Saldo" : saldoLabel))
+                    .append("</td><td align=\"right\" style=\"padding:8px 6px 0 0;font-weight:700\">").append(fmt(f - total)).append("</td></tr>");
+        }
+        return b.append("</table>").toString();
+    }
+
+    private static double parseNum(String t) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d+(?:[.,]\\d+)?").matcher(t == null ? "" : t);
+        if (!m.find()) return Double.NaN;
+        try { return Double.parseDouble(m.group().replace(',', '.')); } catch (NumberFormatException e) { return Double.NaN; }
     }
 
     private static String list(JsonArray rows) {
@@ -158,9 +174,19 @@ final class ImportedReportHtml {
             chatNote = gap(14) + "<table" + T0 + "><tr>" + (str(d, "pillChat").isEmpty() ? "" : "<td valign=\"middle\" style=\"padding-right:8px\">" + pillHtml(str(d, "pillChat"), pill("Pendente")) + "</td>")
                     + "<td style=\"font-size:14px\">" + h(str(d, "notaChat")) + "</td></tr></table>";
         }
-        b.append(twoCols(
-                box(title(str(d, "hConsumo"), INK) + hoursTable("", arr(d, "consumo"), "Demanda", str(d, "totLbl1")), null),
-                box(title(str(d, "hChat"), INK) + hoursTable("", arr(d, "chat"), "Alteração", str(d, "totLbl2")) + chatNote, null)));
+        // modelo novo do Status Report: consumo do mês × decisões do comitê (sem detalhamento do chatbot nem "em andamento")
+        boolean novo = arr(d, "decisoes").size() > 0 && arr(d, "chat").size() == 0;
+        if (novo) {
+            JsonArray kp = arr(d, "kpis");
+            String franquia = kp.size() > 0 && kp.get(0).isJsonObject() ? str(kp.get(0).getAsJsonObject(), "n") : "";
+            b.append(twoCols(
+                    box(title(str(d, "hConsumo"), INK) + hoursTable("", arr(d, "consumo"), "Demanda", str(d, "totLbl1"), franquia, str(d, "totLbl2")), null),
+                    box(title(str(d, "hDec"), INK) + list(arr(d, "decisoes")), null)));
+        } else {
+            b.append(twoCols(
+                    box(title(str(d, "hConsumo"), INK) + hoursTable("", arr(d, "consumo"), "Demanda", str(d, "totLbl1")), null),
+                    box(title(str(d, "hChat"), INK) + hoursTable("", arr(d, "chat"), "Alteração", str(d, "totLbl2")) + chatNote, null)));
+        }
 
         JsonArray acoes = arr(d, "acoes");
         if (acoes.size() > 0) {
@@ -183,9 +209,13 @@ final class ImportedReportHtml {
         }
 
         String prevNote = str(d, "notaPrev").isEmpty() ? "" : "<p style=\"font-size:12.5px;color:" + MUTED + ";margin:12px 0 0\">" + h(str(d, "notaPrev")) + "</p>";
-        b.append(twoCols(
-                box(title(str(d, "hAnd"), INK) + list(arr(d, "andamento")), null),
-                box(title(str(d, "hPrev"), INK) + list(arr(d, "previsao")) + prevNote, null)));
+        if (novo) {
+            b.append(box(title(str(d, "hPrev"), INK) + list(arr(d, "previsao")) + prevNote, null)).append(gap(16));
+        } else {
+            b.append(twoCols(
+                    box(title(str(d, "hAnd"), INK) + list(arr(d, "andamento")), null),
+                    box(title(str(d, "hPrev"), INK) + list(arr(d, "previsao")) + prevNote, null)));
+        }
 
         if (arr(d, "defs").size() > 0) {
             b.append(box(title(str(d, "hDefs"), INK) + list(arr(d, "defs")), RED)).append(gap(16));

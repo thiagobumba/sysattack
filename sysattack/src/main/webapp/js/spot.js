@@ -406,7 +406,7 @@ const Spot = (() => {
   // ------------------------------------------------------------------ importação do Status Report (HTML da Fábrica)
   /** Extrai o literal de array `s.<nome>=[...]` do script do relatório (sem eval: só JSON.parse). */
   function literalText(src, name) {
-    const m = new RegExp('\\bs\\.' + name + '\\s*=\\s*\\[').exec(src);
+    const m = new RegExp('\\bs\\.' + name + '\\s*=\\s*(?:P\\(\\s*)?\\[').exec(src); // aceita `[...]` e `P([...],"a","b")`
     if (!m) return '';
     const start = m.index + m[0].length - 1;
     let depth = 0, inStr = false;
@@ -445,22 +445,33 @@ const Spot = (() => {
     const consumo = literalArray(src, 'consumo'), chat = literalArray(src, 'chat');
     const andamento = literalArray(src, 'andamento'), previsao = literalArray(src, 'previsao');
     const acoesRaw = literalArray(src, 'acoes'), defsRaw = literalArray(src, 'defs');
-    if (!consumo.length) throw new Error('Não encontrei a tabela “Consumo por demanda” neste arquivo. Use o HTML do Status Report da Fábrica.');
+    const decisoes = literalArray(src, 'decisoes');
+    if (!consumo.length) throw new Error('Não encontrei a tabela de consumo por demanda (“Consumo do mês por demanda”) neste arquivo. Use o HTML do Status Report da Fábrica.');
     const meta = (/\bs\.meta\s*=\s*"([^"]*)"/.exec(src) || [])[1] || '';
     const year = (/(\d{2})\/(\d{2})\/(\d{4})/.exec(meta) || [])[3] || '2026';
-    const until = /Consumido[^"]*\(até (\d{1,2})\/(\d{1,2})\)/.exec(src);
+    const until = /Consumido[^"]*\(até (\d{1,2})\/(\d{1,2})\)/.exec(src) || /Usadas? até (\d{1,2})\/(\d{1,2})/.exec(src);
     const date = until ? `${year}-${until[2].padStart(2, '0')}-${until[1].padStart(2, '0')}` : `${year}-10-31`;
     const kp = /n:"(\d+)h \/ (\d+)h"/.exec(src);
     const chatApproved = kp && kp[2] ? Number(kp[2]) : 0;
     const chatTotal = chat.reduce((a, r) => a + num(r[1]), 0);
     // “Chatbot (n alterações)” é a soma do detalhamento: troca a linha agregada pelas linhas detalhadas
     const hours = [];
+    // modelo novo (sem “em andamento” nem detalhe do chatbot): cada linha de consumo é um apontamento e o grupo
+    // “Demanda: atividade” vira a demanda; linha sem “:” é a própria demanda
+    const novo = !andamento.length && !chat.length;
+    const groupOf = t => { const m = /^([^:]{3,80}):\s*\S/.exec(t); return (m ? m[1] : String(t).replace(/\s*\([^)]*\)\s*$/, '')).trim(); };
     consumo.forEach(r => {
       const isChat = norm(r[0]).startsWith('chatbot') && chat.length && Math.abs(num(r[1]) - chatTotal) < 0.01;
       if (isChat) chat.forEach(c => hours.push({ activity: c[0], hours: num(c[1]), front: 'Chatbot', demand: 'Chatbot' }));
+      else if (novo) { const g = groupOf(r[0]); hours.push({ activity: r[0], hours: num(r[1]), front: /:/.test(r[0]) ? g : '', demand: g }); }
       else hours.push({ activity: r[0], hours: num(r[1]), front: '', demand: '' });
     });
     const demands = [];
+    if (novo) {
+      const seen = new Map();
+      hours.forEach(x => { const e = seen.get(x.demand) || { n: 0, h: 0 }; e.n++; e.h += x.hours; seen.set(x.demand, e); });
+      seen.forEach((e, name) => demands.push({ name, next_step: `${String(e.h.toFixed(1)).replace('.', ',')}h apontadas no mês (${e.n} lançamento${e.n > 1 ? 's' : ''})`, status: demandStatus(name, 'EM_ANDAMENTO'), approved: 0, notes: '' }));
+    }
     andamento.forEach(r => demands.push({ name: r[0], next_step: r[1], status: demandStatus(r[0] + ' ' + r[1], 'EM_ANDAMENTO'), approved: r[0] === 'Chatbot' ? chatApproved : 0, notes: '' }));
     previsao.forEach(r => {
       const hrs = /^(\d+(?:,\d+)?)h\b/.exec(r[1]);
@@ -480,9 +491,9 @@ const Spot = (() => {
     const full = { ref_date: (/(\d{2})\/(\d{2})\/(\d{4})/.exec(meta) || []).slice(1).reverse().join('-') || date, kpis,
       consumo: consumo.map(r => ({ d: r[0], h: r[1] })), chat: chat.map(r => ({ d: r[0], h: r[1] })),
       acoes: acoesRaw.map(r => ({ a: r[0], r: r[1], s: r[2], t: r[3] || '' })),
-      andamento: andamento.map(r => ({ t: r[0], d: r[1] })), previsao: previsao.map(r => ({ t: r[0], d: r[1] })), defs: defsRaw.map(r => ({ t: r[0], d: r[1] })) };
-    ['titulo', 'meta', 'destaques', 'hConsumo', 'hChat', 'hAcoes', 'hAnd', 'hPrev', 'hDefs', 'totLbl1', 'totLbl2', 'pillChat', 'notaChat', 'notaPrev', 'rodape'].forEach(k => { full[k] = strProp(src, k); });
-    const ST = { 'Concluído': 'CONCLUIDO', Parcial: 'PARCIAL', 'A confirmar': 'A_CONFIRMAR', Pendente: 'PENDENTE', 'Em andamento': 'PARCIAL', Bloqueado: 'PENDENTE' };
+      decisoes: decisoes.map(r => ({ t: r[0], d: r[1] })), andamento: andamento.map(r => ({ t: r[0], d: r[1] })), previsao: previsao.map(r => ({ t: r[0], d: r[1] })), defs: defsRaw.map(r => ({ t: r[0], d: r[1] })) };
+    ['titulo', 'meta', 'destaques', 'hConsumo', 'hChat', 'hDec', 'hAcoes', 'hAnd', 'hPrev', 'hDefs', 'totLbl1', 'totLbl2', 'pillChat', 'notaChat', 'notaPrev', 'rodape'].forEach(k => { full[k] = strProp(src, k); });
+    const ST = { 'Concluído': 'CONCLUIDO', Parcial: 'PARCIAL', 'A confirmar': 'A_CONFIRMAR', Pendente: 'PENDENTE', 'Em andamento': 'PARCIAL', Bloqueado: 'PENDENTE', Salesforce: 'PARCIAL', Apresentar: 'PARCIAL', Aguardando: 'PENDENTE' };
     const actions = [
       ...acoesRaw.map(r => ({ kind: 'ACAO', description: r[0], responsible: r[1], status: ST[r[2]] || 'PENDENTE', note: r[3] || '' })),
       ...defsRaw.map(r => ({ kind: 'PENDENCIA', description: (r[0] + (r[1] ? ': ' + r[1] : '')).slice(0, 500), responsible: 'Momesso', status: 'PENDENTE', note: '' }))];
@@ -548,7 +559,7 @@ const Spot = (() => {
       <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar o Claude. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
       <div class="field full"><label for="ir-t">Título</label><input id="ir-t" name="titulo" maxlength="200" value="${esc(f.titulo)}" required></div>
       <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(clampDate(f.ref_date, st.data))}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
-      <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
+      <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.decisoes, 'decisões'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
       <div class="field full"><label>Meta</label><div class="small">${esc(f.meta)}</div></div>`, async d => {
       const r = await api('POST', `spot/${st.id}/reports/import`, { ...f, titulo: d.titulo, ref_date: d.ref_date });
       A().toast('Relatório importado.');
