@@ -5,6 +5,10 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+(nada ainda)
+
+## 1.1.0 - Alpha (06/11/2026)
+
 - Modelo de configuração `sysattack/config.exemplo.properties` (endereço do sistema, SMTP e backups) para copiar para a pasta de dados.
 
 - E-mail de boas-vindas: texto do botão "Criar minha senha" forçado para branco (alguns clientes de e-mail o pintavam de roxo).
