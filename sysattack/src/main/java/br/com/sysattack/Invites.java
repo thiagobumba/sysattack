@@ -61,6 +61,23 @@ final class Invites {
         return v == null ? "" : v.trim();
     }
 
+    private static final Pattern LOCAL = Pattern.compile("(?i)^https?://(localhost|127\\.[0-9.]+|\\[::1\\]|0\\.0\\.0\\.0)(:[0-9]+)?(/.*)?$");
+
+    /** O app.url válido configurado (config.properties, -Dsysattack.url ou SYSATTACK_URL), sem barra final; "" se não houver. */
+    static String configuredUrl() {
+        String v = setting();
+        return v.matches("(?i)^https?://[^\\s<>\"']+$") ? v.replaceAll("/+$", "") : "";
+    }
+
+    /** Para a tela Segurança e dados: o endereço que vai nos e-mails e se ele é utilizável por outras máquinas. */
+    static Map<String, Object> addressInfo() {
+        String u = configuredUrl();
+        Map<String, Object> o = new LinkedHashMap<>();
+        o.put("app_url", u);
+        o.put("app_url_ok", !u.isEmpty() && !LOCAL.matcher(u).matches());
+        return o;
+    }
+
     /** Endereço público da aplicação: app.url (config.properties, -Dsysattack.url ou SYSATTACK_URL) ou o da requisição do administrador. */
     static String baseUrl(HttpServletRequest req) {
         String v = setting();
@@ -135,8 +152,14 @@ final class Invites {
      */
     static Map<String, Object> sendInvite(HttpServletRequest req, Map<String, Object> user, String adminName, boolean welcome) throws SQLException {
         Map<String, Object> out = new LinkedHashMap<>();
-        String token = issue(((Number) user.get("id")).longValue());
         String email = (String) user.get("email");
+        String base0 = baseUrl(req);
+        if (LOCAL.matcher(base0).matches()) { // link para localhost só abre na máquina do administrador: não envia
+            out.put("sent", false);
+            out.put("error", "O endereço do sistema está como localhost, que só abre na máquina do servidor. Defina app.url no config.properties da pasta de dados (veja Segurança e dados), reinicie o Tomcat e reenvie o convite.");
+            return out;
+        }
+        String token = issue(((Number) user.get("id")).longValue());
         try {
             String html = html((String) user.get("name"), email, String.valueOf(user.get("job_title") == null ? "" : user.get("job_title")),
                     adminName, baseUrl(req), token, welcome);

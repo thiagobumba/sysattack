@@ -5,7 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
-(nada ainda)
+- Convites por e-mail: se o endereço do sistema for localhost (só abre na máquina do servidor), o e-mail não é mais enviado e o administrador é orientado a definir `app.url` no config.properties da pasta de dados. A tela Segurança e dados mostra o endereço que vai nos e-mails e se ele é acessível por outras máquinas.
 
 ## 1.1.0 - Alpha (06/11/2026)
 

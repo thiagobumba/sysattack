@@ -411,6 +411,7 @@ final class BackupService {
         File data = new File(Db.dataDir()), bdir = backupDir(), mdir = mirrorDir();
         o.put("data_dir", data.getAbsolutePath());
         o.put("data_source", Db.dataSource());
+        o.putAll(Invites.addressInfo());
         o.put("backup_dir", bdir.getAbsolutePath());
         o.put("mirror_dir", mdir == null ? null : mdir.getAbsolutePath());
         o.put("data_id", Db.dataId());

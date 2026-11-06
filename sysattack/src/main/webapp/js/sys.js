@@ -65,6 +65,7 @@ const Sys = (() => {
         </div>
         <dl class="kv" style="margin:16px 0 4px;display:grid;grid-template-columns:max-content 1fr;gap:6px 16px">
           <dt>Pasta de dados</dt><dd><code>${esc(st.data_dir)}</code> <span class="small" style="display:inline">(${esc(st.data_source)})</span></dd>
+          <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}</dd>
           <dt>Pasta dos backups</dt><dd><code>${esc(st.backup_dir)}</code></dd>
           <dt>Segunda cópia</dt><dd>${st.mirror_dir ? `<code>${esc(st.mirror_dir)}</code>` : '<span class="badge b-red">Não configurada</span>'}</dd>
           <dt>Banco</dt><dd>H2 ${esc(st.h2_version)} · id <code>${esc(st.data_id)}</code></dd>
