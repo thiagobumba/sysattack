@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee" version="4.0" metadata-complete="false">
+  <display-name>SysAttack</display-name>
+
+  <session-config>
+    <session-timeout>240</session-timeout>
+    <cookie-config>
+      <http-only>true</http-only>
+    </cookie-config>
+    <tracking-mode>COOKIE</tracking-mode>
+  </session-config>
+
+  <!-- Páginas de erro próprias: não revelam a versão do servidor nem a pilha de execução -->
+  <error-page><error-code>400</error-code><location>/erro.html</location></error-page>
+  <error-page><error-code>403</error-code><location>/erro.html</location></error-page>
+  <error-page><error-code>404</error-code><location>/erro.html</location></error-page>
+  <error-page><error-code>405</error-code><location>/erro.html</location></error-page>
+  <error-page><error-code>500</error-code><location>/erro.html</location></error-page>
+  <error-page><exception-type>java.lang.Throwable</exception-type><location>/erro.html</location></error-page>
+</web-app>

@@ -21,8 +21,9 @@ public class AppListener implements ServletContextListener {
             return t;
         });
         scheduler.scheduleWithFixedDelay(EmailTriggers::scanLate, 2, 30, TimeUnit.MINUTES);
-        // cópia de segurança do banco: ao iniciar e a cada 24 h (últimas 14 em <dados>/backups)
-        scheduler.scheduleWithFixedDelay(() -> Db.backup(14), 1, 24 * 60, TimeUnit.MINUTES);
+        // cópia de segurança completa: todo dia às 02:00 (e logo após subir, se o último backup tem mais de 26 h)
+        BackupService.schedule(scheduler);
+        scheduler.scheduleWithFixedDelay(Audit::prune, 10, 24 * 60, TimeUnit.MINUTES);
         e.getServletContext().log("SysAttack: banco de dados iniciado.");
     }
 

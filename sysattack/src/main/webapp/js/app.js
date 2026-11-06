@@ -629,6 +629,7 @@
     try {
       if (el.dataset.action.startsWith('sp-')) { await Spot.action(el); return; }
       if (el.dataset.action.startsWith('em-')) { await Mail.action(el); return; }
+      if (el.dataset.action.startsWith('sys-')) { await Sys.action(el); return; }
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
@@ -712,10 +713,11 @@
       else if (name === 'spot') await Spot.view(arg);
       else if (name === 'relatorios') await Rep.view();
       else if (name === 'privacidade') await viewPrivacy();
-      else if ((name === 'email' || name === 'ia') && !isAdmin()) {
+      else if ((name === 'email' || name === 'ia' || name === 'sistema') && !isAdmin()) {
         main.innerHTML = pageHead(['SysAttack'], 'Acesso restrito', '') + `<div class="panel">${empty('Esta área é só para administradores', 'Peça a um administrador para ajustar esta configuração.')}</div>`;
       }
       else if (name === 'email') await Mail.view();
+      else if (name === 'sistema') await Sys.view();
       else if (name === 'ia') await viewAI();
       else await viewDashboard();
     } catch (ex) {
@@ -738,7 +740,7 @@
       return;
     }
     // menus de configuração: só administradores; para os demais o item nem existe na página (a API também recusa)
-    document.querySelectorAll('[data-route="ia"], [data-route="email"]').forEach(a => { if (isAdmin()) a.hidden = false; else a.remove(); });
+    document.querySelectorAll('[data-route="ia"], [data-route="email"], [data-route="sistema"]').forEach(a => { if (isAdmin()) a.hidden = false; else a.remove(); });
     if (!isAdmin()) {
       document.querySelector('#g-admin .nav-label').textContent = 'Conta';
       document.querySelector('[data-route="usuarios"] span').textContent = 'Meu usuário';

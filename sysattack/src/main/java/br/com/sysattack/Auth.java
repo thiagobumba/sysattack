@@ -11,7 +11,9 @@ import javax.crypto.spec.PBEKeySpec;
 /** Hash de senha com PBKDF2 (nunca guardamos a senha em texto). */
 public final class Auth {
     private static final SecureRandom RND = new SecureRandom();
-    private static final int ITERATIONS = 120_000;
+    private static final int LEGACY_ITERATIONS = 120_000;
+    /** OWASP: PBKDF2-HMAC-SHA256 com 600 mil iterações. Hashes novos levam o prefixo "v2$<iterações>$". */
+    private static final int ITERATIONS = 600_000;
 
     private Auth() {}
 
@@ -21,9 +23,9 @@ public final class Auth {
         return Base64.getEncoder().encodeToString(b);
     }
 
-    public static String hash(String password, String salt) {
+    private static String pbkdf2(String password, String salt, int iterations) {
         try {
-            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), Base64.getDecoder().decode(salt), ITERATIONS, 256);
+            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), Base64.getDecoder().decode(salt), iterations, 256);
             byte[] out = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();
             return Base64.getEncoder().encodeToString(out);
         } catch (GeneralSecurityException e) {
@@ -31,10 +33,28 @@ public final class Auth {
         }
     }
 
+    public static String hash(String password, String salt) {
+        return "v2$" + ITERATIONS + "$" + pbkdf2(password, salt, ITERATIONS);
+    }
+
     public static boolean verify(String password, String salt, String expectedHash) {
-        byte[] a = hash(password, salt).getBytes(StandardCharsets.UTF_8);
-        byte[] b = expectedHash.getBytes(StandardCharsets.UTF_8);
-        return MessageDigest.isEqual(a, b);
+        String calc;
+        if (expectedHash.startsWith("v2$")) {
+            String[] p = expectedHash.split("\\$", 3);
+            if (p.length != 3) return false;
+            int it;
+            try { it = Integer.parseInt(p[1]); } catch (NumberFormatException e) { return false; }
+            if (it < 100_000 || it > 5_000_000) return false;
+            calc = "v2$" + it + "$" + pbkdf2(password, salt, it);
+        } else {
+            calc = pbkdf2(password, salt, LEGACY_ITERATIONS); // hash antigo (antes do v2)
+        }
+        return MessageDigest.isEqual(calc.getBytes(StandardCharsets.UTF_8), expectedHash.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** true se o hash guardado usa parâmetros antigos e deve ser refeito no próximo login bem-sucedido. */
+    public static boolean needsRehash(String storedHash) {
+        return !storedHash.startsWith("v2$" + ITERATIONS + "$");
     }
 
     public static String sha256(String s) {

@@ -155,7 +155,11 @@ public class ApiServlet extends HttpServlet {
         if (r.equals("login") && m.equals("POST")) return login(req);
         if (r.equals("logout") && m.equals("POST")) {
             HttpSession ses = req.getSession(false);
-            if (ses != null) ses.invalidate();
+            if (ses != null) {
+                Object u = ses.getAttribute("user");
+                if (u instanceof Map) Audit.log(req, String.valueOf(((Map<?, ?>) u).get("email")), "LOGOUT", "", true);
+                ses.invalidate();
+            }
             return Map.of("ok", true);
         }
         Map<String, Object> user = currentUser(req);
@@ -181,6 +185,8 @@ public class ApiServlet extends HttpServlet {
             case "documents": return documents(m, s, req, resp, user);
             case "ai": requireAdmin(user); return ai(m, s, req, user);
             case "ai-status": return AiConfig.availability();
+            case "backup": requireAdmin(user); return backupApi(m, s, req, resp, user);
+            case "security": requireAdmin(user); return Map.of("audit", Audit.recent(200));
             case "email": return EmailService.handle(m, s, req, resp, user);
             case "changes": return ChangeService.handle(m, s, req, user);
             case "reports": return ChangeService.reports(m);
@@ -206,27 +212,57 @@ public class ApiServlet extends HttpServlet {
         return row;
     }
 
+    /** Falhas por (conta+IP), por conta (qualquer IP) e por IP (qualquer conta): trava temporária ao passar do limite. */
+    private static long lockedUntil(String key, long now) {
+        long[] a = ATTEMPTS.get(key);
+        return a == null ? 0 : a[1] > now ? a[1] : 0;
+    }
+
+    private static void registerFail(String key, int max, long lockMs, long now) {
+        long[] a = ATTEMPTS.computeIfAbsent(key, k -> new long[2]);
+        synchronized (a) {
+            if (a[1] != 0 && a[1] <= now) { a[0] = 0; a[1] = 0; } // trava anterior já passou
+            if (++a[0] >= max) { a[0] = 0; a[1] = now + lockMs; }
+        }
+        if (ATTEMPTS.size() > 5000) { // limpeza: evita crescimento sem fim sob ataque
+            ATTEMPTS.entrySet().removeIf(e -> e.getValue()[1] < now && e.getValue()[0] == 0);
+            if (ATTEMPTS.size() > 20000) ATTEMPTS.clear();
+        }
+    }
+
     private Object login(HttpServletRequest req) throws Exception {
         JsonObject b = body(req);
         String email = str(b, "email", "E-mail", 120, true).toLowerCase();
         String password = str(b, "password", "Senha", 200, true);
-        String key = email + "|" + req.getRemoteAddr();
+        String ip = req.getRemoteAddr();
+        String kPair = email + "|" + ip, kAcct = "acct|" + email, kIp = "ip|" + ip;
         long now = System.currentTimeMillis();
-        long[] att = ATTEMPTS.computeIfAbsent(key, k -> new long[2]);
-        if (att[1] > now) {
-            throw new ApiException(429, "Muitas tentativas. Aguarde " + ((att[1] - now) / 60000 + 1) + " minuto(s) e tente novamente.");
+        long until = Math.max(lockedUntil(kPair, now), Math.max(lockedUntil(kAcct, now), lockedUntil(kIp, now)));
+        if (until > 0) {
+            Audit.log(req, email, "LOGIN_BLOQUEADO", "tentativa durante a trava temporária", false);
+            throw new ApiException(429, "Muitas tentativas. Aguarde " + ((until - now) / 60000 + 1) + " minuto(s) e tente novamente.");
         }
         Map<String, Object> row = Db.one("SELECT * FROM users WHERE username = ?", email);
         boolean ok = row != null && Auth.verify(password, (String) row.get("salt"), (String) row.get("password_hash"));
         if (row == null) Auth.hash(password, Auth.newSalt()); // mesmo custo de tempo, exista o e-mail ou não
         if (!ok) {
-            if (++att[0] >= MAX_FAILS) { att[0] = 0; att[1] = now + LOCK_MS; }
+            registerFail(kPair, MAX_FAILS, LOCK_MS, now);
+            registerFail(kAcct, 20, 15 * 60 * 1000L, now);
+            registerFail(kIp, 40, LOCK_MS, now);
+            Audit.log(req, email, "LOGIN_FALHA", row == null ? "e-mail desconhecido" : "senha incorreta", false);
             throw new ApiException(401, "E-mail ou senha incorretos.");
         }
-        ATTEMPTS.remove(key);
+        ATTEMPTS.remove(kPair);
+        ATTEMPTS.remove(kAcct);
         if (!Boolean.TRUE.equals(row.get("active"))) {
+            Audit.log(req, email, "LOGIN_BLOQUEADO", "usuário bloqueado", false);
             throw new ApiException(403, "Usuário bloqueado. Procure o administrador do sistema.");
         }
+        if (Auth.needsRehash((String) row.get("password_hash"))) { // atualiza hashes antigos para o parâmetro atual
+            String salt = Auth.newSalt();
+            Db.update("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", Auth.hash(password, salt), salt, row.get("id"));
+        }
+        Audit.log(req, email, "LOGIN", "", true);
         return startSession(req, row);
     }
 
@@ -234,7 +270,7 @@ public class ApiServlet extends HttpServlet {
         HttpSession old = req.getSession(false);
         if (old != null) old.invalidate(); // evita fixação de sessão
         HttpSession ses = req.getSession(true);
-        ses.setMaxInactiveInterval(8 * 3600);
+        ses.setMaxInactiveInterval(4 * 3600);
         Map<String, Object> user = new LinkedHashMap<>();
         user.put("id", row.get("id"));
         user.put("email", row.get("username"));
@@ -249,7 +285,16 @@ public class ApiServlet extends HttpServlet {
         if (Db.one("SELECT id FROM users LIMIT 1") != null) {
             throw new ApiException(403, "A configuração inicial já foi concluída. Entre com o seu e-mail.");
         }
+        if (Db.wasInitialized()) {
+            // o sistema já teve administrador, mas o banco apareceu vazio: provável pasta de dados errada ou banco perdido
+            Audit.log(req, "", "SETUP_BLOQUEADO", "banco sem usuários em instalação já inicializada", false);
+            throw new ApiException(403, "O banco de dados está vazio, mas este sistema já foi configurado antes. "
+                    + "Não crie um novo administrador: verifique a pasta de dados (-Dsysattack.data) ou restaure um backup. "
+                    + "Veja a seção Dados do README.");
+        }
         Map<String, Object> row = createUser(body(req), "ADMIN");
+        Db.afterCommit(Db::markInitialized);
+        Audit.log(req, (String) row.get("username"), "SETUP", "administrador inicial criado", true);
         return startSession(req, row);
     }
 
@@ -315,7 +360,15 @@ public class ApiServlet extends HttpServlet {
         String salt = Auth.newSalt();
         Db.update("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?", Auth.hash(next, salt), salt, user.get("id"));
         ses.removeAttribute("pwcode");
+        Audit.log(req, (String) user.get("email"), "SENHA_ALTERADA", "pelo próprio usuário", true);
         return Map.of("ok", true);
+    }
+
+    private static Object backupApi(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
+        String what = s.size() > 1 ? s.get(1) : "";
+        if (m.equals("POST") && what.equals("run")) Audit.log(req, (String) user.get("email"), "BACKUP_MANUAL", "", true);
+        if (what.equals("download")) Audit.log(req, (String) user.get("email"), "BACKUP_DOWNLOAD", s.size() > 2 ? s.get(2) : "", true);
+        return BackupService.handle(m, s, req, resp, user);
     }
 
     static void requireAdmin(Map<String, Object> user) {
@@ -351,6 +404,11 @@ public class ApiServlet extends HttpServlet {
 
     private static final String USER_SQL = "SELECT id, username email, name, role, active FROM users";
 
+    private static boolean pwSet(JsonObject b) {
+        JsonElement p = b.get("password");
+        return p != null && !p.isJsonNull() && !p.getAsString().isEmpty();
+    }
+
     private Object users(String m, List<String> s, HttpServletRequest req, Map<String, Object> me) throws SQLException, IOException {
         if (s.size() == 1) {
             if (m.equals("GET")) return Db.query(USER_SQL + " ORDER BY name");
@@ -359,6 +417,7 @@ public class ApiServlet extends HttpServlet {
                 String role = str(b, "role", "Perfil", 10, true);
                 if (!role.equals("ADMIN") && !role.equals("USER")) throw new ApiException(400, "Perfil inválido.");
                 Map<String, Object> row = createUser(b, role);
+                Audit.log(req, (String) me.get("email"), "USUARIO_CRIADO", row.get("username") + " (" + role + ")", true);
                 return Db.one(USER_SQL + " WHERE id = ?", row.get("id"));
             }
         } else if (s.size() == 2) {
@@ -375,6 +434,7 @@ public class ApiServlet extends HttpServlet {
                 if (lastAdmin && !role.equals("ADMIN")) throw new ApiException(400, "Deve existir ao menos um administrador.");
                 String pw = str(b, "password", "Senha", 200, false);
                 Db.update("UPDATE users SET name = ?, role = ? WHERE id = ?", name, role, id);
+                Audit.log(req, (String) me.get("email"), "USUARIO_ALTERADO", target.get("email") + " perfil=" + role + (pwSet(b) ? ", senha redefinida" : ""), true);
                 if (!pw.isEmpty()) {
                     String bad = Auth.checkPassword(pw, (String) target.get("email"));
                     if (bad != null) throw new ApiException(400, bad);
@@ -387,6 +447,7 @@ public class ApiServlet extends HttpServlet {
                 if (id == ((Number) me.get("id")).longValue()) throw new ApiException(400, "Você não pode excluir o seu próprio usuário.");
                 if (lastAdmin) throw new ApiException(400, "Deve existir ao menos um administrador.");
                 Db.update("DELETE FROM users WHERE id = ?", id);
+                Audit.log(req, (String) me.get("email"), "USUARIO_EXCLUIDO", String.valueOf(target.get("email")), true);
                 return Map.of("ok", true);
             }
         } else if (s.size() == 3 && s.get(2).equals("active") && m.equals("PUT")) {
@@ -396,6 +457,7 @@ public class ApiServlet extends HttpServlet {
             JsonElement e = body(req).get("active");
             if (e == null || e.isJsonNull()) throw new ApiException(400, "Informe se o usuário fica ativo ou bloqueado.");
             boolean active = e.getAsBoolean();
+            Audit.log(req, (String) me.get("email"), active ? "USUARIO_DESBLOQUEADO" : "USUARIO_BLOQUEADO", String.valueOf(target.get("email")), true);
             if (!active) {
                 if (id == ((Number) me.get("id")).longValue()) throw new ApiException(400, "Você não pode bloquear o seu próprio usuário.");
                 long activeAdmins = ((Number) Db.one("SELECT COUNT(*) c FROM users WHERE role = 'ADMIN' AND active = TRUE").get("c")).longValue();

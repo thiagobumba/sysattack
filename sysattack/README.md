@@ -67,12 +67,36 @@ Menu **Configurações IA Agent** (somente administrador): conecta e desconecta 
   `-Dhttps.proxyHost=SEU_PROXY -Dhttps.proxyPort=PORTA`.
 - O uso é cobrado na conta do Console (separado de assinaturas do Claude.ai).
 
-## Dados
-Pasta `~/.sysattack/` (banco `sysattack.mv.db` e arquivos em `docs/`). Mude com `-Dsysattack.data=C:\dados\sysattack`.
-**Faça backup dessa pasta.** Para recomeçar do zero, pare o Tomcat e apague-a.
+## Dados e backups
+
+**Onde ficam.** Defina um caminho fixo, fora do perfil do usuário, para o banco não "mudar" se a conta do serviço do Tomcat mudar:
+`-Dsysattack.data=C:\dados\sysattack` (ou variável de ambiente `SYSATTACK_DATA`). Sem isso o padrão é `~/.sysattack`.
+A tela **Segurança e dados** mostra qual pasta está em uso e avisa se algo estiver arriscado.
+
+Conteúdo da pasta: `sysattack.mv.db` (banco), `docs/` (documentos), `ai.key` (chave que criptografa a chave do Claude e a senha do SMTP), `config.properties`.
+Notas fiscais e arquivos dos projetos Spot ficam dentro do banco.
+
+**Backup automático.** Todo dia às 02:00 (e logo após o Tomcat subir, se o último tem mais de 26 h), mais um clique em "Fazer backup agora". Cada backup é **um arquivo**
+`sysattack-AAAAMMDD-HHMMSS-<tipo>.zip` com: `manifest.json`, `database/physical.zip` (cópia consistente feita com o sistema em uso), `database/script.sql.zip`
+(texto SQL, serve para migrar de versão do H2), `files/docs/*` e `config/*` (ai.key e config.properties). Ao terminar ele é **verificado** (CRC do zip + abertura do banco copiado
+lendo todas as tabelas) e recebe um `.sha256`. O histórico fica em `backup-history.jsonl` e na tela.
+Retenção: 1 por dia (14 dias), 1 por semana (8), 1 por mês (12), manuais por 90 dias; os 3 mais novos nunca são apagados.
+Antes de atualizar o sistema para uma versão com esquema novo, o arquivo do banco também é copiado para `pre-update-*.mv.db` (guarda as 5 últimas).
+
+**Para proteger de verdade (recomendado):**
+1. `backup.dir` (ou `-Dsysattack.backup=D:\backups\sysattack`): outro disco que não o do banco.
+2. `backup.mirror` (ou `-Dsysattack.backup.mirror=\\servidor\backups\sysattack`): segunda cópia em outra máquina/rede/nuvem sincronizada. Também pode ser definido em `config.properties` na pasta de dados.
+3. O backup contém a `ai.key`: trate-o como confidencial (acesso restrito à pasta; disco do servidor criptografado, ex.: BitLocker).
+4. Teste a restauração em outra pasta de vez em quando (a tela tem o botão **Verificar** para checar a integridade).
+
+**Restaurar** (Tomcat parado): `.\restaurar-backup.ps1 -Backup D:\backups\sysattack\sysattack-20261106-020000-auto.zip -Dados C:\dados\sysattack`.
+O script confere o SHA-256, guarda o que existe hoje em `<dados>.antes-da-restauracao-<data>` e restaura banco, documentos e configuração.
+Alternativa manual: extraia `database/script.sql.zip` e rode `java -cp h2-2.2.224.jar org.h2.tools.RunScript -url jdbc:h2:file:<pasta>/sysattack -user sa -script script.sql -options compression zip`.
+
+**Segurança.** Veja `SEGURANCA.md`. Para recomeçar do zero, pare o Tomcat e apague a pasta de dados (e o arquivo `.initialized`, senão o primeiro acesso é recusado de propósito).
 
 ## Estrutura
-- `src/main/java/br/com/sysattack` — `ApiServlet` (API JSON), `Db`, `Auth`, `Mailer`, `AiConfig`, `TaskRules`, `AppListener`
+- `src/main/java/br/com/sysattack` — `ApiServlet` (API JSON), `Db`, `BackupService`, `Auth`, `Audit`, `SecurityFilter`, `Mailer`, `AiConfig`, `TaskRules`, `AppListener`
 - `src/main/webapp` — `login.html`, `index.html`, `css/`, `js/`, `img/`, `favicon.ico`
 
 ## Projetos Spot

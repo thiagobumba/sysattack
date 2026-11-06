@@ -1,6 +1,9 @@
 package br.com.sysattack;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -20,6 +23,11 @@ import java.util.Map;
 public final class Db {
     private static String url;
     private static String dataDir;
+    private static String dataSource = "";
+    private static String dataId = "";
+    private static String h2Version = "";
+    /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
+    private static final int SCHEMA_VERSION = 39;
 
     private Db() {}
 
@@ -29,11 +37,23 @@ public final class Db {
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(e);
         }
-        // Pasta dos dados: -Dsysattack.data=/caminho  (padrão: ~/.sysattack)
-        String dir = System.getProperty("sysattack.data",
-                System.getProperty("user.home") + File.separator + ".sysattack");
+        // Pasta dos dados: -Dsysattack.data=/caminho, variável SYSATTACK_DATA ou, por último, ~/.sysattack
+        String dir = System.getProperty("sysattack.data");
+        dataSource = "propriedade -Dsysattack.data";
+        if (dir == null || dir.isBlank()) {
+            dir = System.getenv("SYSATTACK_DATA");
+            dataSource = "variável de ambiente SYSATTACK_DATA";
+        }
+        if (dir == null || dir.isBlank()) {
+            dir = System.getProperty("user.home") + File.separator + ".sysattack";
+            dataSource = "padrão (perfil do usuário que roda o Tomcat)";
+        }
+        dir = new File(dir.trim()).getAbsolutePath();
         new File(dir).mkdirs();
         dataDir = dir;
+        restrict(new File(dir));
+        java.util.logging.Logger.getLogger("sysattack").info("Pasta de dados: " + dir + " [" + dataSource + "]");
+        preUpdateCopy();
         url = "jdbc:h2:file:" + new File(dir, "sysattack").getAbsolutePath() + ";DB_CLOSE_DELAY=-1";
 
         try (Connection c = get(); Statement s = c.createStatement()) {
@@ -268,6 +288,16 @@ public final class Db {
                     + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_changes_project ON project_changes(project_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS app_meta (k VARCHAR(60) PRIMARY KEY, v VARCHAR(400) NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS audit_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,"
+                    + "actor VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "action VARCHAR(40) NOT NULL,"
+                    + "detail VARCHAR(400) NOT NULL DEFAULT '',"
+                    + "ip VARCHAR(60) NOT NULL DEFAULT '',"
+                    + "ok BOOLEAN DEFAULT TRUE NOT NULL)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at)");
         } catch (SQLException e) {
             throw new IllegalStateException("Falha ao iniciar o banco de dados", e);
         }
@@ -278,6 +308,20 @@ public final class Db {
             throw new IllegalStateException(e);
         }
         seed();
+        try {
+            Map<String, Object> id = one("SELECT v FROM app_meta WHERE k = 'data_id'");
+            if (id == null) {
+                dataId = java.util.UUID.randomUUID().toString();
+                update("INSERT INTO app_meta(k, v) VALUES('data_id', ?)", dataId);
+            } else {
+                dataId = (String) id.get("v");
+            }
+            h2Version = String.valueOf(one("SELECT H2VERSION() v").get("v"));
+            if (one("SELECT id FROM users LIMIT 1") != null) markInitialized(); // instalações antigas
+            Files.write(new File(dataDir, "schema.version").toPath(), String.valueOf(SCHEMA_VERSION).getBytes(StandardCharsets.UTF_8));
+        } catch (SQLException | IOException e) {
+            throw new IllegalStateException("Falha ao registrar os metadados do banco", e);
+        }
         try (Connection c = get(); Statement s = c.createStatement()) {
             s.execute("SET WRITE_DELAY 0"); // grava no disco a cada confirmação (sem janela de perda em queda de energia)
         } catch (SQLException ignored) {
@@ -285,27 +329,56 @@ public final class Db {
         }
     }
 
-    /** Cópia de segurança (zip) na pasta de dados; mantém as últimas {@code keep}. */
-    public static synchronized String backup(int keep) {
+    /** Antes de migrar o esquema numa versão nova, guarda uma cópia do arquivo do banco (ainda fechado = consistente). */
+    private static void preUpdateCopy() {
         try {
-            File dir = new File(dataDir, "backups");
-            dir.mkdirs();
-            String name = "sysattack-" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".zip";
-            File out = new File(dir, name);
-            try (Connection c = get(); Statement s = c.createStatement()) {
-                s.execute("BACKUP TO '" + out.getAbsolutePath().replace("'", "''") + "'");
+            File mv = new File(dataDir, "sysattack.mv.db");
+            if (!mv.isFile()) return;
+            File ver = new File(dataDir, "schema.version");
+            String cur = ver.isFile() ? new String(Files.readAllBytes(ver.toPath()), StandardCharsets.UTF_8).trim() : "";
+            if (cur.equals(String.valueOf(SCHEMA_VERSION))) return;
+            File bd = BackupService.backupDir();
+            bd.mkdirs();
+            File copy = new File(bd, "pre-update-" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + "-v" + (cur.isEmpty() ? "0" : cur) + ".mv.db");
+            Files.copy(mv.toPath(), copy.toPath());
+            File[] old = bd.listFiles((d, n) -> n.startsWith("pre-update-") && n.endsWith(".mv.db"));
+            if (old != null && old.length > 5) {
+                java.util.Arrays.sort(old);
+                for (int i = 0; i < old.length - 5; i++) old[i].delete();
             }
-            File[] all = dir.listFiles((d, n) -> n.startsWith("sysattack-") && n.endsWith(".zip"));
-            if (all != null && all.length > keep) {
-                java.util.Arrays.sort(all);
-                for (int i = 0; i < all.length - keep; i++) all[i].delete();
-            }
-            return out.getAbsolutePath();
+            java.util.logging.Logger.getLogger("sysattack").info("Cópia antes da atualização: " + copy);
         } catch (Exception e) {
-            java.util.logging.Logger.getLogger("sysattack").warning("Falha na cópia de segurança: " + e);
-            return null;
+            java.util.logging.Logger.getLogger("sysattack").warning("Não foi possível copiar o banco antes da atualização: " + e);
         }
     }
+
+    /** Marca que o administrador já foi criado: depois disso o "primeiro acesso" não é mais aceito, mesmo com o banco vazio. */
+    public static void markInitialized() {
+        try {
+            File f = new File(dataDir, ".initialized");
+            if (!f.exists()) Files.write(f.toPath(), java.time.LocalDateTime.now().toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            java.util.logging.Logger.getLogger("sysattack").warning("Não foi possível gravar o marcador de instalação: " + e);
+        }
+    }
+
+    public static boolean wasInitialized() {
+        return new File(dataDir, ".initialized").isFile();
+    }
+
+    /** Só o dono lê o arquivo/pasta (POSIX; no Windows herda as permissões do local — veja o README). */
+    static void restrict(File f) {
+        try {
+            String perm = f.isDirectory() ? "rwx------" : "rw-------";
+            Files.setPosixFilePermissions(f.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString(perm));
+        } catch (Exception ignored) {
+            // sistema de arquivos sem POSIX
+        }
+    }
+
+    public static String dataSource() { return dataSource; }
+    public static String dataId() { return dataId; }
+    public static String h2Version() { return h2Version; }
 
     public static String dataDir() {
         return dataDir;
