@@ -42,17 +42,33 @@ if (-not $Watch) { return }
 Write-Host ""
 Write-Host "Modo vigia: verificando '$Branch' a cada $IntervaloSegundos s. Ctrl+C para parar." -ForegroundColor Cyan
 $ultimo = (git rev-parse HEAD).Trim()
-while ($true) {
-    Start-Sleep -Seconds $IntervaloSegundos
-    try {
-        git fetch origin --quiet
-        $remoto = (git rev-parse "origin/$Branch").Trim()
-        if ($remoto -ne $ultimo) {
-            Write-Host "[$(Get-Date -Format HH:mm:ss)] Novo commit em $Branch. Atualizando..." -ForegroundColor Yellow
-            Atualizar
-            $ultimo = (git rev-parse HEAD).Trim()
+$log = Join-Path $PSScriptRoot "atualizar.log"
+function Log($msg, $cor = "Gray") {
+    $linha = "[$(Get-Date -Format 'dd/MM HH:mm:ss')] $msg"
+    Write-Host $linha -ForegroundColor $cor
+    try { Add-Content -Path $log -Value $linha -Encoding UTF8 } catch { }
+}
+$ticks = 0
+try {
+    while ($true) {
+        Start-Sleep -Seconds $IntervaloSegundos
+        $ticks++
+        try {
+            git fetch origin --quiet
+            $remoto = (git rev-parse "origin/$Branch").Trim()
+            if ($remoto -ne $ultimo) {
+                Log "Novo commit em $Branch ($($remoto.Substring(0,8))). Atualizando..." "Yellow"
+                Atualizar
+                $ultimo = (git rev-parse HEAD).Trim()
+                Log "Concluído em $($ultimo.Substring(0,8)). Troque o .war no Tomcat." "Green"
+                [console]::Beep(880, 300)
+            } elseif ($ticks % 10 -eq 0) {
+                Log "Vigiando $Branch: sem novidades (versão $($ultimo.Substring(0,8)))."
+            }
+        } catch {
+            Log "Falha: $($_.Exception.Message)" "Red"
         }
-    } catch {
-        Write-Host "[$(Get-Date -Format HH:mm:ss)] Falha: $($_.Exception.Message)" -ForegroundColor Red
     }
+} finally {
+    Log "Modo vigia ENCERRADO (janela fechada, Ctrl+C ou erro)." "Yellow"
 }

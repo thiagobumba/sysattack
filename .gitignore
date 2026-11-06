@@ -11,3 +11,4 @@ ai.key
 # modelo versionado (config.properties real, com senhas, nunca deve subir)
 # sysattack/config.properties foi adicionado ao git sem segredos; não coloque a senha do SMTP nele.
 sysattack/config.properties
+atualizar.log
