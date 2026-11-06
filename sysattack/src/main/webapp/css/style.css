@@ -541,3 +541,5 @@ h1 { font-size: 38px; margin: 6px 0 6px; }
 @media (max-width: 560px) { .meta-grid > .wide { grid-column: auto; } }
 a.btn { text-decoration: none; color: var(--ink); }
 .fgrid input:disabled, .fgrid select:disabled, .fgrid textarea:disabled { background: #ececec; color: #9a9a9a; cursor: not-allowed; }
+.tbl .num .small { text-align: right; white-space: nowrap; }
+@media (max-width: 1500px) { .tbl th, .tbl td { padding-left: 12px; padding-right: 12px; } .pbar { min-width: 110px; } }

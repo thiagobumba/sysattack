@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Lista de escopo fechado: Valor e Faturado agora ficam numa só coluna "Financeiro" e o cabeçalho "Arquivos" foi encurtado, para a tabela caber na tela sem rolagem lateral.
+
 - Escopo fechado, controle financeiro: novo campo "Valor do projeto (R$)" (obrigatório no escopo fechado) e nova guia "Financeiro" para lançar as notas (número, emissão, vencimento, valor, situação Emitida/Paga/Cancelada) com o PDF anexado, guardado no banco. A visão do projeto mostra Valor Projeto (R$), Faturado, A faturar, Recebido e % faturado; a lista de escopo fechado mostra valor e faturado. Notas canceladas não entram no faturado.
 
 - Escopo fechado: a demanda só conta como entregue quando existe ao menos um apontamento vinculado a ela. O percentual de entrega é demandas entregues ÷ demandas do escopo (as canceladas não contam). Todo apontamento de escopo fechado exige escolher "qual demanda este apontamento entrega". Os cartões mostram entregues, sem apontamento e concluídas sem apontamento (alerta); o Resumo e a aba Demandas mostram, por demanda, quantos apontamentos tem e se está entregue.

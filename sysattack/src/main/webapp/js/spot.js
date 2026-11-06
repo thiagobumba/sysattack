@@ -125,11 +125,11 @@ const Spot = (() => {
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
-    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Valor (R$)</th><th class="num">Faturado</th><th class="num">Arquivos do escopo</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Financeiro</th><th class="num">Arquivos</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
           <td>${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
-          <td class="num">${brl(p.project_value)}</td><td class="num">${brl(p.finance.invoiced)}<span class="small">${p.finance.pct_invoiced}%</span></td>
+          <td class="num strong">${brl(p.project_value)}<span class="small">${brl(p.finance.invoiced)} faturado (${p.finance.pct_invoiced}%)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
