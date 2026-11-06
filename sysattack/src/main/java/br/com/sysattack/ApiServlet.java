@@ -775,18 +775,19 @@ public class ApiServlet extends HttpServlet {
         String priority = b.has("priority") && !b.get("priority").isJsonNull() ? str(b, "priority", "Prioridade", 10, false) : "";
         if (priority.isBlank()) priority = "MEDIA";
         if (!PROJECT_PRIORITY.contains(priority)) throw new ApiException(400, "Prioridade inválida.");
+        boolean goal = bool(b, "company_goal"); // Meta Empresa: projeto do plano de desenvolvimento, acima de qualquer prioridade
         if (!PROJECT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior à inicial.");
         String oldStatus = null;
         if (id == null) {
-            id = Db.insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget,priority) VALUES(?,?,?,?,?,?,?,?)",
-                    name, scope, owner, status, start, end, budget, priority);
+            id = Db.insert("INSERT INTO projects(name,scope,owner,status,start_date,end_date,budget,priority,company_goal) VALUES(?,?,?,?,?,?,?,?,?)",
+                    name, scope, owner, status, start, end, budget, priority, goal);
             EmailTriggers.fire("PROJECT_CREATED", id, owner, "project:" + id, mapOf("Responsável", owner, "Início", start.toString(), "Fim", end.toString()));
         } else {
             Map<String, Object> before = Db.one("SELECT status FROM projects WHERE id = ?", id);
             oldStatus = before == null ? null : (String) before.get("status");
-            Db.update("UPDATE projects SET name=?, scope=?, owner=?, status=?, start_date=?, end_date=?, budget=?, priority=? WHERE id=?",
-                    name, scope, owner, status, start, end, budget, priority, id);
+            Db.update("UPDATE projects SET name=?, scope=?, owner=?, status=?, start_date=?, end_date=?, budget=?, priority=?, company_goal=? WHERE id=?",
+                    name, scope, owner, status, start, end, budget, priority, goal, id);
             if (oldStatus != null && !oldStatus.equals(status)) {
                 EmailTriggers.fire("PROJECT_STATUS_CHANGED", id, owner, "project:" + id, mapOf("Situação anterior", oldStatus, "Nova situação", status, "Responsável", owner));
             }

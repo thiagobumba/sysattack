@@ -9,9 +9,10 @@
   const PRIO_RANK = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
   const H_RANK = { VERMELHO: 0, AMARELO: 1, VERDE: 2, NAO_INICIADO: 3, PAUSADO: 4, CONCLUIDO: 5 };
   const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', PAUSADO: 'h-grey', CONCLUIDO: 'h-done' };
-  const prioBadge = p => badge(PRIORITY, p.priority || 'MEDIA');
+  const goalBadge = p => p.company_goal ? '<span class="badge b-goal" title="Projeto do plano de desenvolvimento da empresa">★ Meta Empresa</span> ' : '';
+  const prioBadge = p => goalBadge(p) + badge(PRIORITY, p.priority || 'MEDIA');
   const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}" title="${esc((h.reasons || []).join(' · ') || h.label)}"><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
-  const byUrgency = (a, b) => (PRIO_RANK[a.priority || 'MEDIA'] - PRIO_RANK[b.priority || 'MEDIA']) || ((H_RANK[a.health.level] ?? 9) - (H_RANK[b.health.level] ?? 9)) || a.name.localeCompare(b.name);
+  const byUrgency = (a, b) => ((b.company_goal ? 1 : 0) - (a.company_goal ? 1 : 0)) || (PRIO_RANK[a.priority || 'MEDIA'] - PRIO_RANK[b.priority || 'MEDIA']) || ((H_RANK[a.health.level] ?? 9) - (H_RANK[b.health.level] ?? 9)) || a.name.localeCompare(b.name);
   const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'] };
   const ROLES = { ADMIN: 'Administrador', USER: 'Usuário' };
   const FIN_KIND = { NF_SERVICO: ['Nota fiscal de serviço', 'b-dark'], FATURA: ['Fatura', 'b-grey'] };
@@ -148,14 +149,14 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira de projetos</h2>
         <button class="btn btn-primary btn-sm" data-action="new-project">+ Novo projeto</button></div>
         <div class="filters"><select id="pf-h" aria-label="Filtrar por saúde"><option value="all">Todas as saúdes</option><option value="VERMELHO">Crítico</option><option value="AMARELO">Atenção</option><option value="VERDE">Saudável</option><option value="OUTROS">Não iniciado, pausado ou concluído</option></select>
-          <select id="pf-p" aria-label="Filtrar por prioridade"><option value="all">Todas as prioridades</option>${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>
+          <select id="pf-p" aria-label="Filtrar por prioridade"><option value="all">Todas as prioridades</option><option value="META">Meta Empresa</option>${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>
         <div class="table-wrap" id="pf-body"></div>
-        <p class="hint" style="margin-top:12px">Saúde = pior resultado entre prazo, custo, marcos e mudanças. Passe o mouse sobre a cor para ver o motivo. Ordenação: prioridade e, dentro dela, os projetos mais críticos primeiro.</p></section>`;
+        <p class="hint" style="margin-top:12px">Saúde = pior resultado entre prazo, custo, marcos e mudanças. Passe o mouse sobre a cor para ver o motivo. Ordenação: Meta Empresa primeiro, depois a prioridade e, dentro dela, os projetos mais críticos primeiro.</p></section>`;
     const hs = document.getElementById('pf-h'), ps = document.getElementById('pf-p');
     hs.value = f.health; ps.value = f.prio;
     const draw = () => {
       f.health = hs.value; f.prio = ps.value;
-      const rows = list.filter(p => (f.prio === 'all' || (p.priority || 'MEDIA') === f.prio)
+      const rows = list.filter(p => (f.prio === 'all' || (f.prio === 'META' ? p.company_goal : (p.priority || 'MEDIA') === f.prio))
         && (f.health === 'all' || (f.health === 'OUTROS' ? !['VERMELHO', 'AMARELO', 'VERDE'].includes(p.health.level) : p.health.level === f.health))).sort(byUrgency);
       document.getElementById('pf-body').innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Prioridade</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')} · ${p.task_count} tarefa(s)${p.late_count ? ` · <b class="late-txt">${p.late_count} atrasada(s)</b>` : ''}</span></td>
@@ -629,11 +630,13 @@
       <div class="field"><label for="o">Responsável</label><input id="o" name="owner" maxlength="120" value="${esc(p.owner)}"></div>
       <div class="field"><label for="s">Situação</label><select id="s" name="status">${opts(P_STATUS, p.status)}</select></div>
       <div class="field"><label for="pr">Prioridade</label><select id="pr" name="priority">${opts(PRIORITY, p.priority || 'MEDIA')}</select></div>
+      <div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" name="company_goal" style="width:auto;margin:0" ${p.company_goal ? 'checked' : ''}> ★ Meta Empresa</label><p class="hint">Projeto do plano de desenvolvimento da empresa. Fica acima de qualquer prioridade nas listas e na visão geral.</p></div>
       <div class="field"><label for="a">Início</label><input id="a" name="start_date" type="date" value="${p.start_date}" required></div>
       <div class="field"><label for="b">Fim</label><input id="b" name="end_date" type="date" value="${p.end_date}" required></div>
       <div class="field full"><label for="bu">Orçamento (R$)</label><input id="bu" name="budget" type="number" min="0" step="0.01" value="${Number(p.budget) > 0 ? p.budget : ''}" placeholder="Opcional — usado no controle financeiro"></div>
       <div class="field full"><label for="c">Escopo inicial</label><textarea id="c" name="scope" maxlength="4000" placeholder="O que será entregue, o que está fora do escopo e como saberemos que acabou.">${esc(p.scope)}</textarea></div>`,
       async d => {
+        d.company_goal = d.company_goal === 'on';
         const saved = await api(id ? 'PUT' : 'POST', id ? 'projects/' + id : 'projects', d);
         toast(id ? 'Projeto salvo.' : 'Projeto criado. Agora adicione as tarefas.');
         if (!id) location.hash = '#/projeto/' + saved.id;
