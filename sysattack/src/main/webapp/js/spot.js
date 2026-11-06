@@ -74,7 +74,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -298,7 +298,8 @@ const Spot = (() => {
     return { date, hours, demands, reportTotal: total ? num(total) : null };
   }
 
-  function importDialog(rep) {
+  function importDialog(rep, mode) {
+    const isH = mode === 'horas';
     const dl = rep.demands.map((d, i) => `<tr><td><input type="checkbox" name="dc${i}" checked aria-label="Importar demanda"></td>
       <td class="strong">${esc(d.name)}<span class="small">${esc(d.next_step)}</span></td>
       <td><select name="ds${i}" aria-label="Situação">${opts(D_STATUS, d.status)}</select></td>
@@ -308,25 +309,33 @@ const Spot = (() => {
     const total = rep.hours.reduce((a, x) => a + x.hours, 0);
     const warn = rep.reportTotal != null && Math.abs(rep.reportTotal - total) > 0.01
       ? `<p class="hint late-txt full">Atenção: o consumo do relatório é ${h(rep.reportTotal)}, mas as linhas somam ${h(total)}. Confira antes de importar.</p>` : '';
-    const f = A().openDialog('Importar relatório da Fábrica', `
-      <p class="hint full">Revise o que será lançado. Demandas com o mesmo nome são atualizadas; horas já lançadas (mesma data, atividade e valor) são ignoradas.</p>
+    const body = isH ? `
+      <p class="hint full">Revise o que será lançado. Horas já lançadas (mesma data, atividade e valor) são ignoradas. As horas são ligadas às demandas já cadastradas quando o nome bate; por isso importe as demandas antes, na aba Demandas.</p>
       <div class="field"><label for="imp-d">Data dos lançamentos</label><input id="imp-d" name="date" type="date" value="${rep.date}" required></div>
       <div class="field"><label>Total de horas</label><div class="strong" style="padding:10px 0">${h(total)}</div></div>${warn}
-      <div class="full"><h3 style="margin:0 0 8px;font-size:15px">Horas consumidas</h3><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Atividade</th><th>Frente</th><th>Demanda</th><th class="num">Horas</th></tr></thead><tbody>${hl}</tbody></table></div></div>
-      <div class="full"><h3 style="margin:0 0 8px;font-size:15px">Demandas</h3><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Demanda</th><th>Situação</th><th class="num">Aprovado</th></tr></thead><tbody>${dl}</tbody></table></div></div>`,
-      async d => {
+      <div class="full"><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Atividade</th><th>Frente</th><th>Demanda</th><th class="num">Horas</th></tr></thead><tbody>${hl}</tbody></table></div></div>`
+      : `
+      <p class="hint full">Revise as demandas. As que já existem com o mesmo nome são atualizadas (situação, próximo passo e horas aprovadas); as demais são criadas.</p>
+      <div class="full"><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Demanda</th><th>Situação</th><th class="num">Aprovado</th></tr></thead><tbody>${dl}</tbody></table></div></div>`;
+    const f = A().openDialog(isH ? 'Importar apontamentos do relatório' : 'Importar demandas do relatório', body, async d => {
+      if (isH) {
+        const hours = rep.hours.map((x, i) => d['hc' + i] ? { work_date: d.date, front: x.front, activity: x.activity, hours: x.hours, demand_name: x.demand } : null).filter(Boolean);
+        if (!hours.length) throw new Error('Marque ao menos um lançamento.');
+        const r = await api('POST', `spot/${st.id}/import`, { hours });
+        st.month = d.date.slice(0, 7);
+        A().toast(`Importado: ${r.hours_created} lançamento(s)` + (r.hours_skipped ? `; ${r.hours_skipped} já existia(m).` : '.'));
+      } else {
         const demands = rep.demands.map((x, i) => d['dc' + i] ? { name: x.name, status: d['ds' + i], next_step: x.next_step.slice(0, 500), approved_hours: x.approved || 0, notes: x.notes } : null).filter(Boolean);
-        const kept = new Set(demands.map(x => x.name));
-        const hours = rep.hours.map((x, i) => d['hc' + i] ? { work_date: d.date, front: x.front, activity: x.activity, hours: x.hours, demand_name: kept.has(x.demand) ? x.demand : '' } : null).filter(Boolean);
-        const r = await api('POST', `spot/${st.id}/import`, { demands, hours });
-        st.month = d.date.slice(0, 7); st.tab = 'horas';
-        A().toast(`Importado: ${r.hours_created} lançamento(s), ${r.demands_created} demanda(s) nova(s), ${r.demands_updated} atualizada(s)` + (r.hours_skipped ? `; ${r.hours_skipped} já existia(m).` : '.'));
-      }, 'Importar');
+        if (!demands.length) throw new Error('Marque ao menos uma demanda.');
+        const r = await api('POST', `spot/${st.id}/import`, { demands });
+        A().toast(`Importado: ${r.demands_created} demanda(s) nova(s), ${r.demands_updated} atualizada(s).`);
+      }
+    }, 'Importar');
     document.getElementById('dlg').className = 'wide';
     return f;
   }
 
-  function pickReport() {
+  function pickReport(mode) {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = '.html,.htm,text/html'; inp.id = 'sp-imp-file'; inp.hidden = true;
     document.body.appendChild(inp);
@@ -335,7 +344,7 @@ const Spot = (() => {
         const f = inp.files[0];
         if (!f) return;
         if (f.size > 3 * 1024 * 1024) throw new Error('Arquivo grande demais para um relatório.');
-        importDialog(parseReport(await f.text()));
+        importDialog(parseReport(await f.text()), mode);
       } catch (e) { A().toast(e.message); }
       inp.remove();
     });
@@ -353,7 +362,8 @@ const Spot = (() => {
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
       case 'sp-month-all': st.month = 'all'; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
-      case 'sp-import': pickReport(); break;
+      case 'sp-import': pickReport('horas'); break;
+      case 'sp-import-demand': pickReport('demandas'); break;
       case 'sp-edit-hour': await hourForm(id); break;
       case 'sp-del-hour': await del('spot/hours/' + id, 'Excluir este lançamento de horas?'); break;
       case 'sp-new-demand': demandForm(); break;

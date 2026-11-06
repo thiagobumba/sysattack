@@ -5,7 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
-- Projetos Spot: importação do Status Report da Fábrica (HTML) na aba "Apontamentos de horas". Mostra uma prévia para revisão; importa as horas consumidas (o detalhamento do chatbot substitui a linha agregada) e as demandas em andamento e previstas, com situação sugerida e editável. Demandas de mesmo nome são atualizadas; horas já lançadas não duplicam.
+- Projetos Spot: importação do Status Report da Fábrica (HTML), com prévia para revisão. Na aba "Apontamentos de horas" importa só as horas consumidas (o detalhamento do chatbot substitui a linha agregada); horas já lançadas não duplicam. Na aba "Demandas" importa só as demandas em andamento e previstas, com situação sugerida e editável; demandas de mesmo nome são atualizadas.
 
 - Projetos Spot: novo campo "Data final" (opcional, validada contra o início) e a marca "Contrato recorrente". A lista mostra o selo Recorrente e a vigência; projeto ativo com a data final vencida é sinalizado. Projetos existentes ficam sem data final e como não recorrentes.
 
