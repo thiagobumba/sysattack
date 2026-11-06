@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Relatório tradicional (escopo fechado): HTML reescrito para o Outlook (motor do Word): só tabelas, cores de fundo em atributo bgcolor, bordas e espaçamentos nas células, etiquetas e barras de progresso em células (sem inline-block nem largura em span, que o Outlook ignora), largura máxima com tabela fantasma para o Outlook e fonte Segoe UI. Corrige datas coladas no texto dos apontamentos, cartões sem fundo e texto cortado. Nos demais clientes o visual é o mesmo.
+
 - Relatório tradicional: o envio por e-mail fica no relatório aberto (botão "Enviar por e-mail"), igual aos projetos de horas: Para, CC e CCO separados por ";", relatório no corpo do e-mail e registro de envio.
 
 - Financeiro e visão do projeto spot: os valores em R$ não vazam mais dos cartões (fonte ajusta à largura, cartões financeiros mais largos) e a tela ficou responsiva: cartões em 2 colunas no tablet/celular, guias com rolagem lateral, botão de ação abaixo das guias e tabelas mais compactas. O mesmo vale para o relatório tradicional (valores longos reduzem a fonte).
