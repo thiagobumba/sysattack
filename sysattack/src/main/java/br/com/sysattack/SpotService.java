@@ -29,6 +29,8 @@ final class SpotService {
     private static final Set<String> SPOT_STATUS = Set.of("ATIVO", "PAUSADO", "ENCERRADO");
     private static final Set<String> DEMAND_STATUS = Set.of("EM_ANALISE", "APROVADO", "EM_ANDAMENTO", "EM_HOMOLOGACAO", "EM_ESPERA", "CONCLUIDA", "CANCELADA");
     private static final Set<String> ACTION_STATUS = Set.of("PENDENTE", "A_CONFIRMAR", "PARCIAL", "CONCLUIDO");
+    private static final Set<String> INVOICE_STATUS = Set.of("EMITIDA", "PAGA", "CANCELADA");
+    private static final String INVOICE_COLS = "id, spot_id, number, issue_date, due_date, amount, status, description, file_name, file_size, created_by, created_at";
     private static final Set<String> ACTION_KIND = Set.of("ACAO", "PENDENCIA");
 
     private static final String PROJECT_SQL = "SELECT p.*, (SELECT MAX(r.created_at) FROM spot_reports r WHERE r.spot_id = p.id) last_report FROM spot_projects p";
@@ -55,7 +57,7 @@ final class SpotService {
         } catch (NumberFormatException e) {
             // /spot/{hours|demands|actions|reports}/{id}
         }
-        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : null;
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : null;
         if (table == null || s.size() < 3) return null;
         Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
@@ -89,6 +91,9 @@ final class SpotService {
                 case "demands": return itemRoute(m, s, req, "spot_demands", user);
                 case "actions": return itemRoute(m, s, req, "spot_actions", user);
                 case "files": return fileRoute(m, s, resp);
+                case "invoices":
+                    if (s.size() == 4 && s.get(3).equals("file")) return invoiceFile(m, s, req, resp, user);
+                    return itemRoute(m, s, req, "spot_invoices", user);
                 case "reports": return reportRoute(m, s, req, resp, user);
                 default: break;
             }
@@ -112,6 +117,10 @@ final class SpotService {
                     case "actions":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_actions WHERE spot_id = ? ORDER BY kind, CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END, id", id);
                         if (m.equals("POST")) return saveAction(null, id, ApiServlet.body(req));
+                        break;
+                    case "invoices":
+                        if (m.equals("GET")) return Db.query("SELECT " + INVOICE_COLS + " FROM spot_invoices WHERE spot_id = ? ORDER BY issue_date DESC, id DESC", id);
+                        if (m.equals("POST")) return saveInvoice(null, id, ApiServlet.body(req), user);
                         break;
                     case "files":
                         if (m.equals("GET")) return Db.query("SELECT id, spot_id, title, description, file_name, size, uploaded_by, uploaded_at FROM spot_files WHERE spot_id = ? ORDER BY id DESC", id);
@@ -152,6 +161,7 @@ final class SpotService {
             p.put("kpi", snap.get("kpi"));
             p.put("period_label", snap.get("period_label"));
             p.put("scope", scopeSummary(((Number) p.get("id")).longValue()));
+            p.put("finance", financeSummary(p));
         }
         return rows;
     }
@@ -164,6 +174,7 @@ final class SpotService {
         }
         p.put("summary", SpotCalc.snapshot(p, r));
         p.put("scope", scopeSummary(id));
+        p.put("finance", financeSummary(p));
         return p;
     }
 
@@ -190,6 +201,105 @@ final class SpotService {
         out.put("by_status", by);
         out.put("files", ((Number) Db.one("SELECT COUNT(*) c FROM spot_files WHERE spot_id = ?", id).get("c")).intValue());
         return out;
+    }
+
+    // ------------------------------------------------------------------ financeiro do escopo fechado: valor do projeto e notas
+    /** Valor do projeto, total faturado (notas não canceladas), pago e saldo a faturar. */
+    private static Map<String, Object> financeSummary(Map<String, Object> p) throws SQLException {
+        long id = ((Number) p.get("id")).longValue();
+        BigDecimal value = new BigDecimal(String.valueOf(p.get("project_value")));
+        BigDecimal invoiced = BigDecimal.ZERO, paid = BigDecimal.ZERO;
+        int count = 0;
+        for (Map<String, Object> r : Db.query("SELECT status, amount FROM spot_invoices WHERE spot_id = ?", id)) {
+            if ("CANCELADA".equals(r.get("status"))) continue;
+            BigDecimal a = new BigDecimal(String.valueOf(r.get("amount")));
+            invoiced = invoiced.add(a);
+            if ("PAGA".equals(r.get("status"))) paid = paid.add(a);
+            count++;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("project_value", value);
+        out.put("invoiced", invoiced);
+        out.put("paid", paid);
+        out.put("to_invoice", value.subtract(invoiced));
+        out.put("to_receive", invoiced.subtract(paid));
+        out.put("pct_invoiced", value.signum() == 0 ? 0 : invoiced.multiply(new BigDecimal(100)).divide(value, 0, java.math.RoundingMode.HALF_UP).intValue());
+        out.put("count", count);
+        return out;
+    }
+
+    private static Object saveInvoice(Long id, long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+        String number = ApiServlet.str(b, "number", "Número da nota", 60, true);
+        LocalDate issue = ApiServlet.date(b, "issue_date", "Data de emissão");
+        LocalDate due = ApiServlet.optDate(b, "due_date", "Vencimento");
+        BigDecimal amount = ApiServlet.money(b, "amount", "Valor (R$)", true);
+        String status = ApiServlet.str(b, "status", "Situação", 10, true);
+        String desc = ApiServlet.str(b, "description", "Descrição", 500, false);
+        if (amount.signum() <= 0) throw new ApiException(400, "Informe um valor maior que zero.");
+        if (!INVOICE_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
+        if (due != null && due.isBefore(issue)) throw new ApiException(400, "O vencimento não pode ser anterior à emissão.");
+        if (!Boolean.TRUE.equals(project(spotId).get("closed_scope"))) throw new ApiException(400, "O controle financeiro é do projeto de escopo fechado.");
+        Map<String, Object> dup = id == null
+                ? Db.one("SELECT id FROM spot_invoices WHERE spot_id = ? AND LOWER(number) = ?", spotId, number.toLowerCase())
+                : Db.one("SELECT id FROM spot_invoices WHERE spot_id = ? AND LOWER(number) = ? AND id <> ?", spotId, number.toLowerCase(), id);
+        if (dup != null) throw new ApiException(400, "Já existe a nota " + number + " neste projeto.");
+        if (id == null) {
+            id = Db.insert("INSERT INTO spot_invoices(spot_id,number,issue_date,due_date,amount,status,description,created_by) VALUES(?,?,?,?,?,?,?,?)",
+                    spotId, number, issue, due, amount, status, desc, user.get("name"));
+        } else {
+            Db.update("UPDATE spot_invoices SET number=?, issue_date=?, due_date=?, amount=?, status=?, description=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    number, issue, due, amount, status, desc, id);
+        }
+        return Db.one("SELECT " + INVOICE_COLS + " FROM spot_invoices WHERE id = ?", id);
+    }
+
+    /** /spot/invoices/{id}/file: POST envia (ou troca) o arquivo da nota; GET baixa. */
+    private static Object invoiceFile(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
+        long id = Long.parseLong(s.get(2));
+        Map<String, Object> meta = Db.one("SELECT id, file_name FROM spot_invoices WHERE id = ?", id);
+        if (meta == null) throw new ApiException(404, "Nota não encontrada.");
+        if (m.equals("POST")) {
+            if (req.getContentLengthLong() > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+            String fileName = ApiServlet.header(req, "X-File-Name").replace('\\', '/');
+            fileName = fileName.substring(fileName.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "");
+            if (fileName.length() > 200) fileName = fileName.substring(fileName.length() - 200);
+            if (fileName.isBlank()) throw new ApiException(400, "Selecione um arquivo.");
+            String ext = ApiServlet.extOf(fileName);
+            if (!ApiServlet.MIME.containsKey(ext)) throw new ApiException(400, "Tipo de arquivo não permitido. Aceitos: " + String.join(", ", new java.util.TreeSet<>(ApiServlet.MIME.keySet())) + ".");
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            try (java.io.InputStream in = req.getInputStream()) {
+                byte[] chunk = new byte[16384];
+                int n;
+                while ((n = in.read(chunk)) > 0) {
+                    if (buf.size() + n > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+                    buf.write(chunk, 0, n);
+                }
+            }
+            if (buf.size() == 0) throw new ApiException(400, "O arquivo está vazio.");
+            Db.update("UPDATE spot_invoices SET file_name=?, file_size=?, file_content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", fileName, (long) buf.size(), buf.toByteArray(), id);
+            return Db.one("SELECT " + INVOICE_COLS + " FROM spot_invoices WHERE id = ?", id);
+        }
+        if (m.equals("GET")) {
+            String fileName = (String) meta.get("file_name");
+            if (fileName.isEmpty()) throw new ApiException(404, "Esta nota não tem arquivo anexado.");
+            String ext = ApiServlet.extOf(fileName);
+            resp.setContentType(ApiServlet.MIME.getOrDefault(ext, "application/octet-stream"));
+            resp.setHeader("X-Content-Type-Options", "nosniff");
+            resp.setHeader("Content-Security-Policy", "sandbox");
+            resp.setHeader("Content-Disposition", (ApiServlet.INLINE.contains(ext) ? "inline" : "attachment") + "; filename*=UTF-8\'\'"
+                    + java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"));
+            try (java.sql.Connection c = Db.get(); java.sql.PreparedStatement ps = c.prepareStatement("SELECT file_content FROM spot_invoices WHERE id = ?")) {
+                ps.setLong(1, id);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next() || rs.getBinaryStream(1) == null) throw new ApiException(404, "Arquivo não encontrado.");
+                    try (java.io.InputStream in = rs.getBinaryStream(1)) {
+                        in.transferTo(resp.getOutputStream());
+                    }
+                }
+            }
+            return ApiServlet.FILE_SENT;
+        }
+        throw new ApiException(405, "Operação não suportada.");
     }
 
     // ------------------------------------------------------------------ arquivos do escopo (somente registro)
@@ -270,6 +380,8 @@ final class SpotService {
         String provider = ApiServlet.str(b, "provider", "Fornecedor / equipe", 160, false);
         String desc = ApiServlet.str(b, "description", "Descrição", 2000, false);
         boolean closedScope = ApiServlet.bool(b, "closed_scope");
+        BigDecimal value = closedScope ? ApiServlet.money(b, "project_value", "Valor do projeto (R$)", true) : BigDecimal.ZERO.setScale(2);
+        if (closedScope && value.signum() <= 0) throw new ApiException(400, "Informe o valor do projeto (R$) do escopo fechado.");
         // escopo fechado: não controla horas (modelo e horas fixadas não se aplicam)
         String model = closedScope ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
         BigDecimal hours = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
@@ -285,11 +397,11 @@ final class SpotService {
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value);
         } else {
             Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=?, closed_scope=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, id);
+                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, id);
         }
         return project(id);
     }
@@ -310,6 +422,7 @@ final class SpotService {
             switch (table) {
                 case "spot_hours": return saveHour(id, spotId, b, user);
                 case "spot_demands": return saveDemand(id, spotId, b);
+                case "spot_invoices": return saveInvoice(id, spotId, b, user);
                 default: return saveAction(id, spotId, b);
             }
         }

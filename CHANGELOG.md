@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Escopo fechado, controle financeiro: novo campo "Valor do projeto (R$)" (obrigatório no escopo fechado) e nova guia "Financeiro" para lançar as notas (número, emissão, vencimento, valor, situação Emitida/Paga/Cancelada) com o PDF anexado, guardado no banco. A visão do projeto mostra Valor Projeto (R$), Faturado, A faturar, Recebido e % faturado; a lista de escopo fechado mostra valor e faturado. Notas canceladas não entram no faturado.
+
 - Escopo fechado: a demanda só conta como entregue quando existe ao menos um apontamento vinculado a ela. O percentual de entrega é demandas entregues ÷ demandas do escopo (as canceladas não contam). Todo apontamento de escopo fechado exige escolher "qual demanda este apontamento entrega". Os cartões mostram entregues, sem apontamento e concluídas sem apontamento (alerta); o Resumo e a aba Demandas mostram, por demanda, quantos apontamentos tem e se está entregue.
 
 - Projetos Spot por tipo: a lista agora tem guias "Contrato" (contratos recorrentes), "Escopo fechado" e, quando existirem, "Avulsos". Novo tipo Escopo fechado (flag no cadastro, excludente com Contrato): não controla horas (modelo e horas fixadas ficam desabilitados) e acompanha só o escopo, o que foi feito e o que foi entregue. Na tela do projeto, os cartões mostram demandas do escopo, entregues, em andamento, a iniciar e % entregue; apontamentos e demandas não têm horas; nova aba "Escopo" para anexar o PDF ou arquivo do projeto (até 25 MB), guardado no banco somente para registro, com abrir e excluir.

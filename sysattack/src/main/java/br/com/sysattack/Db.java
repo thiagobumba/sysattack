@@ -128,6 +128,23 @@ public final class Db {
                     + "uploaded_by VARCHAR(120) NOT NULL DEFAULT '',"
                     + "uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_spot_files ON spot_files(spot_id)");
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS project_value DECIMAL(14,2) DEFAULT 0 NOT NULL");
+            s.execute("CREATE TABLE IF NOT EXISTS spot_invoices ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
+                    + "number VARCHAR(60) NOT NULL,"
+                    + "issue_date DATE NOT NULL,"
+                    + "due_date DATE,"
+                    + "amount DECIMAL(14,2) NOT NULL,"
+                    + "status VARCHAR(10) NOT NULL DEFAULT 'EMITIDA',"
+                    + "description VARCHAR(500) NOT NULL DEFAULT '',"
+                    + "file_name VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "file_size BIGINT NOT NULL DEFAULT 0,"
+                    + "file_content BLOB,"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                    + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_spot_invoices ON spot_invoices(spot_id, issue_date)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_demands ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

@@ -38,7 +38,7 @@ const Spot = (() => {
   function spotOf(url) {
     const m = /^spot\/(\d+)/.exec(url);
     if (m) return Number(m[1]);
-    return /^spot\/(hours|demands|actions|reports|files)\//.test(url) ? st.id : null;
+    return /^spot\/(hours|demands|actions|reports|files|invoices)\//.test(url) ? st.id : null;
   }
   async function api(method, url, body) {
     if (method !== 'GET' && !/\/send$/.test(url)) {
@@ -86,6 +86,16 @@ const Spot = (() => {
       <div class="mini ${sc.done_no_entry ? 'neg' : ''}"><span>Concluídas sem apontamento</span><b>${sc.done_no_entry}</b></div>
       <div class="mini"><span>Entregue do escopo</span><b>${sc.pct}%</b></div></div>`;
   }
+  const brl = n => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const I_STATUS = { EMITIDA: ['Emitida', 'b-orange'], PAGA: ['Paga', 'b-green'], CANCELADA: ['Cancelada', 'b-grey'] };
+  function financeCards(f) {
+    return `<div class="mini-kpis">
+      <div class="mini accent"><span>Valor Projeto (R$)</span><b>${brl(f.project_value)}</b></div>
+      <div class="mini"><span>Faturado</span><b>${brl(f.invoiced)}</b></div>
+      <div class="mini ${Number(f.to_invoice) < 0 ? 'neg' : ''}"><span>A faturar</span><b>${brl(f.to_invoice)}</b></div>
+      <div class="mini"><span>Recebido</span><b>${brl(f.paid)}</b></div>
+      <div class="mini"><span>Faturado do valor</span><b>${f.pct_invoiced}%</b></div></div>`;
+  }
   const entryBadge = d => Number(d.entries) > 0 ? '<span class="badge b-green">Entregue</span>' : '<span class="badge b-grey">Sem apontamento</span>';
 
   // ------------------------------------------------------------------ vigência
@@ -115,10 +125,11 @@ const Spot = (() => {
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
-    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Arquivos do escopo</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Valor (R$)</th><th class="num">Faturado</th><th class="num">Arquivos do escopo</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
           <td>${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
+          <td class="num">${brl(p.project_value)}</td><td class="num">${brl(p.finance.invoiced)}<span class="small">${p.finance.pct_invoiced}%</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
@@ -140,13 +151,13 @@ const Spot = (() => {
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${p.closed_scope ? scopeCards(p.scope) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
+        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
+        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -155,7 +166,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), financeiro: b('sp-new-invoice', '+ Lançar nota'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -210,6 +221,15 @@ const Spot = (() => {
           <td>${esc(f.uploaded_by)}<span class="small">${esc(String(f.uploaded_at).slice(0, 16).replace('T', ' '))}</span></td>
           <td class="acts"><a class="btn btn-sm" href="api/spot/files/${f.id}/download" target="_blank" rel="noopener">Abrir</a>${locked() ? '' : `<button class="icon-btn del" title="Excluir" aria-label="Excluir arquivo" data-action="sp-del-file" data-id="${f.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum arquivo do escopo', 'Use “+ Anexar arquivo do escopo” para guardar o PDF ou o arquivo do projeto.')}`;
+    } else if (st.tab === 'financeiro') {
+      st.invoices = await api('GET', `spot/${id}/invoices`);
+      const f = st.data.finance;
+      host.innerHTML = `${financeCards(f)}<p class="hint" style="margin:14px 0 12px">Notas fiscais do escopo fechado. Notas canceladas não entram no total faturado.</p>
+        ${st.invoices.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Nota</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Arquivo</th><th></th></tr></thead><tbody>
+        ${st.invoices.map(n => `<tr><td class="strong">${esc(n.number)}${n.description ? `<span class="small">${esc(n.description)}</span>` : ''}</td><td>${fmt(n.issue_date)}</td><td>${n.due_date ? fmt(n.due_date) : '—'}</td>
+          <td class="num strong">${brl(n.amount)}</td><td>${badge(I_STATUS, n.status)}</td>
+          <td>${n.file_name ? `<a class="btn btn-sm" href="api/spot/invoices/${n.id}/file" target="_blank" rel="noopener" title="${esc(n.file_name)}">Abrir</a>` : '—'}</td>${iconBtns('invoice', n.id)}</tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhuma nota lançada', 'Use “+ Lançar nota” para registrar a nota fiscal e anexar o PDF.')}`;
     } else if (st.tab === 'demandas') {
       st.demands = await api('GET', `spot/${id}/demands`);
       host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th>${closedScope() ? '<th class="num">Apontamentos</th><th>Entrega</th>' : '<th class="num">Aprovado</th><th class="num">Realizado</th>'}<th></th></tr></thead><tbody>
@@ -253,6 +273,7 @@ const Spot = (() => {
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
         <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
         <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
+        <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label><input id="sv" name="project_value" type="number" min="0" step="0.01" value="${p.project_value || ''}"></div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
@@ -264,13 +285,15 @@ const Spot = (() => {
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
       // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
       const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
       const sync = () => {
         for (const n of ['hours_model', 'contracted_hours']) { f.elements[n].disabled = cs.checked; f.elements[n].required = !cs.checked && n === 'contracted_hours'; }
         if (cs.checked) rc.checked = false;
         rc.disabled = cs.checked;
+        f.elements.project_value.disabled = !cs.checked; f.elements.project_value.required = cs.checked;
+        document.getElementById('sv-f').style.display = cs.checked ? '' : 'none';
       };
       cs.addEventListener('change', sync);
       sync();
@@ -566,6 +589,38 @@ const Spot = (() => {
     }, 'Anexar');
   }
 
+  // ------------------------------------------------------------------ nota fiscal (financeiro do escopo fechado)
+  function invoiceForm(id) {
+    const x = id ? st.invoices.find(r => r.id === id) : { number: '', issue_date: todayIso(), due_date: '', amount: '', status: 'EMITIDA', description: '', file_name: '' };
+    A().openDialog(id ? 'Editar nota' : 'Lançar nota', `
+      <div class="field"><label for="in">Número da nota</label><input id="in" name="number" maxlength="60" value="${esc(x.number)}" required></div>
+      <div class="field"><label for="ia">Valor (R$)</label><input id="ia" name="amount" type="number" min="0.01" step="0.01" value="${x.amount}" required></div>
+      <div class="field"><label for="ie">Emissão</label><input id="ie" name="issue_date" type="date" value="${x.issue_date}" required></div>
+      <div class="field"><label for="iv">Vencimento <span class="opt">(opcional)</span></label><input id="iv" name="due_date" type="date" value="${x.due_date || ''}"></div>
+      <div class="field"><label for="is">Situação</label><select id="is" name="status">${opts(Object.fromEntries(Object.entries(I_STATUS).map(([k, v]) => [k, v[0]])), x.status)}</select></div>
+      <div class="field full"><label for="id">Descrição <span class="opt">(opcional)</span></label><input id="id" name="description" maxlength="500" value="${esc(x.description)}" placeholder="Ex.: 1ª parcela — kickoff"></div>
+      <div class="field full"><label for="if">Arquivo da nota (PDF) <span class="opt">(opcional)</span></label><input id="if" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.xml">${x.file_name ? `<span class="small">Atual: ${esc(x.file_name)}. Escolha outro para substituir.</span>` : ''}</div>
+      <p class="hint full">O arquivo é guardado no banco de dados (até 25 MB).</p>`, async d => {
+      const file = d.file;
+      if (file && file.name && file.size > 25 * 1024 * 1024) throw new Error('O arquivo é maior que 25 MB.');
+      const body = { number: d.number, amount: d.amount, issue_date: d.issue_date, due_date: d.due_date || null, status: d.status, description: d.description || '' };
+      const n = await api(id ? 'PUT' : 'POST', id ? 'spot/invoices/' + id : `spot/${st.id}/invoices`, body);
+      if (file && file.name) {
+        const headers = { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) };
+        if (closedIds.has(st.id)) {
+          const why = await askJustification('Alterar projeto encerrado');
+          if (!why) throw new Error('A nota foi salva, mas o arquivo não foi anexado (cancelado).');
+          headers['X-Justification'] = encodeURIComponent(why);
+        }
+        const r = await fetch(`api/spot/invoices/${n.id}/file`, { method: 'POST', credentials: 'same-origin', body: file, headers });
+        const data = await r.json().catch(() => null);
+        if (r.status === 401) { location.replace('login.html'); return; }
+        if (!r.ok) throw new Error('A nota foi salva, mas o arquivo falhou: ' + ((data && data.error) || 'erro ao enviar.'));
+      }
+      A().toast('Nota salva.');
+    });
+  }
+
   // ------------------------------------------------------------------ ações
   async function action(el) {
     const id = Number(el.dataset.id), a = el.dataset.action, dlg = document.getElementById('dlg');
@@ -578,6 +633,9 @@ const Spot = (() => {
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
       case 'sp-vig-all': st.from = null; st.to = null; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
+      case 'sp-new-invoice': invoiceForm(); break;
+      case 'sp-edit-invoice': invoiceForm(id); break;
+      case 'sp-del-invoice': await del('spot/invoices/' + id, 'Excluir esta nota?'); break;
       case 'sp-new-file': fileForm(); break;
       case 'sp-del-file': await del('spot/files/' + id, 'Excluir este arquivo do escopo?'); break;
       case 'sp-list-tab': listTab = el.dataset.kind; await viewList(); break;
