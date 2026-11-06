@@ -702,7 +702,7 @@ final class SpotService {
                 if (isImported(r)) throw new ApiException(400, "Relatórios importados não têm o texto editável aqui; importe o HTML novamente.");
                 JsonObject b = ApiServlet.body(req);
                 if (isManual(r)) {
-                    JsonObject data = ImportedReportHtml.normalize(b);
+                    JsonObject data = ScopeReportHtml.normalize(b);
                     String json = GSON.toJson(data);
                     if (json.length() > 150000) throw new ApiException(400, "Relatório grande demais.");
                     String t = data.get("titulo").getAsString();
@@ -743,7 +743,7 @@ final class SpotService {
 
     /** Guarda um Status Report importado de HTML (mesmo conteúdo do arquivo), sem passar pelo Claude. */
     private static Object importStatusReport(long spotId, JsonObject b, Map<String, Object> user, String model) throws SQLException {
-        JsonObject data = ImportedReportHtml.normalize(b);
+        JsonObject data = "manual".equals(model) ? ScopeReportHtml.normalize(b) : ImportedReportHtml.normalize(b);
         String title = data.get("titulo").getAsString();
         if (title.isEmpty()) title = "Status Report da Fábrica";
         if (title.length() > 200) title = title.substring(0, 200);
@@ -760,7 +760,10 @@ final class SpotService {
     }
 
     private static String renderReport(Map<String, Object> r, boolean email) {
-        if (statusLayout(r)) return ImportedReportHtml.render(JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject());
+        if (statusLayout(r)) {
+            JsonObject sd = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
+            return isManual(r) ? ScopeReportHtml.render(sd) : ImportedReportHtml.render(sd);
+        }
         JsonObject snap = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
         JsonObject narr = JsonParser.parseString((String) r.get("narrative")).getAsJsonObject();
         return SpotReportHtml.render((String) r.get("title"), (String) r.get("created_by"), (String) r.get("created_at"), snap, narr,
