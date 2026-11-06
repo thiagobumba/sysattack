@@ -44,6 +44,8 @@ Novos usuários recebem um e-mail de boas-vindas com um link para criar a senha.
 `app.url=https://sysattack.suaempresa.com.br` (também aceito: `-Dsysattack.url=` ou a variável `SYSATTACK_URL`). O texto das políticas de uso do e-mail fica em `Invites.java`; revise-o com o jurídico/TI.
 Cada pessoa pode ativar a **verificação em duas etapas** em Usuários > Segurança da conta; o administrador pode exigi-la na edição do usuário.
 
+Há um modelo pronto em `config.properties` (na raiz do projeto): copie-o para a pasta de dados, ajuste os valores e reinicie o Tomcat. O arquivo do projeto não é lido pelo sistema; só o da pasta de dados.
+
 Para **testar sem e-mail**, use somente `smtp.dev=true` (o código aparece no log do Tomcat — não use em produção).
 
 ## 5. Funcionalidades
