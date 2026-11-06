@@ -11,8 +11,15 @@ Set-Location $PSScriptRoot
 
 function Atualizar {
     git fetch origin
+    if ($LASTEXITCODE -ne 0) { throw "git fetch falhou." }
     git checkout $Branch
+    if ($LASTEXITCODE -ne 0) { throw "git checkout $Branch falhou." }
     git pull origin $Branch
+    if ($LASTEXITCODE -ne 0) {
+        throw "git pull falhou (provavelmente alterações locais em arquivos do projeto). NÃO vou gerar o .war com código antigo. Veja 'git status'; para descartar as alterações locais e igualar ao GitHub: git reset --hard origin/$Branch"
+    }
+    $local = (git rev-parse HEAD).Trim(); $remoto = (git rev-parse "origin/$Branch").Trim()
+    if ($local -ne $remoto) { throw "O código local ($($local.Substring(0,8))) não está igual ao GitHub ($($remoto.Substring(0,8))). Resolva com: git reset --hard origin/$Branch" }
     git log --oneline -3
 
     $app = Join-Path $PSScriptRoot "sysattack"
