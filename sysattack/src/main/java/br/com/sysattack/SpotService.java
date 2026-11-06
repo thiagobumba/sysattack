@@ -55,7 +55,7 @@ final class SpotService {
         } catch (NumberFormatException e) {
             // /spot/{hours|demands|actions|reports}/{id}
         }
-        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : null;
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : null;
         if (table == null || s.size() < 3) return null;
         Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
@@ -88,6 +88,7 @@ final class SpotService {
                 case "hours": return itemRoute(m, s, req, "spot_hours", user);
                 case "demands": return itemRoute(m, s, req, "spot_demands", user);
                 case "actions": return itemRoute(m, s, req, "spot_actions", user);
+                case "files": return fileRoute(m, s, resp);
                 case "reports": return reportRoute(m, s, req, resp, user);
                 default: break;
             }
@@ -111,6 +112,10 @@ final class SpotService {
                     case "actions":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_actions WHERE spot_id = ? ORDER BY kind, CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END, id", id);
                         if (m.equals("POST")) return saveAction(null, id, ApiServlet.body(req));
+                        break;
+                    case "files":
+                        if (m.equals("GET")) return Db.query("SELECT id, spot_id, title, description, file_name, size, uploaded_by, uploaded_at FROM spot_files WHERE spot_id = ? ORDER BY id DESC", id);
+                        if (m.equals("POST")) return uploadFile(id, req, user);
                         break;
                     case "audit":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_audit WHERE spot_id = ? ORDER BY created_at DESC, id DESC LIMIT 200", id);
@@ -146,6 +151,7 @@ final class SpotService {
             Map<String, Object> snap = SpotCalc.snapshot(p, LocalDate.now());
             p.put("kpi", snap.get("kpi"));
             p.put("period_label", snap.get("period_label"));
+            p.put("scope", scopeSummary(((Number) p.get("id")).longValue()));
         }
         return rows;
     }
@@ -157,7 +163,87 @@ final class SpotService {
             try { r = LocalDate.parse(ref); } catch (DateTimeParseException e) { throw new ApiException(400, "Data de referência inválida."); }
         }
         p.put("summary", SpotCalc.snapshot(p, r));
+        p.put("scope", scopeSummary(id));
         return p;
+    }
+
+    /** Escopo fechado: quantas demandas existem (sem as canceladas), quantas foram entregues e a divisão por situação. */
+    private static Map<String, Object> scopeSummary(long id) throws SQLException {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> by = new LinkedHashMap<>();
+        int total = 0, done = 0;
+        for (Map<String, Object> r : Db.query("SELECT status, COUNT(*) c FROM spot_demands WHERE spot_id = ? GROUP BY status", id)) {
+            int c = ((Number) r.get("c")).intValue();
+            by.put((String) r.get("status"), c);
+            if (!"CANCELADA".equals(r.get("status"))) total += c;
+            if ("CONCLUIDA".equals(r.get("status"))) done += c;
+        }
+        out.put("total", total);
+        out.put("done", done);
+        out.put("pct", total == 0 ? 0 : Math.round(done * 100.0 / total));
+        out.put("by_status", by);
+        out.put("files", ((Number) Db.one("SELECT COUNT(*) c FROM spot_files WHERE spot_id = ?", id).get("c")).intValue());
+        return out;
+    }
+
+    // ------------------------------------------------------------------ arquivos do escopo (somente registro)
+    private static Object uploadFile(long spotId, HttpServletRequest req, Map<String, Object> user) throws Exception {
+        if (req.getContentLengthLong() > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+        String fileName = ApiServlet.header(req, "X-File-Name").replace('\\', '/');
+        fileName = fileName.substring(fileName.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "");
+        if (fileName.length() > 200) fileName = fileName.substring(fileName.length() - 200);
+        if (fileName.isBlank()) throw new ApiException(400, "Selecione um arquivo.");
+        String ext = ApiServlet.extOf(fileName);
+        if (!ApiServlet.MIME.containsKey(ext)) throw new ApiException(400, "Tipo de arquivo não permitido. Aceitos: " + String.join(", ", new java.util.TreeSet<>(ApiServlet.MIME.keySet())) + ".");
+        String title = ApiServlet.header(req, "X-Doc-Title");
+        if (title.isEmpty()) title = fileName.substring(0, Math.max(1, fileName.length() - ext.length() - 1));
+        if (title.length() > 160) throw new ApiException(400, "O título excede 160 caracteres.");
+        String description = ApiServlet.header(req, "X-Doc-Description");
+        if (description.length() > 500) throw new ApiException(400, "A descrição excede 500 caracteres.");
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try (java.io.InputStream in = req.getInputStream()) {
+            byte[] chunk = new byte[16384];
+            int n;
+            while ((n = in.read(chunk)) > 0) {
+                if (buf.size() + n > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+                buf.write(chunk, 0, n);
+            }
+        }
+        if (buf.size() == 0) throw new ApiException(400, "O arquivo está vazio.");
+        long id = Db.insert("INSERT INTO spot_files(spot_id,title,description,file_name,size,content,uploaded_by) VALUES(?,?,?,?,?,?,?)",
+                spotId, title, description, fileName, (long) buf.size(), buf.toByteArray(), user.get("name"));
+        return Db.one("SELECT id, spot_id, title, description, file_name, size, uploaded_by, uploaded_at FROM spot_files WHERE id = ?", id);
+    }
+
+    /** /spot/files/{id} (DELETE) e /spot/files/{id}/download (GET). */
+    private static Object fileRoute(String m, List<String> s, HttpServletResponse resp) throws Exception {
+        if (s.size() < 3) throw new ApiException(405, "Operação não suportada.");
+        long id = Long.parseLong(s.get(2));
+        Map<String, Object> meta = Db.one("SELECT id, file_name FROM spot_files WHERE id = ?", id);
+        if (meta == null) throw new ApiException(404, "Arquivo não encontrado.");
+        if (s.size() == 3 && m.equals("DELETE")) {
+            Db.update("DELETE FROM spot_files WHERE id = ?", id);
+            return Map.of("ok", true);
+        }
+        if (s.size() == 4 && s.get(3).equals("download") && m.equals("GET")) {
+            String fileName = (String) meta.get("file_name"), ext = ApiServlet.extOf(fileName);
+            resp.setContentType(ApiServlet.MIME.getOrDefault(ext, "application/octet-stream"));
+            resp.setHeader("X-Content-Type-Options", "nosniff");
+            resp.setHeader("Content-Security-Policy", "sandbox");
+            resp.setHeader("Content-Disposition", (ApiServlet.INLINE.contains(ext) ? "inline" : "attachment") + "; filename*=UTF-8\'\'"
+                    + java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"));
+            try (java.sql.Connection c = Db.get(); java.sql.PreparedStatement ps = c.prepareStatement("SELECT content FROM spot_files WHERE id = ?")) {
+                ps.setLong(1, id);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new ApiException(404, "Arquivo não encontrado.");
+                    try (java.io.InputStream in = rs.getBinaryStream(1)) {
+                        in.transferTo(resp.getOutputStream());
+                    }
+                }
+            }
+            return ApiServlet.FILE_SENT;
+        }
+        throw new ApiException(405, "Operação não suportada.");
     }
 
     private static String normalizeRecipients(String raw) {
@@ -177,11 +263,13 @@ final class SpotService {
         String client = ApiServlet.str(b, "client", "Cliente", 160, false);
         String provider = ApiServlet.str(b, "provider", "Fornecedor / equipe", 160, false);
         String desc = ApiServlet.str(b, "description", "Descrição", 2000, false);
-        String model = ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
-        BigDecimal hours = ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
+        boolean closedScope = ApiServlet.bool(b, "closed_scope");
+        // escopo fechado: não controla horas (modelo e horas fixadas não se aplicam)
+        String model = closedScope ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
+        BigDecimal hours = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
         LocalDate start = ApiServlet.date(b, "start_date", "Início");
         LocalDate end = ApiServlet.optDate(b, "end_date", "Data final");
-        boolean recurring = ApiServlet.bool(b, "recurring");
+        boolean recurring = !closedScope && ApiServlet.bool(b, "recurring"); // escopo fechado e contrato são tipos excludentes
         String status = ApiServlet.str(b, "status", "Situação", 12, true);
         String participants = ApiServlet.str(b, "participants", "Participantes", 1000, false);
         String recipients = normalizeRecipients(ApiServlet.str(b, "recipients", "Destinatários", 1000, false));
@@ -191,11 +279,11 @@ final class SpotService {
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope);
         } else {
             Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, id);
+                    + " participants=?, recipients=?, billing_note=?, closed_scope=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, id);
         }
         return project(id);
     }
@@ -248,9 +336,11 @@ final class SpotService {
         String front = ApiServlet.str(b, "front", "Frente", 80, false);
         String activity = ApiServlet.str(b, "activity", "Atividade", 300, true);
         Long demand = ApiServlet.optLong(b, "demand_id");
-        BigDecimal hours = ApiServlet.money(b, "hours", "Horas", true);
-        if (hours.signum() <= 0 || hours.compareTo(new BigDecimal("9999")) > 0) throw new ApiException(400, "Informe horas maiores que zero (máximo 9999).");
         Map<String, Object> sp = project(spotId);
+        boolean noHours = Boolean.TRUE.equals(sp.get("closed_scope")); // escopo fechado: apontamento sem controle de horas
+        BigDecimal hours = ApiServlet.money(b, "hours", "Horas", !noHours);
+        if (!noHours && (hours.signum() <= 0 || hours.compareTo(new BigDecimal("9999")) > 0)) throw new ApiException(400, "Informe horas maiores que zero (máximo 9999).");
+        if (noHours && hours.compareTo(new BigDecimal("9999")) > 0) throw new ApiException(400, "Horas inválidas.");
         LocalDate vs = SpotCalc.vigStart(sp), ve = SpotCalc.vigEnd(sp);
         if (d.isBefore(vs) || (ve != null && d.isAfter(ve))) {
             throw new ApiException(400, "A data do lançamento precisa estar dentro da vigência do contrato (" + SpotReportHtml.date(vs.toString())

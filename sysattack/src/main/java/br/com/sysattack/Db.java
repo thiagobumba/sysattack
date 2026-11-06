@@ -116,6 +116,18 @@ public final class Db {
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS end_date DATE");
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS recurring BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS closed_scope BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("CREATE TABLE IF NOT EXISTS spot_files ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
+                    + "title VARCHAR(160) NOT NULL,"
+                    + "description VARCHAR(500) NOT NULL DEFAULT '',"
+                    + "file_name VARCHAR(200) NOT NULL,"
+                    + "size BIGINT NOT NULL,"
+                    + "content BLOB NOT NULL,"
+                    + "uploaded_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_spot_files ON spot_files(spot_id)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_demands ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

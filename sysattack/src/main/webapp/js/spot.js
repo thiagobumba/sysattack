@@ -8,6 +8,7 @@ const Spot = (() => {
   const clampDate = (iso, p) => (iso < p.start_date ? p.start_date : p.end_date && iso > p.end_date ? p.end_date : iso);
   const vigText = p => p.end_date ? `${fmt(p.start_date)} a ${fmt(p.end_date)}` : `${fmt(p.start_date)} em diante`;
   const vigLine = () => `<p class="hint" style="margin:0 0 14px"><b>Vigência do contrato:</b> ${vigText(st.data)}</p>`;
+  const closedScope = () => !!(st.data && st.data.closed_scope);
   const isAdmin = () => A().me && A().me.role === 'ADMIN';
   const locked = () => !!(st.data && st.data.status === 'ENCERRADO' && !isAdmin());
   function askJustification(title) {
@@ -37,7 +38,7 @@ const Spot = (() => {
   function spotOf(url) {
     const m = /^spot\/(\d+)/.exec(url);
     if (m) return Number(m[1]);
-    return /^spot\/(hours|demands|actions|reports)\//.test(url) ? st.id : null;
+    return /^spot\/(hours|demands|actions|reports|files)\//.test(url) ? st.id : null;
   }
   async function api(method, url, body) {
     if (method !== 'GET' && !/\/send$/.test(url)) {
@@ -76,27 +77,54 @@ const Spot = (() => {
       <div class="mini ${projNeg ? 'neg' : ''}"><span>Saldo projetado</span><b>${h(k.projected)}</b></div></div>`;
   }
 
+  function scopeCards(sc) {
+    const b = sc.by_status || {}, n = (...k) => k.reduce((a, x) => a + (b[x] || 0), 0);
+    return `<div class="mini-kpis">
+      <div class="mini"><span>Demandas do escopo</span><b>${sc.total}</b></div>
+      <div class="mini accent"><span>Entregues (concluídas)</span><b>${sc.done}</b></div>
+      <div class="mini"><span>Em andamento / homologação</span><b>${n('EM_ANDAMENTO', 'EM_HOMOLOGACAO')}</b></div>
+      <div class="mini"><span>A iniciar / em espera</span><b>${n('EM_ANALISE', 'APROVADO', 'EM_ESPERA')}</b></div>
+      <div class="mini"><span>Entregue do escopo</span><b>${sc.pct}%</b></div></div>`;
+  }
+
   // ------------------------------------------------------------------ vigência
   const overdue = p => p.end_date && p.status === 'ATIVO' && p.end_date < todayIso();
   const vigencia = p => p.end_date ? `<span class="small ${overdue(p) ? 'late-txt' : ''}">até ${fmt(p.end_date)}${overdue(p) ? ' · vigência encerrada' : ''}</span>` : '';
   const endedNote = p => overdue(p) ? '<span class="small late-txt">Vigência encerrada: encerre o projeto ou ajuste a data.</span>' : '';
 
-  // ------------------------------------------------------------------ lista
+  // ------------------------------------------------------------------ lista (guias por tipo de projeto)
+  const KINDS = { CONTRATO: 'Contrato', ESCOPO: 'Escopo fechado', AVULSO: 'Avulsos' };
+  const kindOf = p => p.closed_scope ? 'ESCOPO' : p.recurring ? 'CONTRATO' : 'AVULSO';
+  let listTab = 'CONTRATO';
+  const pct = p => `<div class="pbar"><div class="pbar-track"><div class="pbar-fill${p >= 100 ? ' done' : ''}" style="width:${p}%"></div></div><span>${p}%</span></div>`;
+
   async function viewList() {
     const list = await api('GET', 'spot');
     list.forEach(p => { if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id); });
-    A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas: consumo, demandas e relatórios de acompanhamento.') + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira spot</h2>
-        <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
-        <div class="table-wrap">${list.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${list.map(p => `<tr class="click" data-go="#/spot/${p.id}"><td class="strong">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></td>
+    const count = k => list.filter(p => kindOf(p) === k).length;
+    if (!count(listTab) && listTab !== 'CONTRATO' && listTab !== 'ESCOPO') listTab = 'CONTRATO';
+    const kinds = ['CONTRATO', 'ESCOPO'].concat(count('AVULSO') || listTab === 'AVULSO' ? ['AVULSO'] : []);
+    const rows = list.filter(p => kindOf(p) === listTab);
+    const acts = p => `<td class="acts">${p.recurring && !p.closed_scope ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
+          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td>`;
+    const name = p => `<td class="strong">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></td>`;
+    const tableHours = `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
-          <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>
-          <td class="acts">${p.recurring ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
-          <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table>`
-        : empty('Nenhum projeto spot ainda', 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
+          <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
+    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Arquivos do escopo</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
+          <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
+          <td>${pct(p.scope.pct)}<span class="small">${p.scope.done} de ${p.scope.total} demanda(s) concluída(s)</span></td>
+          <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
+    A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
+      <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
+        ${kinds.map(k => `<button class="tab ${listTab === k ? 'active' : ''}" data-action="sp-list-tab" data-kind="${k}">${KINDS[k]} (${count(k)})</button>`).join('')}</div>
+        <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
+        <div class="table-wrap">${rows.length ? (listTab === 'ESCOPO' ? tableScope : tableHours)
+        : empty('Nenhum projeto nesta guia', listTab === 'ESCOPO' ? 'Cadastre um projeto marcando “Escopo fechado”: não controla horas, só escopo, demandas e entregas.' : 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
   }
 
   // ------------------------------------------------------------------ detalhe
@@ -107,17 +135,17 @@ const Spot = (() => {
     if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
-    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, MODEL[p.hours_model] + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
+    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
- <a class="btn btn-sm" href="#/spot">← Voltar</a>${p.recurring ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
+ <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
+        ${p.closed_scope ? scopeCards(p.scope) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
-        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Contrato</dt><dd>${p.recurring ? '<span class="badge b-dark">Recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${tab('horas', 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
+        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${tab('relatorios', 'Relatórios com Claude')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -126,10 +154,17 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = locked() ? '' : { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
+      if (closedScope()) {
+        const sc = st.data.scope, ST_ORDER = ['CONCLUIDA', 'EM_HOMOLOGACAO', 'EM_ANDAMENTO', 'APROVADO', 'EM_ANALISE', 'EM_ESPERA', 'CANCELADA'];
+        host.innerHTML = `${vigLine()}<h3 style="margin:0 0 10px;font-size:15px">Entrega do escopo</h3>${pct(sc.pct)}
+          <div class="table-wrap" style="margin-top:14px"><table class="tbl"><thead><tr><th>Situação das demandas</th><th class="num">Quantidade</th></tr></thead><tbody>
+          ${ST_ORDER.filter(k => (sc.by_status || {})[k]).map(k => `<tr><td>${badge(D_STATUS, k)}</td><td class="num">${sc.by_status[k]}</td></tr>`).join('') || '<tr><td colspan="2" class="small">Nenhuma demanda cadastrada.</td></tr>'}</tbody></table></div>
+          <p class="hint" style="margin-top:14px">${sc.files} arquivo(s) do escopo anexado(s) na aba “Escopo”. Este projeto não controla horas.</p>`;
+      } else
       host.innerHTML = `${vigLine()}${s.by_item.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Frente</th><th>Atividade</th><th class="num">Horas</th></tr></thead><tbody>
         ${s.by_item.map(i => `<tr><td>${esc(i.front || '—')}</td><td class="strong">${esc(i.label)}</td><td class="num">${h(i.hours)}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Sem horas no período', 'Lance as horas consumidas na aba “Apontamentos de horas”.')}
@@ -143,15 +178,15 @@ const Spot = (() => {
       const v = vigRange(st.data);
       const from = st.from || v.s, to = st.to || v.e;
       st.hours = await api('GET', `spot/${id}/hours?from=${from}&to=${to || '2999-12-31'}`);
-      const total = st.hours.reduce((a, x) => a + Number(x.hours), 0);
+      const total = st.hours.reduce((a, x) => a + Number(x.hours), 0), cs = closedScope();
       const inp = 'min-height:36px;border:1px solid #cfcfcf;padding:0 10px';
       host.innerHTML = `${vigLine()}<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><label for="sp-f" class="hint">De</label>
         <input id="sp-f" type="date" value="${from}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}"><label for="sp-t" class="hint">Até</label>
         <input id="sp-t" type="date" value="${to}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}">
-        <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} lançamento(s) · <b>${h(total)}</b></span></div>
-        ${st.hours.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Frente</th><th>Atividade</th><th>Demanda</th><th class="num">Horas</th><th></th></tr></thead><tbody>
-        ${st.hours.map(x => `<tr><td>${fmt(x.work_date)}</td><td>${esc(x.front || '—')}</td><td class="strong">${esc(x.activity)}</td><td>${esc(x.demand_name || '—')}</td><td class="num">${h(x.hours)}</td>${iconBtns('hour', x.id)}</tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
+        <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} ${cs ? 'apontamento(s)' : `lançamento(s) · <b>${h(total)}</b>`}</span></div>
+        ${st.hours.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Frente</th><th>Atividade</th><th>Demanda</th>${cs ? '' : '<th class="num">Horas</th>'}<th></th></tr></thead><tbody>
+        ${st.hours.map(x => `<tr><td>${fmt(x.work_date)}</td><td>${esc(x.front || '—')}</td><td class="strong">${esc(x.activity)}</td><td>${esc(x.demand_name || '—')}</td>${cs ? '' : `<td class="num">${h(x.hours)}</td>`}${iconBtns('hour', x.id)}</tr>`).join('')}</tbody></table></div>`
+        : cs ? empty('Nenhum apontamento neste filtro', 'Use “+ Novo apontamento” para registrar o que foi feito e entregue.') : empty('Nenhum lançamento neste filtro', 'Use “+ Lançar horas” para registrar o consumo (ex.: horas exportadas do Salesforce).')}`;
       const rangeChanged = () => {
         const f = document.getElementById('sp-f').value, t = document.getElementById('sp-t').value;
         if (f && t && f > t) { A().toast('A data inicial não pode ser depois da final.'); return; }
@@ -159,13 +194,23 @@ const Spot = (() => {
       };
       document.getElementById('sp-f').addEventListener('change', rangeChanged);
       document.getElementById('sp-t').addEventListener('change', rangeChanged);
+    } else if (st.tab === 'escopo') {
+      st.files = await api('GET', `spot/${id}/files`);
+      const fsz = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
+      host.innerHTML = `${vigLine()}${st.data.description ? `<p class="scope-text" style="margin-bottom:18px">${esc(st.data.description)}</p>` : ''}
+        <p class="hint" style="margin:0 0 12px">Arquivos do escopo (PDF, proposta, contrato…) guardados no banco somente para registro.</p>
+        ${st.files.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Tamanho</th><th>Enviado por</th><th></th></tr></thead><tbody>
+        ${st.files.map(f => `<tr><td class="strong">${esc(f.title)}<span class="small">${esc(f.file_name)}${f.description ? ' · ' + esc(f.description) : ''}</span></td><td>${fsz(f.size)}</td>
+          <td>${esc(f.uploaded_by)}<span class="small">${esc(String(f.uploaded_at).slice(0, 16).replace('T', ' '))}</span></td>
+          <td class="acts"><a class="btn btn-sm" href="api/spot/files/${f.id}/download" target="_blank" rel="noopener">Abrir</a>${locked() ? '' : `<button class="icon-btn del" title="Excluir" aria-label="Excluir arquivo" data-action="sp-del-file" data-id="${f.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhum arquivo do escopo', 'Use “+ Anexar arquivo do escopo” para guardar o PDF ou o arquivo do projeto.')}`;
     } else if (st.tab === 'demandas') {
       st.demands = await api('GET', `spot/${id}/demands`);
-      host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th><th class="num">Aprovado</th><th class="num">Realizado</th><th></th></tr></thead><tbody>
+      host.innerHTML = vigLine() + (st.demands.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th>Próximo passo</th>${closedScope() ? '' : '<th class="num">Aprovado</th><th class="num">Realizado</th>'}<th></th></tr></thead><tbody>
         ${st.demands.map(d => `<tr><td class="strong">${esc(d.name)}${d.notes ? `<span class="small">${esc(d.notes)}</span>` : ''}</td><td>${badge(D_STATUS, d.status)}</td><td>${esc(d.next_step || '—')}</td>
-          <td class="num">${Number(d.approved_hours) > 0 ? h(d.approved_hours) : '—'}</td>
-          <td class="num ${Number(d.approved_hours) > 0 && Number(d.hours_total) > Number(d.approved_hours) ? 'late-txt' : ''}">${h(d.hours_total)}</td>${iconBtns('demand', d.id)}</tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhuma demanda', 'Cadastre as demandas (com horas aprovadas) para comparar realizado × aprovado.'));
+          ${closedScope() ? '' : `<td class="num">${Number(d.approved_hours) > 0 ? h(d.approved_hours) : '—'}</td>
+          <td class="num ${Number(d.approved_hours) > 0 && Number(d.hours_total) > Number(d.approved_hours) ? 'late-txt' : ''}">${h(d.hours_total)}</td>`}${iconBtns('demand', d.id)}</tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhuma demanda', closedScope() ? 'Cadastre as demandas do escopo e acompanhe a entrega de cada uma.' : 'Cadastre as demandas (com horas aprovadas) para comparar realizado × aprovado.'));
     } else if (st.tab === 'acoes') {
       st.actions = await api('GET', `spot/${id}/actions`);
       host.innerHTML = vigLine() + (st.actions.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Situação</th><th></th></tr></thead><tbody>
@@ -190,12 +235,12 @@ const Spot = (() => {
     const o = await api('GET', 'spot/' + fromId);
     if (!o.recurring) throw new Error('Só é possível copiar projetos do tipo contrato recorrente.');
     return { name: o.name, client: o.client, provider: o.provider, description: '', hours_model: o.hours_model, contracted_hours: o.contracted_hours,
-      start_date: '', end_date: '', recurring: true, status: 'ATIVO', participants: o.participants, recipients: o.recipients, billing_note: '' };
+      start_date: '', end_date: '', recurring: true, closed_scope: false, status: 'ATIVO', participants: o.participants, recipients: o.recipients, billing_note: '' };
   }
 
   function projectForm(id, copyFrom) {
     return (async () => {
-      const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: false, status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
+      const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: listTab === 'CONTRATO', closed_scope: listTab === 'ESCOPO', status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
       A().openDialog(id ? 'Editar projeto spot' : copyFrom ? 'Copiar projeto spot' : 'Novo projeto spot', `
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
@@ -205,6 +250,7 @@ const Spot = (() => {
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
+        <div class="field full"><label class="check"><input type="checkbox" name="closed_scope" ${p.closed_scope ? 'checked' : ''}> <b>Escopo fechado</b> — não controla horas; controla só o escopo, o que foi feito e entregue (demandas e apontamentos) e guarda o arquivo do escopo.</label></div>
         <div class="field full"><label class="check"><input type="checkbox" name="recurring" ${p.recurring ? 'checked' : ''}> <b>Contrato recorrente</b> — repete a cada período (ex.: franquia mensal). O cadastro continua o mesmo; muda só o que é registrado nas demandas.</label></div>
         <div class="field full"><label for="spa">Participantes do comitê</label><input id="spa" name="participants" maxlength="1000" value="${esc(p.participants)}" placeholder="Nomes separados por vírgula"></div>
         <div class="field full"><label for="sr">Destinatários dos relatórios (e-mails)</label><input id="sr" name="recipients" maxlength="1000" value="${esc(p.recipients)}" placeholder="gestor1@empresa.com, gestor2@empresa.com"></div>
@@ -212,20 +258,29 @@ const Spot = (() => {
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, recurring: !!d.recurring, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+      // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
+      const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
+      const sync = () => {
+        for (const n of ['hours_model', 'contracted_hours']) { f.elements[n].disabled = cs.checked; f.elements[n].required = !cs.checked && n === 'contracted_hours'; }
+        if (cs.checked) rc.checked = false;
+        rc.disabled = cs.checked;
+      };
+      cs.addEventListener('change', sync);
+      sync();
     })();
   }
 
   async function hourForm(id) {
     const demands = await api('GET', `spot/${st.id}/demands`);
     const x = id ? st.hours.find(r => r.id === id) : { work_date: clampDate(todayIso(), st.data), front: '', activity: '', demand_id: '', hours: '' };
-    A().openDialog(id ? 'Editar lançamento' : 'Lançar horas', `
+    A().openDialog(id ? (closedScope() ? 'Editar apontamento' : 'Editar lançamento') : (closedScope() ? 'Novo apontamento' : 'Lançar horas'), `
       <div class="field"><label for="hd">Data</label><input id="hd" name="work_date" type="date" value="${x.work_date}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
-      <div class="field"><label for="hh">Horas</label><input id="hh" name="hours" type="number" min="0.1" step="0.1" value="${x.hours}" required></div>
+      ${closedScope() ? '' : `<div class="field"><label for="hh">Horas</label><input id="hh" name="hours" type="number" min="0.1" step="0.1" value="${x.hours}" required></div>`}
       <div class="field"><label for="hf">Frente</label><input id="hf" name="front" maxlength="80" value="${esc(x.front)}" placeholder="Ex.: Suporte, Chatbot"></div>
       <div class="field"><label for="hm">Demanda</label><select id="hm" name="demand_id"><option value="">— nenhuma —</option>${demands.map(d => `<option value="${d.id}"${d.id === x.demand_id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
       <div class="field full"><label for="ha">Atividade</label><input id="ha" name="activity" maxlength="300" value="${esc(x.activity)}" required></div>`,
-      async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/hours/' + id : `spot/${st.id}/hours`, d); A().toast('Horas salvas.'); });
+      async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/hours/' + id : `spot/${st.id}/hours`, d); A().toast(closedScope() ? 'Apontamento salvo.' : 'Horas salvas.'); });
   }
 
   function demandForm(id) {
@@ -233,7 +288,7 @@ const Spot = (() => {
     A().openDialog(id ? 'Editar demanda' : 'Nova demanda', `
       <div class="field full"><label for="dn">Demanda</label><input id="dn" name="name" maxlength="200" value="${esc(x.name)}" required></div>
       <div class="field"><label for="ds">Situação</label><select id="ds" name="status">${opts(D_STATUS, x.status)}</select></div>
-      <div class="field"><label for="dh">Horas aprovadas</label><input id="dh" name="approved_hours" type="number" min="0" step="0.5" value="${Number(x.approved_hours) > 0 ? x.approved_hours : ''}" placeholder="Opcional"></div>
+      ${closedScope() ? '' : `<div class="field"><label for="dh">Horas aprovadas</label><input id="dh" name="approved_hours" type="number" min="0" step="0.5" value="${Number(x.approved_hours) > 0 ? x.approved_hours : ''}" placeholder="Opcional"></div>`}
       <div class="field full"><label for="dp">Próximo passo</label><input id="dp" name="next_step" maxlength="500" value="${esc(x.next_step)}"></div>
       <div class="field full"><label for="do">Observações</label><textarea id="do" name="notes" maxlength="1000">${esc(x.notes)}</textarea></div>`,
       async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/demands/' + id : `spot/${st.id}/demands`, d); A().toast('Demanda salva.'); });
@@ -480,6 +535,31 @@ const Spot = (() => {
     inp.click();
   }
 
+  // ------------------------------------------------------------------ arquivo do escopo (somente registro)
+  function fileForm() {
+    A().openDialog('Anexar arquivo do escopo', `
+      <div class="field full"><label for="ff">Arquivo (PDF, Word, Excel, imagem…)</label><input id="ff" name="file" type="file" required></div>
+      <div class="field full"><label for="ft">Título (opcional)</label><input id="ft" name="title" maxlength="160" placeholder="Ex.: Proposta técnica v3"></div>
+      <div class="field full"><label for="fd">Descrição (opcional)</label><input id="fd" name="description" maxlength="500"></div>
+      <p class="hint full">O arquivo é guardado no banco de dados somente para registro (até 25 MB).</p>`, async d => {
+      const file = d.file;
+      if (!file || !file.name) throw new Error('Selecione um arquivo.');
+      if (file.size > 25 * 1024 * 1024) throw new Error('O arquivo é maior que 25 MB.');
+      const headers = { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name),
+        'X-Doc-Title': encodeURIComponent(d.title || ''), 'X-Doc-Description': encodeURIComponent(d.description || '') };
+      if (closedIds.has(st.id)) { // projeto encerrado: justificativa obrigatória
+        const why = await askJustification('Alterar projeto encerrado');
+        if (!why) throw new Error('Alteração cancelada.');
+        headers['X-Justification'] = encodeURIComponent(why);
+      }
+      const r = await fetch(`api/spot/${st.id}/files`, { method: 'POST', credentials: 'same-origin', body: file, headers });
+      const data = await r.json().catch(() => null);
+      if (r.status === 401) { location.replace('login.html'); return; }
+      if (!r.ok) throw new Error((data && data.error) || 'Falha ao enviar o arquivo.');
+      A().toast('Arquivo anexado.');
+    }, 'Anexar');
+  }
+
   // ------------------------------------------------------------------ ações
   async function action(el) {
     const id = Number(el.dataset.id), a = el.dataset.action, dlg = document.getElementById('dlg');
@@ -492,6 +572,9 @@ const Spot = (() => {
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
       case 'sp-vig-all': st.from = null; st.to = null; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
+      case 'sp-new-file': fileForm(); break;
+      case 'sp-del-file': await del('spot/files/' + id, 'Excluir este arquivo do escopo?'); break;
+      case 'sp-list-tab': listTab = el.dataset.kind; await viewList(); break;
       case 'sp-import': pickReport('horas'); break;
       case 'sp-import-demand': pickReport('demandas'); break;
       case 'sp-import-action': pickReport('acoes'); break;

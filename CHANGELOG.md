@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot por tipo: a lista agora tem guias "Contrato" (contratos recorrentes), "Escopo fechado" e, quando existirem, "Avulsos". Novo tipo Escopo fechado (flag no cadastro, excludente com Contrato): não controla horas (modelo e horas fixadas ficam desabilitados) e acompanha só o escopo, o que foi feito e o que foi entregue. Na tela do projeto, os cartões mostram demandas do escopo, entregues, em andamento, a iniciar e % entregue; apontamentos e demandas não têm horas; nova aba "Escopo" para anexar o PDF ou arquivo do projeto (até 25 MB), guardado no banco somente para registro, com abrir e excluir.
+
 - Projetos Spot: a lista é ordenada pela data de início (a menor em cima, a maior embaixo), depois pela data final e pelo nome.
 
 - E-mail: cada teste de envio (Configurações de E-mail) gera um arquivo .log, baixado na hora, com data, quem disparou, destino, configuração SMTP usada (sem senha), a conversa com o servidor SMTP, o resultado e, na falha, a cadeia de erros e o stack trace. O log fica no banco (lista "Logs dos testes de envio", com botão Baixar) e também na pasta `email-logs` dentro da pasta de dados do servidor, para extração.

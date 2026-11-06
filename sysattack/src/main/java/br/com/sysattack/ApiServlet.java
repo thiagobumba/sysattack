@@ -54,9 +54,9 @@ public class ApiServlet extends HttpServlet {
     private static final Set<String> FIN_STATUS = Set.of("PENDENTE", "PAGO");
     private static final Set<String> DOC_CATEGORY = Set.of("ESPECIFICACAO", "CONTRATO", "PROPOSTA", "DESENHO", "NOTA_FISCAL", "OUTRO");
     static final Object FILE_SENT = new Object();
-    private static final long MAX_UPLOAD = 25L * 1024 * 1024;
+    static final long MAX_UPLOAD = 25L * 1024 * 1024;
     /** Tipos de arquivo aceitos nos documentos (extensão -> tipo MIME). Sem HTML/SVG/scripts por segurança. */
-    private static final Map<String, String> MIME = Map.ofEntries(
+    static final Map<String, String> MIME = Map.ofEntries(
             Map.entry("pdf", "application/pdf"), Map.entry("png", "image/png"), Map.entry("jpg", "image/jpeg"),
             Map.entry("jpeg", "image/jpeg"), Map.entry("gif", "image/gif"), Map.entry("webp", "image/webp"),
             Map.entry("txt", "text/plain; charset=UTF-8"), Map.entry("csv", "text/csv; charset=UTF-8"),
@@ -68,7 +68,7 @@ public class ApiServlet extends HttpServlet {
             Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
             Map.entry("zip", "application/zip"), Map.entry("dwg", "application/octet-stream"),
             Map.entry("dxf", "application/octet-stream"));
-    private static final Set<String> INLINE = Set.of("pdf", "png", "jpg", "jpeg", "gif", "webp", "txt");
+    static final Set<String> INLINE = Set.of("pdf", "png", "jpg", "jpeg", "gif", "webp", "txt");
 
     private static final String NO_CHILDREN = "NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)";
 
@@ -749,7 +749,7 @@ public class ApiServlet extends HttpServlet {
         }
     }
 
-    private static String header(HttpServletRequest req, String name) {
+    static String header(HttpServletRequest req, String name) {
         String v = req.getHeader(name);
         if (v == null) return "";
         try {
@@ -759,7 +759,7 @@ public class ApiServlet extends HttpServlet {
         }
     }
 
-    private static String extOf(String fileName) {
+    static String extOf(String fileName) {
         int i = fileName.lastIndexOf('.');
         return i < 0 ? "" : fileName.substring(i + 1).toLowerCase(Locale.ROOT);
     }
