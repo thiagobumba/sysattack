@@ -21,9 +21,9 @@ const Mpp = (() => {
   // ---- passo 1: escolher o arquivo
   function open(projectId) {
     st = { projectId };
-    const dlg = dlgShell('Importar cronograma do Project', `
-      <p class="hint" style="margin-bottom:14px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo) ou o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML). Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
-      <div class="field full"><label for="mpp-f">Arquivo do Project</label><input id="mpp-f" type="file" accept=".mpp,.xml"></div>
+    const dlg = dlgShell('Importar tarefas', `
+      <p class="hint" style="margin-bottom:14px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo), o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML) ou um <b>JSON</b> de tarefas. Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
+      <div class="field full"><label for="mpp-f">Arquivo do Project</label><input id="mpp-f" type="file" accept=".mpp,.xml,.json"></div>
       <div class="form-error" id="mpp-err" role="alert" hidden></div>
       <div class="form-actions"><button type="button" class="btn" data-action="close">Cancelar</button><button type="button" class="btn btn-primary" id="mpp-read">Ler arquivo</button></div>`);
     const err = dlg.querySelector('#mpp-err'), go = dlg.querySelector('#mpp-read');
@@ -50,7 +50,7 @@ const Mpp = (() => {
   // ---- regras de conversão: as linhas do Project viram tarefas principais e subtarefas (o SysAttack tem 2 níveis)
   function start(fileName, data, proj, existing) {
     const rows = data.rows.filter(r => r.name);
-    if (!rows.length) { dlgShell('Importar cronograma do Project', '<p>O arquivo não tem tarefas.</p>'); return; }
+    if (!rows.length) { dlgShell('Importar tarefas', '<p>O arquivo não tem tarefas.</p>'); return; }
     const levels = [...new Set(rows.map(r => r.level))].sort((a, b) => a - b);
     const minL = levels[0];
     const top = rows.filter(r => r.level === minL);
@@ -100,7 +100,7 @@ const Mpp = (() => {
     const rows = st.plan;
     const minD = rows.filter(p => isImportable(p)).map(p => p.row.start).sort()[0], maxD = rows.filter(p => isImportable(p)).map(p => p.row.end).sort().pop();
     const outside = minD && (minD < st.proj.start_date || maxD > st.proj.end_date);
-    const dlg = dlgShell('Importar cronograma do Project', `
+    const dlg = dlgShell('Importar tarefas', `
       <p class="hint" style="margin-bottom:12px"><b>${esc(st.fileName)}</b> · ${st.rows.length} linhas${st.projectName ? ` · ${esc(st.projectName)}` : ''}. Marque o que deve ser importado. Nada foi gravado ainda.</p>
       <div class="fgrid" style="margin-bottom:10px">
         <div class="field full"><label for="mpp-lv">Qual nível do Project vira tarefa principal?</label>

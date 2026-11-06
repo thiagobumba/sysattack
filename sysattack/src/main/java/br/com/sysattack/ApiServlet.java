@@ -729,6 +729,9 @@ public class ApiServlet extends HttpServlet {
                     case "PUT": projectOr404(id); return saveProject(id, body(req));
                     case "DELETE":
                         projectOr404(id);
+                        Map<String, Object> tc = Db.one("SELECT COUNT(*) n FROM tasks WHERE project_id = ?", id);
+                        long ntasks = tc == null ? 0 : ((Number) tc.get("n")).longValue();
+                        if (ntasks > 0) throw new ApiException(409, "Este projeto tem " + ntasks + " tarefa(s). Exclua as tarefas antes de excluir o projeto.");
                         for (Map<String, Object> d : Db.query("SELECT stored_name FROM documents WHERE project_id = ?", id)) {
                             String stored = (String) d.get("stored_name");
                             Db.afterCommit(() -> deleteStored(stored)); // só apaga o arquivo depois que o banco confirmar
@@ -813,8 +816,13 @@ public class ApiServlet extends HttpServlet {
                 if (m.equals("GET")) return t;
                 if (m.equals("PUT")) return saveTask(t, body(req));
                 if (m.equals("DELETE")) {
+                    int nkids = ((Number) t.get("child_count")).intValue();
+                    if (nkids > 0) throw new ApiException(409, "Esta tarefa tem " + nkids + " tarefa(s) filha(s). Exclua as filhas antes de excluir a tarefa-pai.");
+                    Map<String, Object> dc = Db.one("SELECT COUNT(*) n FROM tasks WHERE depends_on = ?", id);
+                    long ndep = dc == null ? 0 : ((Number) dc.get("n")).longValue();
+                    if (ndep > 0) throw new ApiException(409, "Há " + ndep + " tarefa(s) que dependem desta. Remova a dependência (ou exclua essas tarefas) antes de excluir.");
                     Long parent = optNum(t.get("parent_id"));
-                    Db.update("DELETE FROM tasks WHERE id = ?", id); // as filhas saem junto (ON DELETE CASCADE)
+                    Db.update("DELETE FROM tasks WHERE id = ?", id);
                     TaskRules.rollup(parent);
                     return Map.of("ok", true);
                 }

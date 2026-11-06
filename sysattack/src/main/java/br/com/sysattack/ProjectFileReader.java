@@ -12,6 +12,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -57,8 +61,13 @@ final class ProjectFileReader {
     private static final int MAX_STREAM = 64 * 1024 * 1024;
 
     static Result parse(byte[] data) {
-        if (data == null || data.length < 64) throw bad("O arquivo está vazio ou incompleto.");
+        if (data == null || data.length < 2) throw bad("O arquivo está vazio ou incompleto.");
         try {
+            int p0 = 0;
+            if (data.length >= 3 && (data[0] & 0xff) == 0xEF && (data[1] & 0xff) == 0xBB && (data[2] & 0xff) == 0xBF) p0 = 3; // BOM
+            while (p0 < data.length && (data[p0] == ' ' || data[p0] == '\n' || data[p0] == '\r' || data[p0] == '\t')) p0++;
+            if (p0 < data.length && (data[p0] == '{' || data[p0] == '[')) return parseJson(data);
+            if (data.length < 64) throw bad("O arquivo está vazio ou incompleto.");
             if ((data[0] & 0xff) == 0xD0 && (data[1] & 0xff) == 0xCF) return parseMpp(data);
             String head = new String(data, 0, Math.min(data.length, 400), StandardCharsets.UTF_8);
             if (head.contains("<?xml") || head.contains("<Project")) return parseXml(data);
@@ -67,7 +76,7 @@ final class ProjectFileReader {
         } catch (RuntimeException e) { // arquivo corrompido: nunca vira erro 500
             throw bad("Não consegui ler este arquivo. Ele pode estar danificado ou ser de uma versão do Project não suportada. Exporte como XML do Project e importe o .xml.");
         }
-        throw bad("Formato não reconhecido. Use um arquivo .mpp do Microsoft Project ou o XML do Project (Arquivo > Salvar como > XML).");
+        throw bad("Formato não reconhecido. Use um arquivo .mpp do Microsoft Project o XML do Project (Arquivo > Salvar como > XML) ou um JSON de tarefas.");
     }
 
     private static ApiServlet.ApiException bad(String m) { return new ApiServlet.ApiException(400, m); }
@@ -263,6 +272,15 @@ final class ProjectFileReader {
             if (r.start != null && r.finish != null && r.finish.isBefore(r.start)) r.finish = r.start;
             r.milestone = !r.summary && r.start != null && r.start.equals(r.finish);
         }
+        for (int i = all.size() - 1; i >= 0; i--) { // resumo sem datas (comum em JSON): usa o intervalo das filhas
+            Row r = all.get(i);
+            if (!r.summary || (r.start != null && r.finish != null)) continue;
+            for (int j = i + 1; j < all.size() && all.get(j).level > r.level; j++) {
+                Row k = all.get(j);
+                if (k.start != null && (r.start == null || k.start.isBefore(r.start))) r.start = k.start;
+                if (k.finish != null && (r.finish == null || k.finish.isAfter(r.finish))) r.finish = k.finish;
+            }
+        }
         res.rows.addAll(all);
     }
 
@@ -340,5 +358,104 @@ final class ProjectFileReader {
         for (Row r : all) have.add(r.uid);
         for (Row r : all) r.preds.removeIf(l -> !have.contains(l.pred));
         return res;
+    }
+
+    // ------------------------------------------------------------------ JSON de tarefas
+
+    private static final String[] J_TASKS = {"tasks", "tarefas", "Tasks"};
+    private static final String[] J_KIDS = {"children", "subtasks", "filhas", "subtarefas", "tasks", "tarefas"};
+    private static final String[] J_NAME = {"name", "title", "nome", "titulo", "título", "Name"};
+    private static final String[] J_START = {"start", "start_date", "startDate", "inicio", "início", "Start"};
+    private static final String[] J_END = {"end", "end_date", "endDate", "finish", "fim", "Finish"};
+    private static final String[] J_PCT = {"percent", "percentComplete", "percent_complete", "progress", "progresso", "pct"};
+    private static final String[] J_ID = {"id", "uid", "ID", "UID"};
+    private static final String[] J_LEVEL = {"level", "outline_level", "outlineLevel", "nivel", "nível"};
+    private static final String[] J_PREDS = {"predecessors", "predecessoras", "depends_on", "dependsOn", "depende_de", "predecessor"};
+
+    private static JsonElement jget(JsonObject o, String[] keys) {
+        for (String k : keys) { JsonElement e = o.get(k); if (e != null && !e.isJsonNull()) return e; }
+        return null;
+    }
+
+    private static String jstr(JsonObject o, String[] keys) {
+        JsonElement e = jget(o, keys);
+        return e != null && e.isJsonPrimitive() ? e.getAsString().trim() : "";
+    }
+
+    private static LocalDateTime jdate(String v) {
+        if (v == null || v.isEmpty()) return null;
+        try {
+            if (v.matches("\\d{2}/\\d{2}/\\d{4}.*")) return LocalDate.of(Integer.parseInt(v.substring(6, 10)), Integer.parseInt(v.substring(3, 5)), Integer.parseInt(v.substring(0, 2))).atStartOfDay();
+            return xmlDate(v);
+        } catch (RuntimeException e) { return null; }
+    }
+
+    private static Result parseJson(byte[] data) {
+        JsonElement root;
+        try {
+            root = JsonParser.parseString(new String(data, StandardCharsets.UTF_8).replace("\uFEFF", ""));
+        } catch (RuntimeException e) {
+            throw bad("O JSON está inválido. Confira vírgulas, aspas e chaves.");
+        }
+        Result res = new Result();
+        res.format = "json";
+        JsonArray arr = null;
+        if (root.isJsonArray()) arr = root.getAsJsonArray();
+        else if (root.isJsonObject()) {
+            JsonObject ro = root.getAsJsonObject();
+            res.projectName = jstr(ro, new String[] {"project", "projeto", "name", "nome", "title"});
+            JsonElement te = jget(ro, J_TASKS);
+            if (te != null && te.isJsonArray()) arr = te.getAsJsonArray();
+        }
+        if (arr == null || arr.size() == 0) throw bad("O JSON não tem tarefas. Use uma lista de tarefas ou um objeto com a chave \"tasks\".");
+        List<Row> all = new ArrayList<>();
+        Map<String, Integer> uids = new HashMap<>();
+        List<JsonElement> predSrc = new ArrayList<>();
+        jsonWalk(arr, 1, all, uids, predSrc);
+        if (all.isEmpty()) throw bad("O JSON não tem tarefas.");
+        for (int i = 0; i < all.size(); i++) {
+            JsonElement pe = predSrc.get(i);
+            if (pe == null) continue;
+            List<JsonElement> items = new ArrayList<>();
+            if (pe.isJsonArray()) pe.getAsJsonArray().forEach(items::add); else items.add(pe);
+            for (JsonElement it : items) {
+                String ref = it.isJsonObject() ? jstr(it.getAsJsonObject(), J_ID) : it.isJsonPrimitive() ? it.getAsString().trim() : "";
+                Integer pu = uids.get(ref);
+                if (pu == null || pu == all.get(i).uid) continue;
+                int ty = 1;
+                if (it.isJsonObject()) {
+                    String t = jstr(it.getAsJsonObject(), new String[] {"type", "tipo"}).toUpperCase();
+                    ty = t.equals("TT") || t.equals("FF") || t.equals("0") ? 0 : t.equals("IT") || t.equals("SF") || t.equals("2") ? 2 : t.equals("II") || t.equals("SS") || t.equals("3") ? 3 : 1;
+                }
+                all.get(i).preds.add(new Link(pu, ty, 0));
+            }
+        }
+        finish(all, res);
+        return res;
+    }
+
+    /** Percorre a lista (e as filhas aninhadas); o nível vem do aninhamento ou do campo "level". */
+    private static void jsonWalk(JsonArray arr, int depth, List<Row> all, Map<String, Integer> uids, List<JsonElement> predSrc) {
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject o = el.getAsJsonObject();
+            if (all.size() >= MAX_ROWS) throw bad("O cronograma tem tarefas demais para importar (limite de " + MAX_ROWS + ").");
+            Row r = new Row();
+            r.id = all.size() + 1;
+            r.uid = r.id;
+            String ext = jstr(o, J_ID);
+            if (!ext.isEmpty()) uids.put(ext, r.uid);
+            r.name = jstr(o, J_NAME);
+            String lv = jstr(o, J_LEVEL);
+            r.level = lv.matches("\\d{1,2}") ? Math.max(1, Integer.parseInt(lv)) : depth;
+            r.start = jdate(jstr(o, J_START));
+            r.finish = jdate(jstr(o, J_END));
+            String pc = jstr(o, J_PCT).replace("%", "").replace(',', '.');
+            try { r.percent = Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(pc)))); } catch (NumberFormatException e) { r.percent = 0; }
+            all.add(r);
+            predSrc.add(jget(o, J_PREDS));
+            JsonElement kids = jget(o, J_KIDS);
+            if (kids != null && kids.isJsonArray()) jsonWalk(kids.getAsJsonArray(), depth + 1, all, uids, predSrc);
+        }
     }
 }

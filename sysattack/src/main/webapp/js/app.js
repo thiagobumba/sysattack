@@ -205,7 +205,7 @@
       : t === 'changes' ? btn('rp-new-change', '+ Nova change')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
-      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar do Project', `data-project="${view.projectId}"`, false);
+      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar', `data-project="${view.projectId}"`, false);
     if (t === 'gantt') {
       const p = view.project;
       Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
@@ -767,7 +767,7 @@
         case 'edit-project': e.stopPropagation(); openProjectForm(id); break;
         case 'del-project':
           e.stopPropagation();
-          if (confirm('Excluir este projeto, suas tarefas, lançamentos e documentos? Esta ação não pode ser desfeita.')) { await api('DELETE', 'projects/' + id); toast('Projeto excluído.'); location.hash = '#/projetos'; await route(); }
+          if (confirm('Tem certeza que deseja excluir este projeto, com seus lançamentos e documentos? Esta ação não pode ser desfeita.')) { await api('DELETE', 'projects/' + id); toast('Projeto excluído.'); location.hash = '#/projetos'; await route(); }
           break;
         case 'new-task': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null }); break;
         case 'new-milestone': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null, milestone: true }); break;
@@ -779,7 +779,7 @@
         case 'edit-task': openTaskForm(view.tasks, id); break;
         case 'del-task': {
           const t = view.tasks.find(x => x.id === id);
-          if (confirm(t && t.child_count > 0 ? `Excluir esta tarefa e as ${t.child_count} tarefa(s) filha(s)?` : 'Excluir esta tarefa?')) { await api('DELETE', 'tasks/' + id); toast('Tarefa excluída.'); await route(); }
+          if (confirm(`Tem certeza que deseja excluir a tarefa "${t ? t.name : ''}"? Esta ação não pode ser desfeita.`)) { await api('DELETE', 'tasks/' + id); toast('Tarefa excluída.'); await route(); }
           break;
         }
         case 'tab': view.tab = el.dataset.tab; document.querySelectorAll('.tabs .tab').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
