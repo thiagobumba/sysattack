@@ -1,0 +1,51 @@
+/* Tela de entrada — degradê industrial do site momesso.ind.br, cartão branco e rodapé em faixas */
+.login-page { position: relative; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; color: var(--ink);
+  background: radial-gradient(ellipse 70% 90% at 62% 42%, #e8590a 0%, #b83f00 38%, #5a1c00 70%, #120804 100%); }
+.login-page::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,0) 38%); pointer-events: none; }
+.login-page::after { content: ""; position: absolute; inset: 0; opacity: .16; mix-blend-mode: overlay; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.login-sil { position: absolute; left: 3vw; bottom: 0; height: min(84vh, 760px); width: auto; filter: brightness(0) opacity(.5) blur(.4px); z-index: 1; pointer-events: none; }
+.login-top { position: relative; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 28px 6vw; }
+.login-top img { height: 34px; width: auto; display: block; }
+.login-top a { color: #fff; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; text-decoration: none; opacity: .85; }
+.login-top a:hover { opacity: 1; text-decoration: underline; }
+.login-main { position: relative; z-index: 3; display: grid; grid-template-columns: 1fr minmax(360px, 440px); gap: 6vw; align-items: center; padding: 8px 6vw 44px; }
+.login-pitch { justify-self: end; max-width: 520px; color: var(--peach); }
+.login-pitch h2 { margin: 0 0 18px; font-weight: 300; font-size: clamp(34px, 4vw, 58px); line-height: 1.12; color: var(--peach); text-transform: none; }
+.login-pitch p { margin: 0; color: #fff; font-size: 17px; line-height: 1.7; opacity: .92; }
+.login-card { background: #fff; padding: 40px 40px 30px; border-radius: 2px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.6); }
+.login-card h1 { margin: 0 0 6px; font-size: 30px; font-weight: 600; }
+.login-card .sub { margin: 0 0 24px; color: var(--muted); font-size: 15px; }
+.login-card #loading p { margin: 0; color: var(--muted); }
+.login-card .field { margin-bottom: 16px; }
+.login-card .field input { min-height: 48px; border: 1px solid #cfcfd2; border-radius: 2px; }
+.login-card .field input:focus { outline: 2px solid var(--orange); outline-offset: 0; border-color: var(--orange); }
+.login-card .btn { width: 100%; min-height: 52px; background: var(--orange); border-color: var(--orange); color: #fff; justify-content: space-between; padding: 0 20px; letter-spacing: .06em; text-transform: uppercase; }
+.login-card .btn:hover { background: var(--orange-dark); border-color: var(--orange-dark); }
+.login-card .btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.login-terms { margin: 16px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.login-terms a { color: var(--orange-dark); font-weight: 600; }
+.login-note { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid #ececec; font-size: 13px; color: var(--muted); }
+.login-foot { position: relative; z-index: 3; }
+.login-band { background: #fff; display: grid; grid-template-columns: auto 1fr auto; gap: 28px; align-items: center; padding: 18px 6vw; }
+.login-band img { height: 32px; width: auto; display: block; }
+.login-band p { margin: 0; font-size: 13px; line-height: 1.45; color: #333; }
+.login-band nav { display: flex; gap: 22px; font-size: 13px; }
+.login-band nav a { color: var(--ink); text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--orange); padding-bottom: 2px; }
+.login-band nav a:hover { color: var(--orange-dark); }
+.login-bar { background: var(--orange); }
+.login-bar div { margin-top: 6px; background: var(--ink); color: #bdbdbd; font-size: 12.5px; padding: 12px 6vw; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.login-bar b { color: #fff; font-weight: 600; }
+@media (max-width: 860px) {
+  .login-page { background: radial-gradient(ellipse 120% 70% at 70% 30%, #e8590a 0%, #8a2e00 45%, #120804 100%); }
+  .login-top { padding: 20px; }
+  .login-main { grid-template-columns: 1fr; gap: 22px; padding: 0 20px 28px; }
+  .login-pitch { justify-self: start; order: -1; }
+  .login-pitch h2 { font-size: 34px; margin-bottom: 10px; }
+  .login-pitch p { font-size: 15px; }
+  .login-sil { height: 55vh; left: -10vw; opacity: .7; }
+  .login-card { padding: 28px 22px 22px; }
+  .login-band { grid-template-columns: 1fr; gap: 12px; padding: 18px 20px; }
+  .login-bar div { padding: 12px 20px; }
+}
+@media (max-width: 420px) { .rules { grid-template-columns: 1fr; } }
