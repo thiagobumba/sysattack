@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,6 +68,9 @@ final class SpotService {
                     case "actions":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_actions WHERE spot_id = ? ORDER BY kind, CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END, id", id);
                         if (m.equals("POST")) return saveAction(null, id, ApiServlet.body(req));
+                        break;
+                    case "import":
+                        if (m.equals("POST")) return importReport(id, ApiServlet.body(req), user);
                         break;
                     case "reports":
                         if (m.equals("GET")) return Db.query("SELECT id, spot_id, title, ref_date, model, created_by, created_at, sent_at, sent_to, sent_by"
@@ -216,6 +220,45 @@ final class SpotService {
             Db.update("UPDATE spot_demands SET name=?, status=?, next_step=?, approved_hours=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", name, status, next, approved, notes, id);
         }
         return Db.one("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total FROM spot_demands d WHERE d.id = ?", id);
+    }
+
+    /** Importa demandas e horas de um relatório: demandas por nome (atualiza se já existir), horas sem duplicar. */
+    private static Object importReport(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+        com.google.gson.JsonArray dem = b.has("demands") && b.get("demands").isJsonArray() ? b.getAsJsonArray("demands") : new com.google.gson.JsonArray();
+        com.google.gson.JsonArray hrs = b.has("hours") && b.get("hours").isJsonArray() ? b.getAsJsonArray("hours") : new com.google.gson.JsonArray();
+        if (dem.size() > 200 || hrs.size() > 500) throw new ApiException(400, "Relatório grande demais para importar.");
+        if (dem.size() == 0 && hrs.size() == 0) throw new ApiException(400, "Nada para importar.");
+        Map<String, Long> ids = new HashMap<>();
+        for (Map<String, Object> d : Db.query("SELECT id, name FROM spot_demands WHERE spot_id = ?", spotId)) {
+            ids.put(String.valueOf(d.get("name")).trim().toLowerCase(), ((Number) d.get("id")).longValue());
+        }
+        int dNew = 0, dUpd = 0, hNew = 0, hSkip = 0;
+        for (JsonElement e : dem) {
+            JsonObject o = e.getAsJsonObject();
+            String key = ApiServlet.str(o, "name", "Nome da demanda", 200, true).toLowerCase();
+            Long existing = ids.get(key);
+            Map<String, Object> saved = (Map<String, Object>) saveDemand(existing, spotId, o);
+            if (existing == null) dNew++; else dUpd++;
+            ids.put(key, ((Number) saved.get("id")).longValue());
+        }
+        for (JsonElement e : hrs) {
+            JsonObject o = e.getAsJsonObject();
+            String dn = o.has("demand_name") && !o.get("demand_name").isJsonNull() ? o.get("demand_name").getAsString().trim().toLowerCase() : "";
+            Long demandId = dn.isEmpty() ? null : ids.get(dn);
+            JsonObject h = new JsonObject();
+            for (String k : new String[]{"work_date", "front", "activity", "hours"}) if (o.has(k)) h.add(k, o.get(k));
+            if (demandId != null) h.addProperty("demand_id", demandId);
+            LocalDate d = ApiServlet.date(h, "work_date", "Data");
+            String activity = ApiServlet.str(h, "activity", "Atividade", 300, true);
+            BigDecimal hours = ApiServlet.money(h, "hours", "Horas", true);
+            if (Db.one("SELECT id FROM spot_hours WHERE spot_id = ? AND work_date = ? AND activity = ? AND hours = ?", spotId, d, activity, hours) != null) { hSkip++; continue; }
+            saveHour(null, spotId, h, user);
+            hNew++;
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("demands_created", dNew); r.put("demands_updated", dUpd);
+        r.put("hours_created", hNew); r.put("hours_skipped", hSkip);
+        return r;
     }
 
     private static Object saveAction(Long id, long spotId, JsonObject b) throws SQLException {

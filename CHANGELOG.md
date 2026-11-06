@@ -5,6 +5,8 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- Projetos Spot: importação do Status Report da Fábrica (HTML) na aba "Apontamentos de horas". Mostra uma prévia para revisão; importa as horas consumidas (o detalhamento do chatbot substitui a linha agregada) e as demandas em andamento e previstas, com situação sugerida e editável. Demandas de mesmo nome são atualizadas; horas já lançadas não duplicam.
+
 - Projetos Spot: novo campo "Data final" (opcional, validada contra o início) e a marca "Contrato recorrente". A lista mostra o selo Recorrente e a vigência; projeto ativo com a data final vencida é sinalizado. Projetos existentes ficam sem data final e como não recorrentes.
 
 - Indicadores de custo e prazo por projeto (valor agregado): SPI, CPI, EAC e desvio no término. Aparecem no detalhe do projeto e na aba Orçamentária de Relatórios & Dashs ("Projeção de custo no término"). Orçamento = previsto; progresso ponderado pela duração das tarefas; custo = notas fiscais e faturas lançadas. A saúde de custo vira Atenção quando a projeção passa do orçamento (com progresso a partir de 10%).

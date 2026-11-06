@@ -74,7 +74,7 @@ const Spot = (() => {
     const host = document.getElementById('sp-body'), act = document.getElementById('sp-actions');
     if (!host) return;
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
-    act.innerHTML = { resumo: '', horas: b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-new-report', '✦ Gerar relatório') }[st.tab];
+    act.innerHTML = { resumo: '', horas: b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), demandas: b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-new-action', '+ Nova ação / pendência'), relatorios: b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
     if (st.tab === 'resumo') {
       const s = st.data.summary;
@@ -232,6 +232,116 @@ const Spot = (() => {
       }, 'Enviar');
   }
 
+
+  // ------------------------------------------------------------------ importação do Status Report (HTML da Fábrica)
+  /** Extrai o literal de array `s.<nome>=[...]` do script do relatório (sem eval: só JSON.parse). */
+  function literalArray(src, name) {
+    const m = new RegExp('\\bs\\.' + name + '\\s*=\\s*\\[').exec(src);
+    if (!m) return [];
+    const start = m.index + m[0].length - 1;
+    let depth = 0, inStr = false;
+    for (let i = start; i < src.length; i++) {
+      const c = src[i];
+      if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '[') depth++;
+      else if (c === ']' && --depth === 0) {
+        try { const v = JSON.parse(src.slice(start, i + 1)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+      }
+    }
+    return [];
+  }
+  const num = v => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+  function demandStatus(text, fallback) {
+    const t = norm(text);
+    if (t.includes('homologacao')) return 'EM_HOMOLOGACAO';
+    if (t.includes('aprovacao prevista') || t.includes('investigacao') || t.includes('estimativa')) return 'EM_ANALISE';
+    if (t.includes('aprovad')) return 'APROVADO';
+    if (t.includes('aguarda') || t.includes('licenca')) return 'EM_ESPERA';
+    return fallback;
+  }
+
+  function parseReport(src) {
+    const consumo = literalArray(src, 'consumo'), chat = literalArray(src, 'chat');
+    const andamento = literalArray(src, 'andamento'), previsao = literalArray(src, 'previsao');
+    if (!consumo.length) throw new Error('Não encontrei a tabela “Consumo por demanda” neste arquivo. Use o HTML do Status Report da Fábrica.');
+    const meta = (/\bs\.meta\s*=\s*"([^"]*)"/.exec(src) || [])[1] || '';
+    const year = (/(\d{2})\/(\d{2})\/(\d{4})/.exec(meta) || [])[3] || '2026';
+    const until = /Consumido[^"]*\(até (\d{1,2})\/(\d{1,2})\)/.exec(src);
+    const date = until ? `${year}-${until[2].padStart(2, '0')}-${until[1].padStart(2, '0')}` : `${year}-10-31`;
+    const kp = /n:"(\d+)h \/ (\d+)h"/.exec(src);
+    const chatApproved = kp && kp[2] ? Number(kp[2]) : 0;
+    const chatTotal = chat.reduce((a, r) => a + num(r[1]), 0);
+    // “Chatbot (n alterações)” é a soma do detalhamento: troca a linha agregada pelas linhas detalhadas
+    const hours = [];
+    consumo.forEach(r => {
+      const isChat = norm(r[0]).startsWith('chatbot') && chat.length && Math.abs(num(r[1]) - chatTotal) < 0.01;
+      if (isChat) chat.forEach(c => hours.push({ activity: c[0], hours: num(c[1]), front: 'Chatbot', demand: 'Chatbot' }));
+      else hours.push({ activity: r[0], hours: num(r[1]), front: '', demand: '' });
+    });
+    const demands = [];
+    andamento.forEach(r => demands.push({ name: r[0], next_step: r[1], status: demandStatus(r[0] + ' ' + r[1], 'EM_ANDAMENTO'), approved: r[0] === 'Chatbot' ? chatApproved : 0, notes: '' }));
+    previsao.forEach(r => {
+      const hrs = /^(\d+(?:,\d+)?)h\b/.exec(r[1]);
+      demands.push({ name: r[0], next_step: r[1], status: demandStatus(r[1], 'EM_ANALISE'), approved: 0, notes: 'Previsão para o próximo mês' + (hrs ? ` (estimativa ${hrs[1]}h)` : '') });
+    });
+    // vincula horas a demandas pelo nome quando não foi vinculado de forma explícita
+    hours.forEach(x => {
+      if (x.demand) return;
+      const a = norm(x.activity);
+      const d = demands.find(d => { const n = norm(d.name); return n.length >= 6 && (a === n || a.startsWith(n)); });
+      if (d) x.demand = d.name;
+    });
+    const total = (/s\.kpis\s*=[^;]*?n:"(\d+(?:,\d+)?)h"[^;]*?n:"(\d+(?:,\d+)?)h"/.exec(src) || [])[2];
+    return { date, hours, demands, reportTotal: total ? num(total) : null };
+  }
+
+  function importDialog(rep) {
+    const dl = rep.demands.map((d, i) => `<tr><td><input type="checkbox" name="dc${i}" checked aria-label="Importar demanda"></td>
+      <td class="strong">${esc(d.name)}<span class="small">${esc(d.next_step)}</span></td>
+      <td><select name="ds${i}" aria-label="Situação">${opts(D_STATUS, d.status)}</select></td>
+      <td class="num">${d.approved ? h(d.approved) : '—'}</td></tr>`).join('');
+    const hl = rep.hours.map((x, i) => `<tr><td><input type="checkbox" name="hc${i}" checked aria-label="Importar lançamento"></td>
+      <td class="strong">${esc(x.activity)}</td><td>${esc(x.front || '—')}</td><td>${esc(x.demand || '—')}</td><td class="num">${h(x.hours)}</td></tr>`).join('');
+    const total = rep.hours.reduce((a, x) => a + x.hours, 0);
+    const warn = rep.reportTotal != null && Math.abs(rep.reportTotal - total) > 0.01
+      ? `<p class="hint late-txt full">Atenção: o consumo do relatório é ${h(rep.reportTotal)}, mas as linhas somam ${h(total)}. Confira antes de importar.</p>` : '';
+    const f = A().openDialog('Importar relatório da Fábrica', `
+      <p class="hint full">Revise o que será lançado. Demandas com o mesmo nome são atualizadas; horas já lançadas (mesma data, atividade e valor) são ignoradas.</p>
+      <div class="field"><label for="imp-d">Data dos lançamentos</label><input id="imp-d" name="date" type="date" value="${rep.date}" required></div>
+      <div class="field"><label>Total de horas</label><div class="strong" style="padding:10px 0">${h(total)}</div></div>${warn}
+      <div class="full"><h3 style="margin:0 0 8px;font-size:15px">Horas consumidas</h3><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Atividade</th><th>Frente</th><th>Demanda</th><th class="num">Horas</th></tr></thead><tbody>${hl}</tbody></table></div></div>
+      <div class="full"><h3 style="margin:0 0 8px;font-size:15px">Demandas</h3><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Demanda</th><th>Situação</th><th class="num">Aprovado</th></tr></thead><tbody>${dl}</tbody></table></div></div>`,
+      async d => {
+        const demands = rep.demands.map((x, i) => d['dc' + i] ? { name: x.name, status: d['ds' + i], next_step: x.next_step.slice(0, 500), approved_hours: x.approved || 0, notes: x.notes } : null).filter(Boolean);
+        const kept = new Set(demands.map(x => x.name));
+        const hours = rep.hours.map((x, i) => d['hc' + i] ? { work_date: d.date, front: x.front, activity: x.activity, hours: x.hours, demand_name: kept.has(x.demand) ? x.demand : '' } : null).filter(Boolean);
+        const r = await api('POST', `spot/${st.id}/import`, { demands, hours });
+        st.month = d.date.slice(0, 7); st.tab = 'horas';
+        A().toast(`Importado: ${r.hours_created} lançamento(s), ${r.demands_created} demanda(s) nova(s), ${r.demands_updated} atualizada(s)` + (r.hours_skipped ? `; ${r.hours_skipped} já existia(m).` : '.'));
+      }, 'Importar');
+    document.getElementById('dlg').className = 'wide';
+    return f;
+  }
+
+  function pickReport() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.html,.htm,text/html'; inp.id = 'sp-imp-file'; inp.hidden = true;
+    document.body.appendChild(inp);
+    inp.addEventListener('change', async () => {
+      try {
+        const f = inp.files[0];
+        if (!f) return;
+        if (f.size > 3 * 1024 * 1024) throw new Error('Arquivo grande demais para um relatório.');
+        importDialog(parseReport(await f.text()));
+      } catch (e) { A().toast(e.message); }
+      inp.remove();
+    });
+    inp.click();
+  }
+
   // ------------------------------------------------------------------ ações
   async function action(el) {
     const id = Number(el.dataset.id), a = el.dataset.action, dlg = document.getElementById('dlg');
@@ -243,6 +353,7 @@ const Spot = (() => {
       case 'sp-tab': st.tab = el.dataset.tab; document.querySelectorAll('[data-action="sp-tab"]').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
       case 'sp-month-all': st.month = 'all'; await renderTab(); break;
       case 'sp-new-hour': await hourForm(); break;
+      case 'sp-import': pickReport(); break;
       case 'sp-edit-hour': await hourForm(id); break;
       case 'sp-del-hour': await del('spot/hours/' + id, 'Excluir este lançamento de horas?'); break;
       case 'sp-new-demand': demandForm(); break;
