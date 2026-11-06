@@ -5,8 +5,6 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
-- Visual das telas com menos preto: o menu lateral voltou a ser claro (só o topo leva o degradê), a faixa de título passou a um degradê só de laranjas (sem o preto), título em branco e cartões de indicadores com borda neutra. O preto fica só em textos e botões de contorno.
-
 - Novo visual em todas as telas, no estilo da tela de entrada: menu lateral escuro com o degradê industrial no topo e item ativo em laranja, faixa de título de cada página com o mesmo degradê (título leve em creme, caminho e botão Sair em branco), fundo quente, cartões com sombra suave, tabelas com realce ao passar o mouse, foco laranja nos campos e marca d'água mais discreta. Responsivo: no celular e tablet estreito o menu vira uma barra no topo com botão que abre o menu (fecha ao escolher uma tela ou com Esc, com rótulos acessíveis), alvos de toque de 44 px e cabeçalho compacto. Também respeita "reduzir movimento" e tem estilo próprio para impressão. Tudo fica em css/theme.css, carregado depois do style.css (para voltar ao visual antigo basta remover esse arquivo do index.html).
 
 - Tela de entrada: removido o link "Site Momesso" do topo (o link "Site" do rodapé continua).
