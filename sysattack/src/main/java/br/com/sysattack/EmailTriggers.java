@@ -80,7 +80,7 @@ final class EmailTriggers {
                 String subject = subjectOf((String) rule.get("subject"), event, data);
                 String html = body(EVENTS.get(event), data, (String) rule.get("message"));
                 Long pid = projectId;
-                POOL.submit(() -> deliver(ruleId, pid, event, refKey, new ArrayList<>(to), subject, html));
+                Db.afterCommit(() -> POOL.submit(() -> deliver(ruleId, pid, event, refKey, new ArrayList<>(to), subject, html))); // só envia depois que o banco confirmar
             }
         } catch (Exception e) {
             LOG.warning("Gatilho de e-mail " + event + " não executado: " + e);

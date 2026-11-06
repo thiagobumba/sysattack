@@ -120,7 +120,9 @@ public class ApiServlet extends HttpServlet {
             }
             Object out;
             try {
-                out = route(m, segments(req), req, resp);
+                // toda alteração (POST/PUT/DELETE) é atômica: grava tudo ou nada
+                final List<String> segs = segments(req);
+                out = m.equals("GET") ? route(m, segs, req, resp) : Db.tx(() -> route(m, segs, req, resp));
             } finally {
                 EmailTriggers.ACTOR.remove();
             }
@@ -446,7 +448,8 @@ public class ApiServlet extends HttpServlet {
                     case "DELETE":
                         projectOr404(id);
                         for (Map<String, Object> d : Db.query("SELECT stored_name FROM documents WHERE project_id = ?", id)) {
-                            deleteStored((String) d.get("stored_name"));
+                            String stored = (String) d.get("stored_name");
+                            Db.afterCommit(() -> deleteStored(stored)); // só apaga o arquivo depois que o banco confirmar
                         }
                         Db.update("DELETE FROM projects WHERE id = ?", id);
                         return Map.of("ok", true);
@@ -796,6 +799,7 @@ public class ApiServlet extends HttpServlet {
         }
         if (tooBig) { deleteStored(stored); throw new ApiException(413, "Arquivo maior que 25 MB."); }
         if (total == 0) { deleteStored(stored); throw new ApiException(400, "O arquivo está vazio."); }
+        Db.onRollback(() -> deleteStored(stored)); // se a gravação for desfeita, não deixa arquivo órfão
         long id = Db.insert("INSERT INTO documents(project_id,title,category,description,file_name,stored_name,size,uploaded_by,uploaded_by_id)"
                 + " VALUES(?,?,?,?,?,?,?,?,?)", projectId, title, category, description, fileName, stored, total,
                 user.get("name"), user.get("id"));
@@ -817,7 +821,7 @@ public class ApiServlet extends HttpServlet {
                     throw new ApiException(403, "Só o administrador ou quem enviou o documento pode excluí-lo.");
                 }
                 Db.update("DELETE FROM documents WHERE id = ?", id);
-                deleteStored((String) d.get("stored_name"));
+                Db.afterCommit(() -> deleteStored((String) d.get("stored_name")));
                 return Map.of("ok", true);
             }
         }

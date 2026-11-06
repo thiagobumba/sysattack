@@ -303,6 +303,30 @@ public final class Db {
         T run() throws Exception;
     }
 
+    private static final ThreadLocal<List<Runnable>> AFTER_COMMIT = new ThreadLocal<>(), AFTER_ROLLBACK = new ThreadLocal<>();
+
+    /** Executa depois da confirmação da transação (ou já, se não houver transação). Para e-mails e exclusão de arquivos. */
+    public static void afterCommit(Runnable r) {
+        if (TX.get() == null) { r.run(); return; }
+        if (AFTER_COMMIT.get() == null) AFTER_COMMIT.set(new ArrayList<>());
+        AFTER_COMMIT.get().add(r);
+    }
+
+    /** Executa se a transação for desfeita (ex.: apagar um arquivo gravado antes do erro). */
+    public static void onRollback(Runnable r) {
+        if (TX.get() == null) return;
+        if (AFTER_ROLLBACK.get() == null) AFTER_ROLLBACK.set(new ArrayList<>());
+        AFTER_ROLLBACK.get().add(r);
+    }
+
+    private static void runAll(ThreadLocal<List<Runnable>> tl) {
+        List<Runnable> l = tl.get();
+        tl.remove();
+        if (l != null) for (Runnable r : l) {
+            try { r.run(); } catch (RuntimeException e) { java.util.logging.Logger.getLogger("sysattack").warning("Tarefa pós-transação falhou: " + e); }
+        }
+    }
+
     /** Executa o trabalho numa única transação: se algo falhar, nada é gravado. Chamadas aninhadas reaproveitam a transação. */
     public static <T> T tx(Work<T> work) throws Exception {
         if (TX.get() != null) return work.run();
@@ -312,9 +336,15 @@ public final class Db {
             try {
                 T r = work.run();
                 c.commit();
+                TX.remove();
+                AFTER_ROLLBACK.remove();
+                runAll(AFTER_COMMIT);
                 return r;
             } catch (Exception | Error e) {
                 try { c.rollback(); } catch (SQLException ignored) { /* conexão já inválida */ }
+                TX.remove();
+                AFTER_COMMIT.remove();
+                runAll(AFTER_ROLLBACK);
                 throw e;
             } finally {
                 TX.remove();
