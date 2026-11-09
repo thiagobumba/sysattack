@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 44;
+    private static final int SCHEMA_VERSION = 45;
 
     private Db() {}
 
@@ -109,6 +109,7 @@ public final class Db {
             s.execute("ALTER TABLE tasks ADD CONSTRAINT IF NOT EXISTS fk_tasks_parent FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE");
             s.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_milestone BOOLEAN DEFAULT FALSE NOT NULL");
             s.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_important BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at DATE"); // dia em que foi concluída (alimenta o burndown)
             s.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget DECIMAL(14,2) DEFAULT 0 NOT NULL");
             s.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'MEDIA' NOT NULL");
             s.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS company_goal BOOLEAN DEFAULT FALSE NOT NULL");

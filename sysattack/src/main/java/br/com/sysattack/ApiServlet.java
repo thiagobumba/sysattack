@@ -897,7 +897,10 @@ public class ApiServlet extends HttpServlet {
         JsonElement e = b.get("done");
         boolean done = e != null && !e.isJsonNull() && e.getAsBoolean();
         long id = ((Number) t.get("id")).longValue();
-        Db.update("UPDATE tasks SET status = ?, progress = ? WHERE id = ?", done ? "CONCLUIDA" : "A_FAZER", done ? 100 : 0, id);
+        boolean wasDone = "CONCLUIDA".equals(t.get("status"));
+        LocalDate completedAt = !done ? null : (wasDone && t.get("completed_at") != null
+                ? LocalDate.parse(String.valueOf(t.get("completed_at")).substring(0, 10)) : LocalDate.now());
+        Db.update("UPDATE tasks SET status = ?, progress = ?, completed_at = ? WHERE id = ?", done ? "CONCLUIDA" : "A_FAZER", done ? 100 : 0, completedAt, id);
         TaskRules.rollup(optNum(t.get("parent_id")));
         Map<String, Object> saved = Db.one(TASK_SQL + " WHERE t.id = ?", id);
         taskEvents(t, saved);
@@ -957,12 +960,20 @@ public class ApiServlet extends HttpServlet {
         Long dep = optLong(b, "depends_on");
         if (dep != null) checkDependency(id, projectId, dep);
 
+        // dia da conclusão: nasce ao virar Concluída, é mantido enquanto continuar concluída e some se for reaberta
+        LocalDate completedAt = null;
+        if ("CONCLUIDA".equals(status)) {
+            boolean wasDone = existing != null && "CONCLUIDA".equals(existing.get("status"));
+            Object prev = wasDone ? existing.get("completed_at") : null;
+            completedAt = prev != null ? LocalDate.parse(String.valueOf(prev).substring(0, 10)) : LocalDate.now();
+        }
+
         if (id == null) {
-            id = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone,is_important)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, who, start, end, progress, status, dep, parent, milestone, important);
+            id = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone,is_important,completed_at)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, who, start, end, progress, status, dep, parent, milestone, important, completedAt);
         } else {
-            Db.update("UPDATE tasks SET name=?, description=?, responsible=?, start_date=?, end_date=?, progress=?, status=?, depends_on=?, parent_id=?, is_milestone=?, is_important=? WHERE id=?",
-                    name, desc, who, start, end, progress, status, dep, parent, milestone, important, id);
+            Db.update("UPDATE tasks SET name=?, description=?, responsible=?, start_date=?, end_date=?, progress=?, status=?, depends_on=?, parent_id=?, is_milestone=?, is_important=?, completed_at=? WHERE id=?",
+                    name, desc, who, start, end, progress, status, dep, parent, milestone, important, completedAt, id);
         }
         TaskRules.rollup(parent);
         if (oldParent != null && !oldParent.equals(parent)) TaskRules.rollup(oldParent);

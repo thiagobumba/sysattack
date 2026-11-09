@@ -262,7 +262,7 @@
         ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
         ${evmPanel(p)}</section>
       <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
-        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${tab('ishikawa', 'Ishikawa')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
+        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('burndown', 'Burndown')}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${tab('ishikawa', 'Ishikawa')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
         <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;
     await renderTab();
   }
@@ -276,6 +276,7 @@
     act.innerHTML = t === 'finance' ? btn('new-fin', '+ Nota fiscal', 'data-kind="NF_SERVICO"') + btn('new-fin', '+ Fatura', 'data-kind="FATURA"', false)
       : t === 'docs' ? btn('new-doc', '+ Adicionar documento')
       : t === 'changes' ? btn('rp-new-change', '+ Nova change')
+      : t === 'burndown' ? ''
       : t === 'ishikawa' ? btn('ish-new', '+ Novo diagrama')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
@@ -285,6 +286,7 @@
       Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
     } else if (t === 'tasks') host.innerHTML = taskTable(view.tasks, { tree: true });
     else if (t === 'marcos') renderMilestones(host, view.tasks.filter(x => x.is_milestone), false);
+    else if (t === 'burndown') Burn.render(host, view.project, view.tasks);
     else if (t === 'finance') await renderFinance(host);
     else if (t === 'docs') await renderDocs(host);
     else if (t === 'changes') await Rep.changesTab(host, view.projectId);
