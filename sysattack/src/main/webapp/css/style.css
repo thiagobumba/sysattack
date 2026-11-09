@@ -756,3 +756,20 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .logo-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .logo-pick { cursor: pointer; }
 .logo-msg { color: #2e6b32; }
+
+/* Lista de tarefas: hierarquia (pai/filha) e dependências */
+.t-line { display: flex; align-items: stretch; gap: 0; }
+.t-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.t-branch { flex: 0 0 34px; position: relative; margin: -15px 8px -15px 14px; }
+.t-branch::before { content: ""; position: absolute; left: 6px; top: 0; bottom: 50%; width: 14px; border-left: 2px solid #cfcfcf; border-bottom: 2px solid #cfcfcf; border-bottom-left-radius: 8px; }
+tr.row-child td { background: #fbfaf9; }
+tr.row-child:not(:last-child) .t-branch::after { content: ""; position: absolute; left: 6px; top: 50%; bottom: 0; border-left: 2px solid #cfcfcf; }
+tr.row-child.last-child .t-branch::after { display: none; }
+tr.row-parent td:first-child { box-shadow: inset 4px 0 0 var(--orange); }
+.rels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.rel { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; line-height: 1.5; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rel-parent { background: #fdeadf; color: #a53c00; }
+.rel-child { background: #ececec; color: #555; }
+.rel-dep { background: #e4eefb; color: #1c4f94; }
+.rel-dep::before { content: "\21B3  "; }
+.rel-blocks { background: #e6f4ea; color: #1e6b3a; }

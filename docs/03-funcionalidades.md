@@ -58,6 +58,9 @@ Nome (até 160 caracteres), descrição, responsável, início, fim, progresso (
 ### Situações
 A fazer · Em andamento · Concluída · Bloqueada · **Cancelada**.
 
+### Como a lista mostra a hierarquia
+Pai: barra laranja à esquerda e selo "Pai · N filha(s)". Filha: recuada, com linha de árvore e selo "Filha". Dependência: selo azul "Depende de: …" na tarefa que espera, e selo verde "Libera N" na que é pré-requisito.
+
 ### Regras
 - **Dois níveis:** tarefa principal e filhas. Uma filha não pode ter filhas.
 - **Tarefa-pai calculada** (`TaskRules.rollup`): início = menor início das filhas; fim = maior fim; progresso = média ponderada pela duração; situação derivada. Filhas **canceladas são ignoradas**; se todas forem canceladas, o pai fica Cancelado.

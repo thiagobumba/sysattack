@@ -323,13 +323,22 @@
     const byId = Object.fromEntries(list.map(t => [t.id, t]));
     const rows = tree ? treeOrder(list) : list.map(t => ({ t, level: 0 }));
     return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tarefa</th>${showProject ? '<th>Projeto</th>' : ''}<th>Início</th><th>Fim</th><th>Progresso</th><th>Situação</th><th></th></tr></thead><tbody>
-      ${rows.map(({ t, level }) => `<tr><td class="strong">${'<span class="t-ind"></span>'.repeat(level)}${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}
-        <span class="small">${'<span class="t-ind"></span>'.repeat(level)}${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}${t.child_count ? ` · ${t.child_count} filha(s), calculada` : ''}</span></td>
+      ${rows.map(({ t, level }, i) => {
+        const lastKid = level && !(rows[i + 1] && rows[i + 1].level);
+        const dep = t.depends_on && byId[t.depends_on], blocks = list.filter(x => x.depends_on === t.id).length;
+        const chips = [
+          t.child_count ? `<span class="rel rel-parent" title="Tarefa pai: início, fim, progresso e situação são calculados pelas filhas">Pai · ${t.child_count} filha(s)</span>` : '',
+          level ? '<span class="rel rel-child" title="Tarefa filha">Filha</span>' : '',
+          dep ? `<span class="rel rel-dep" title="Só deve começar depois de: ${esc(dep.name)}">Depende de: ${esc(dep.name)}</span>` : '',
+          blocks ? `<span class="rel rel-blocks" title="Outras tarefas dependem desta">Libera ${blocks}</span>` : ''
+        ].join('');
+        return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}</span>
+        <span class="small">${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}</span>${chips ? `<span class="rels">${chips}</span>` : ''}</div></div></td>
         ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
         <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
         <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 10px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
         <button class="icon-btn" title="Editar" aria-label="Editar tarefa" data-action="edit-task" data-id="${t.id}">${ic('edit')}</button>
-        <button class="icon-btn del" title="Excluir" aria-label="Excluir tarefa" data-action="del-task" data-id="${t.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`;
+        <button class="icon-btn del" title="Excluir" aria-label="Excluir tarefa" data-action="del-task" data-id="${t.id}">${ic('trash')}</button></td></tr>`; }).join('')}</tbody></table></div>`;
   }
 
   // ------------------------------------------------------------------ marcos
