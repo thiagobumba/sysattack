@@ -727,3 +727,4 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .pn-hint { flex: 1 1 260px; font-size: 13px; color: #777; margin-left: 6px; }
 @media (max-width: 700px) { .pn-hint { flex-basis: 100%; margin: 4px 0 0; } }
 .pn-groups .tab { padding: 12px 13px; font-size: 13.5px; }
+.sub-h { margin: 22px 0 10px; font-size: 14px; font-weight: 700; }

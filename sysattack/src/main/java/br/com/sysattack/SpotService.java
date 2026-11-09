@@ -387,6 +387,9 @@ final class SpotService {
         // escopo fechado: não controla horas (modelo e horas fixadas não se aplicam)
         String model = closedScope ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
         BigDecimal hours = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
+        // valor da hora do parceiro (normal e excedente): opcionais, só para projetos que controlam horas
+        BigDecimal rate = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_hour_rate", "Hora desenvolvimento parceiro (R$)", false);
+        BigDecimal overRate = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_overage_rate", "Hora excedente desenvolvimento parceiro (R$)", false);
         LocalDate start = ApiServlet.date(b, "start_date", "Início");
         LocalDate end = ApiServlet.optDate(b, "end_date", "Data final");
         boolean recurring = !closedScope && ApiServlet.bool(b, "recurring"); // escopo fechado e contrato são tipos excludentes
@@ -399,11 +402,11 @@ final class SpotService {
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value,partner_hour_rate,partner_overage_rate)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate);
         } else {
             Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, id);
+                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=?, partner_hour_rate=?, partner_overage_rate=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, id);
         }
         return project(id);
     }

@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **45**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **46**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -15,7 +15,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `tasks` | `id`, `project_id`, `name`, `description`, `responsible`, `start_date`, `end_date`, `progress`, `status`, `depends_on`, `parent_id`, `is_milestone`, `is_important`, `completed_at` |
 | `finance_entries` | `id`, `project_id`, `kind`, `number`, `party`, `description`, `issue_date`, `due_date`, `amount`, `status`, `paid_date`, `created_at` |
 | `documents` | `id`, `project_id`, `title`, `category`, `description`, `file_name`, `stored_name`, `size`, `uploaded_by`, `uploaded_by_id`, `uploaded_at` |
-| `spot_projects` | `id`, `name`, `client`, `provider`, `description`, `hours_model`, `contracted_hours`, `start_date`, `status`, `participants`, `recipients`, `billing_note`, `created_at`, `end_date`, `recurring`, `closed_scope`, `project_value` |
+| `spot_projects` | `id`, `name`, `client`, `provider`, `description`, `hours_model`, `contracted_hours`, `start_date`, `status`, `participants`, `recipients`, `billing_note`, `created_at`, `end_date`, `recurring`, `closed_scope`, `project_value`, `partner_hour_rate`, `partner_overage_rate` |
 | `spot_files` | `id`, `spot_id`, `title`, `description`, `file_name`, `size`, `content`, `uploaded_by`, `uploaded_at` |
 | `spot_invoices` | `id`, `spot_id`, `number`, `issue_date`, `due_date`, `amount`, `status`, `description`, `file_name`, `file_size`, `file_content`, `created_by`, `created_at`, `updated_at` |
 | `spot_demands` | `id`, `spot_id`, `name`, `status`, `next_step`, `approved_hours`, `notes`, `updated_at` |

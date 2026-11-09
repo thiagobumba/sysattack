@@ -164,6 +164,7 @@ Para todos os usuários; projetos Spot não entram. **Projetos:** Timeline, Iten
 - **Ações e pendências:** tipo Ação ou Pendência; situação Pendente, A confirmar, Parcial ou Concluído.
 - **Financeiro (escopo fechado):** notas com número, emissão, vencimento, valor, situação Emitida/Paga/Cancelada e PDF anexado (guardado no banco). A visão mostra Valor do projeto, Faturado, A faturar etc.
 - **Entrega (escopo fechado):** uma demanda só conta como entregue com ao menos um apontamento vinculado; `% de entrega = demandas entregues ÷ demandas do escopo` (canceladas não contam); todo apontamento exige a demanda que ele entrega.
+- **Faturamento com excedente (projetos que controlam horas):** o cadastro tem **Hora desenvolvimento parceiro (R$/h)** e **Hora excedente desenvolvimento parceiro (R$/h)**. O Resumo mostra *Franquia* = horas fixadas × valor da hora; *Excedente gerado* = `max(0, consumidas − fixadas)` × valor da hora excedente; *Total a faturar* = franquia + excedente; *Total projetado* = franquia + `max(0, consumidas + reservadas − fixadas)` × valor da hora excedente. O bloco só aparece quando algum dos valores está preenchido. Não aparece nos relatórios enviados ao cliente.
 - **Cálculo de horas (feito pelo sistema):** mensal = do dia 1º do mês de referência até a data; pacote = desde o início. Consumidas = soma das horas do período; reservadas = Σ(aprovado − realizado) das demandas abertas; saldo = fixadas − consumidas; saldo projetado = saldo − reservadas.
 - **Copiar projeto:** só para contratos recorrentes (cadastro, modelo, horas, participantes, destinatários; datas e observação em branco; situação Ativo).
 - **Importar Status Report da Fábrica (HTML):** sempre com prévia; entende o modelo "Consumo do mês por demanda" + "Decisões do comitê"; cada linha de consumo vira um apontamento.
@@ -191,7 +192,7 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Antes de atualizar o esquema** o arquivo do banco é copiado para `pre-update-*.mv.db` (guarda as 5 últimas).
 - **Restauração:** `restaurar-backup.ps1` (confere o SHA-256 e guarda o estado atual antes de restaurar).
 - **Segurança e dados** (tela): pasta em uso, endereço nos e-mails, backups e trilha de auditoria.
-- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 45); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
+- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 46); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
 
 ## 14. Interface e usabilidade
 

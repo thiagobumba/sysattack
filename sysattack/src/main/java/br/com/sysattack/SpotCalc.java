@@ -154,9 +154,26 @@ final class SpotCalc {
         kpi.put("balance", r2(contracted - consumed));
         kpi.put("projected", r2(contracted - consumed - reserved));
 
+        // faturamento do período: franquia (horas fixadas x valor da hora) + excedente (horas acima da franquia x valor da hora excedente)
+        double rate = num(p.get("partner_hour_rate")), overRate = num(p.get("partner_overage_rate"));
+        double overHours = Math.max(0, consumed - contracted), overHoursProj = Math.max(0, consumed + reserved - contracted);
+        Map<String, Object> billing = new LinkedHashMap<>();
+        billing.put("configured", rate > 0 || overRate > 0);
+        billing.put("rate", r2(rate));
+        billing.put("overage_rate", r2(overRate));
+        billing.put("base_value", r2(contracted * rate));
+        billing.put("overage_hours", r2(overHours));
+        billing.put("overage_value", r2(overHours * overRate));
+        billing.put("total", r2(contracted * rate + overHours * overRate));
+        billing.put("projected_overage_hours", r2(overHoursProj));
+        billing.put("projected_overage_value", r2(overHoursProj * overRate));
+        billing.put("projected_total", r2(contracted * rate + overHoursProj * overRate));
+
         Map<String, Object> proj = new LinkedHashMap<>();
         for (String k : new String[] {"name", "client", "provider", "description", "hours_model", "participants", "billing_note"}) proj.put(k, p.get(k));
         proj.put("contracted_hours", r2(contracted));
+        proj.put("partner_hour_rate", r2(rate));
+        proj.put("partner_overage_rate", r2(overRate));
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("project", proj);
@@ -166,6 +183,7 @@ final class SpotCalc {
                 ? ref.getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("pt-BR")) + "/" + ref.getYear()
                 : "desde " + start.getDayOfMonth() + "/" + start.getMonthValue() + "/" + start.getYear());
         out.put("kpi", kpi);
+        out.put("billing", billing);
         out.put("by_item", byItem);
         out.put("approved", approved);
         out.put("demands", demands);

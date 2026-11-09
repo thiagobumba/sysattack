@@ -77,6 +77,18 @@ const Spot = (() => {
       <div class="mini ${projNeg ? 'neg' : ''}"><span>Saldo projetado</span><b>${h(k.projected)}</b></div></div>`;
   }
 
+  /** Faturamento do período: franquia + excedente, a partir do valor da hora negociado com o parceiro. */
+  function billingCards(b, k) {
+    if (!b || !b.configured) return '';
+    const over = Number(b.overage_hours) > 0, projOver = Number(b.projected_overage_hours) > Number(b.overage_hours) + 0.001;
+    const tip = (t, l) => Tip.attr(t, l);
+    return `<h3 class="sub-h">Faturamento do período</h3><div class="mini-kpis fin wrapv">
+      <div class="mini"${tip('Valor da franquia', [`= horas fixadas (${h(k.contracted)}) × valor da hora (${brl(b.rate)})`, 'Valor-base do período, cobrado pela franquia contratada.'])}><span>Franquia (${h(k.contracted)} × ${brl(b.rate)})</span><b>${brl(b.base_value)}</b></div>
+      <div class="mini ${over ? 'neg' : ''}"${tip('Excedente gerado', [`= horas acima da franquia (${h(b.overage_hours)}) × valor da hora excedente (${brl(b.overage_rate)})`, over ? 'Horas consumidas além da franquia: devem ser faturadas à parte.' : 'Nenhuma hora acima da franquia até agora.'])}><span>Excedente gerado (${h(b.overage_hours)} × ${brl(b.overage_rate)})</span><b>${brl(b.overage_value)}</b></div>
+      <div class="mini accent"${tip('Total a faturar', ['= franquia + excedente gerado', 'Considera só as horas já consumidas.'])}><span>Total a faturar</span><b>${brl(b.total)}</b></div>
+      <div class="mini ${projOver ? 'neg' : ''}"${tip('Total projetado', [`= franquia + excedente projetado (${h(b.projected_overage_hours)} × ${brl(b.overage_rate)} = ${brl(b.projected_overage_value)})`, 'Inclui as horas reservadas (aprovadas e ainda não realizadas).'])}><span>Total projetado</span><b>${brl(b.projected_total)}</b></div></div>`;
+  }
+
   /** Escopo fechado: a demanda só é "entregue" quando tem apontamento vinculado a ela. */
   function scopeCards(sc) {
     return `<div class="mini-kpis">
@@ -151,7 +163,7 @@ const Spot = (() => {
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote')}
+        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
@@ -269,7 +281,7 @@ const Spot = (() => {
   async function copyTemplate(fromId) {
     const o = await api('GET', 'spot/' + fromId);
     if (!o.recurring) throw new Error('Só é possível copiar projetos do tipo contrato recorrente.');
-    return { name: o.name, client: o.client, provider: o.provider, description: '', hours_model: o.hours_model, contracted_hours: o.contracted_hours,
+    return { name: o.name, client: o.client, provider: o.provider, description: '', hours_model: o.hours_model, contracted_hours: o.contracted_hours, partner_hour_rate: o.partner_hour_rate, partner_overage_rate: o.partner_overage_rate,
       start_date: '', end_date: '', recurring: true, closed_scope: false, status: 'ATIVO', participants: o.participants, recipients: o.recipients, billing_note: '' };
   }
 
@@ -282,6 +294,8 @@ const Spot = (() => {
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
         <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
         <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
+        <div class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}</div>
+        <div class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}</div>
         <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
@@ -294,15 +308,17 @@ const Spot = (() => {
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
       // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
       const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
       const sync = () => {
         for (const n of ['hours_model', 'contracted_hours']) { f.elements[n].disabled = cs.checked; f.elements[n].required = !cs.checked && n === 'contracted_hours'; }
         if (cs.checked) rc.checked = false;
         rc.disabled = cs.checked;
+        f.elements.partner_hour_rate.disabled = cs.checked; f.elements.partner_overage_rate.disabled = cs.checked;
         f.elements.project_value.disabled = !cs.checked; f.elements.project_value.required = cs.checked;
         document.getElementById('sv-f').style.display = cs.checked ? '' : 'none';
+        document.getElementById('pr-f').style.display = cs.checked ? 'none' : ''; document.getElementById('po-f').style.display = cs.checked ? 'none' : '';
       };
       cs.addEventListener('change', sync);
       sync();

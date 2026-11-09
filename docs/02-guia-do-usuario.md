@@ -131,7 +131,8 @@ Menu **Projetos Spot**. A lista tem guias **Contrato** (recorrentes), **Escopo f
 
 - **Projeto:** nome, cliente, fornecedor/equipe, modelo (franquia mensal ou pacote), horas fixadas, início, data final (vigência), participantes do comitê, destinatários e observação de faturamento. **Escopo fechado** não controla horas; exige o valor do projeto em R$.
 - **Abas do projeto:** Resumo, Escopo e Financeiro (só escopo fechado), Apontamentos de horas, Demandas (com horas aprovadas), Ações e pendências, Relatório tradicional (só escopo fechado) e Relatórios com Claude.
-- **Copiar projeto** (contratos recorrentes): copia o cadastro; datas e observação ficam em branco e a situação vem como Ativo.
+- **Faturamento e excedente:** preencha **Hora desenvolvimento parceiro** e **Hora excedente desenvolvimento parceiro** (valor da hora/homem negociado). O Resumo passa a mostrar a franquia em R$, o **excedente gerado**, o **total a faturar** e o **total projetado**.
+- **Copiar projeto** (contratos recorrentes): copia o cadastro (inclusive os valores de hora); datas e observação ficam em branco e a situação vem como Ativo.
 - **Projeto encerrado:** só o administrador altera, com justificativa (mín. 10 caracteres) registrada no histórico.
 - **Importar Status Report da Fábrica (HTML):** com prévia para revisão, nas abas de apontamentos, demandas e ações.
 - **Relatórios:** o texto é gerado pelo Claude a partir dos números calculados pelo sistema, pode ser editado, enviado por e-mail (Para, CC, CCO, separados por `;`) ou impresso/salvo em PDF.
