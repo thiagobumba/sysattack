@@ -328,12 +328,13 @@
         const dep = t.depends_on && byId[t.depends_on], blocks = list.filter(x => x.depends_on === t.id).length;
         const chips = [
           t.child_count ? `<span class="rel rel-parent" title="Tarefa pai: início, fim, progresso e situação são calculados pelas filhas">Pai · ${t.child_count} filha(s)</span>` : '',
-          level ? '<span class="rel rel-child" title="Tarefa filha">Filha</span>' : '',
+          level ? '<span class="rel rel-child" title="Tarefa filha">Filha</span>'
+            : (!tree && t.parent_id && byId[t.parent_id] ? `<span class="rel rel-child" title="Tarefa filha de ${esc(byId[t.parent_id].name)}">Filha de: ${esc(byId[t.parent_id].name)}</span>` : ''),
           dep ? `<span class="rel rel-dep" title="Só deve começar depois de: ${esc(dep.name)}">Depende de: ${esc(dep.name)}</span>` : '',
           blocks ? `<span class="rel rel-blocks" title="Outras tarefas dependem desta">Libera ${blocks}</span>` : ''
         ].join('');
         return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}</span>
-        <span class="small">${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}</span>${chips ? `<span class="rels">${chips}</span>` : ''}</div></div></td>
+        <span class="small">${esc(t.responsible || 'Sem responsável')}</span>${chips ? `<span class="rels">${chips}</span>` : ''}</div></div></td>
         ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
         <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
         <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 10px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
