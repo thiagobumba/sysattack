@@ -505,9 +505,9 @@
     const r = await api('POST', 'me/2fa/start', {});
     const form = openDialog('Ativar verificação em duas etapas', `
       <div class="full"><p class="hint"><b>1.</b> No aplicativo autenticador, escaneie o QR code (ou digite a chave).</p>
-        <div class="qr-box" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:10px 0">
-          <div style="width:180px;height:180px;background:#fff;padding:6px;border:1px solid #ddd">${QR.svg(r.uri, { scale: 4, margin: 0 })}</div>
-          <div><p class="hint">Chave manual:</p><code style="user-select:all;word-break:break-all">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</code></div></div>
+        <div class="qr-box">
+          <div class="qr-frame">${QR.svg(r.uri, { scale: 4, margin: 0 })}</div>
+          <div class="qr-key"><p class="hint">Chave manual:</p><code style="user-select:all">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</code></div></div>
         <p class="hint"><b>2.</b> Digite o código de 6 dígitos que o aplicativo mostra.</p></div>
       <div class="field full"><label for="tf">Código de 6 dígitos</label><input id="tf" name="code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required></div>`,
       async d => {
@@ -767,7 +767,11 @@
         case 'edit-project': e.stopPropagation(); openProjectForm(id); break;
         case 'del-project':
           e.stopPropagation();
-          if (confirm('Tem certeza que deseja excluir este projeto, com seus lançamentos e documentos? Esta ação não pode ser desfeita.')) { await api('DELETE', 'projects/' + id); toast('Projeto excluído.'); location.hash = '#/projetos'; await route(); }
+          try {
+            const chk = await api('GET', `projects/${id}/links`);
+            if (chk && chk.message) { alert(chk.message); break; }
+            if (confirm('Tem certeza que deseja excluir este projeto? Esta ação não pode ser desfeita.')) { await api('DELETE', 'projects/' + id); toast('Projeto excluído.'); location.hash = '#/projetos'; await route(); }
+          } catch (ex) { alert(ex.message); }
           break;
         case 'new-task': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null }); break;
         case 'new-milestone': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null, milestone: true }); break;
@@ -779,6 +783,10 @@
         case 'edit-task': openTaskForm(view.tasks, id); break;
         case 'del-task': {
           const t = view.tasks.find(x => x.id === id);
+          try {
+            const chk = await api('GET', `tasks/${id}/links`);
+            if (chk && chk.message) { alert(chk.message); break; }
+          } catch (ex) { alert(ex.message); break; }
           if (confirm(`Tem certeza que deseja excluir a tarefa "${t ? t.name : ''}"? Esta ação não pode ser desfeita.`)) { await api('DELETE', 'tasks/' + id); toast('Tarefa excluída.'); await route(); }
           break;
         }

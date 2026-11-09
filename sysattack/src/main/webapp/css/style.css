@@ -579,3 +579,9 @@ a.btn { text-decoration: none; color: var(--ink); }
 body > .app-copy { max-width: 900px; margin: 0 auto; }
 @media (max-width: 860px) { .app-copy { padding: 16px 16px 24px; } .watermark { width: 180px; right: 12px; bottom: 28px; } }
 @media print { .watermark { opacity: .08; } .app-copy { color: #666; } }
+
+/* QR code do 2FA: tamanho fixo, nunca cobre o texto ao redor */
+.qr-box { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin: 12px 0 16px; }
+.qr-frame { flex: none; width: 220px; height: 220px; box-sizing: border-box; padding: 10px; background: #fff; border: 1px solid #ddd; }
+.qr-frame svg { display: block; width: 100%; height: 100%; }
+.qr-key { flex: 1 1 200px; min-width: 0; }

@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -729,9 +730,8 @@ public class ApiServlet extends HttpServlet {
                     case "PUT": projectOr404(id); return saveProject(id, body(req));
                     case "DELETE":
                         projectOr404(id);
-                        Map<String, Object> tc = Db.one("SELECT COUNT(*) n FROM tasks WHERE project_id = ?", id);
-                        long ntasks = tc == null ? 0 : ((Number) tc.get("n")).longValue();
-                        if (ntasks > 0) throw new ApiException(409, "Este projeto tem " + ntasks + " tarefa(s). Exclua as tarefas antes de excluir o projeto.");
+                        String blockMsg = projectDeleteBlock(id);
+                        if (blockMsg != null) throw new ApiException(409, blockMsg);
                         for (Map<String, Object> d : Db.query("SELECT stored_name FROM documents WHERE project_id = ?", id)) {
                             String stored = (String) d.get("stored_name");
                             Db.afterCommit(() -> deleteStored(stored)); // só apaga o arquivo depois que o banco confirmar
@@ -747,6 +747,7 @@ public class ApiServlet extends HttpServlet {
                     return Db.query(TASK_SQL + " WHERE t.project_id = ? ORDER BY t.start_date, t.id", id);
                 }
                 if (sub.equals("finance") && m.equals("GET")) return projectFinance(id);
+                if (sub.equals("links") && m.equals("GET")) { projectOr404(id); return Collections.singletonMap("message", projectDeleteBlock(id)); }
                 if (sub.equals("import-preview") && m.equals("POST")) { projectOr404(id); return importPreview(req); }
                 if (sub.equals("import-tasks") && m.equals("POST")) { projectOr404(id); return importTasks(id, req, user); }
                 if (sub.equals("documents")) {
@@ -757,6 +758,56 @@ public class ApiServlet extends HttpServlet {
             }
         }
         throw new ApiException(405, "Operação não suportada.");
+    }
+
+    private static long countOf(String sql, Object... args) throws SQLException {
+        Map<String, Object> r = Db.one(sql, args);
+        return r == null ? 0 : ((Number) r.get("n")).longValue();
+    }
+
+    /** Mensagem com o que ainda está vinculado ao projeto (null = pode excluir). */
+    private static String projectDeleteBlock(long id) throws SQLException {
+        List<String> parts = new ArrayList<>();
+        long n = countOf("SELECT COUNT(*) n FROM tasks WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " tarefa(s)/marco(s)");
+        n = countOf("SELECT COUNT(*) n FROM finance_entries WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " lançamento(s) financeiro(s)");
+        n = countOf("SELECT COUNT(*) n FROM documents WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " documento(s)");
+        n = countOf("SELECT COUNT(*) n FROM project_changes WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " change(s)");
+        n = countOf("SELECT COUNT(*) n FROM email_rules WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " gatilho(s) de e-mail");
+        if (parts.isEmpty()) return null;
+        return "Não é possível excluir este projeto: ele ainda tem " + String.join(", ", parts)
+                + " vinculado(s). Exclua ou remova esses itens primeiro e tente de novo.";
+    }
+
+    /** Mensagem com os vínculos que impedem excluir a tarefa (null = pode excluir). */
+    private static String taskDeleteBlock(Map<String, Object> t) throws SQLException {
+        long id = ((Number) t.get("id")).longValue();
+        List<String> parts = new ArrayList<>();
+        Long parent = optNum(t.get("parent_id"));
+        if (parent != null) {
+            Map<String, Object> p = Db.one("SELECT name FROM tasks WHERE id = ?", parent);
+            parts.add("ela é filha da tarefa \"" + (p == null ? "?" : p.get("name")) + "\" (edite a tarefa e deixe \"Tarefa pai\" vazio)");
+        }
+        Long dep = optNum(t.get("depends_on"));
+        if (dep != null) {
+            Map<String, Object> p = Db.one("SELECT name FROM tasks WHERE id = ?", dep);
+            parts.add("ela depende da tarefa \"" + (p == null ? "?" : p.get("name")) + "\" (edite a tarefa e deixe \"Depende de\" como Nenhuma)");
+        }
+        int kids = ((Number) t.get("child_count")).intValue();
+        if (kids > 0) parts.add("ela tem " + kids + " tarefa(s) filha(s) (exclua ou desvincule as filhas antes)");
+        List<Map<String, Object>> deps = Db.query("SELECT name FROM tasks WHERE depends_on = ? ORDER BY id LIMIT 4", id);
+        if (!deps.isEmpty()) {
+            long total = countOf("SELECT COUNT(*) n FROM tasks WHERE depends_on = ?", id);
+            StringBuilder names = new StringBuilder();
+            for (Map<String, Object> d : deps) names.append(names.length() > 0 ? ", " : "").append('"').append(d.get("name")).append('"');
+            parts.add(total + " tarefa(s) dependem dela (" + names + (total > deps.size() ? " e outras" : "") + "); ajuste a dependência delas antes");
+        }
+        if (parts.isEmpty()) return null;
+        return "Não é possível excluir esta tarefa: " + String.join("; ", parts) + ".";
     }
 
     private static Map<String, Object> projectOr404(long id) throws SQLException {
@@ -816,16 +867,15 @@ public class ApiServlet extends HttpServlet {
                 if (m.equals("GET")) return t;
                 if (m.equals("PUT")) return saveTask(t, body(req));
                 if (m.equals("DELETE")) {
-                    int nkids = ((Number) t.get("child_count")).intValue();
-                    if (nkids > 0) throw new ApiException(409, "Esta tarefa tem " + nkids + " tarefa(s) filha(s). Exclua as filhas antes de excluir a tarefa-pai.");
-                    Map<String, Object> dc = Db.one("SELECT COUNT(*) n FROM tasks WHERE depends_on = ?", id);
-                    long ndep = dc == null ? 0 : ((Number) dc.get("n")).longValue();
-                    if (ndep > 0) throw new ApiException(409, "Há " + ndep + " tarefa(s) que dependem desta. Remova a dependência (ou exclua essas tarefas) antes de excluir.");
+                    String taskBlock = taskDeleteBlock(t);
+                    if (taskBlock != null) throw new ApiException(409, taskBlock);
                     Long parent = optNum(t.get("parent_id"));
                     Db.update("DELETE FROM tasks WHERE id = ?", id);
                     TaskRules.rollup(parent);
                     return Map.of("ok", true);
                 }
+            } else if (s.size() == 3 && s.get(2).equals("links") && m.equals("GET")) {
+                return Collections.singletonMap("message", taskDeleteBlock(t));
             } else if (s.size() == 3 && s.get(2).equals("done") && m.equals("PUT")) {
                 return markDone(t, body(req));
             }
