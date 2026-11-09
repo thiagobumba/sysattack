@@ -68,30 +68,29 @@ const Spot = (() => {
     <button class="icon-btn del" title="Excluir" aria-label="Excluir" data-action="sp-del-${kind}" data-id="${id}">${ic('trash')}</button></td>`;
 
   function kpiCards(k, label) {
-    const neg = Number(k.balance) < 0, projNeg = Number(k.projected) < 0;
+    const neg = Number(k.balance) < 0;
     return `<div class="mini-kpis">
       <div class="mini"><span>${esc(label || 'Horas fixadas')}</span><b>${h(k.contracted)}</b></div>
       <div class="mini accent"><span>Consumidas</span><b>${h(k.consumed)}</b></div>
       <div class="mini"><span>Reservadas (aprovado a realizar)</span><b>${h(k.reserved)}</b></div>
-      <div class="mini ${neg ? 'neg' : ''}"><span>Saldo atual</span><b>${h(k.balance)}</b></div>
-      <div class="mini ${projNeg ? 'neg' : ''}"><span>Saldo projetado</span><b>${h(k.projected)}</b></div></div>`;
+      <div class="mini ${neg ? 'neg' : ''}"><span>Saldo atual</span><b>${h(k.balance)}</b></div></div>`;
   }
 
   /** Fatura excedente: horas consumidas acima da franquia x valor da hora excedente negociado com o parceiro. */
   function billingCards(b, k) {
     if (!b) return '';
     const tip = (t, l) => Tip.attr(t, l);
-    const over = Number(b.overage_hours) > 0, hasProj = Number(b.projected_overage_hours) > Number(b.overage_hours) + 0.001;
+    const over = Number(b.overage_hours) > 0;
     const rateOk = Number(b.overage_rate) > 0;
     const line = !rateOk ? 'Os valores da hora ainda não foram informados. Use <b>Editar projeto</b> e preencha <b>Hora excedente desenvolvimento parceiro (R$/h)</b> para ver aqui o valor da fatura excedente.'
       : over ? `Consumidas <b>${h(k.consumed)}</b> − franquia <b>${h(k.contracted)}</b> = <b>${h(b.overage_hours)}</b> excedentes × <b>${brl(b.overage_rate)}</b> por hora = <b>${brl(b.overage_value)}</b> de fatura excedente.`
-      : `Consumidas <b>${h(k.consumed)}</b> de <b>${h(k.contracted)}</b> da franquia: <b>nenhuma hora excedente</b>, então não há fatura excedente a gerar.${hasProj ? ` Com as horas reservadas (${h(k.reserved)}), o excedente projetado é de ${h(b.projected_overage_hours)}.` : ''}`;
+      : `Consumidas <b>${h(k.consumed)}</b> de <b>${h(k.contracted)}</b> da franquia: <b>nenhuma hora excedente</b>, então não há fatura excedente a gerar.`;
     return `<h3 class="sub-h">Fatura excedente do período</h3><div class="mini-kpis fin wrapv">
       <div class="mini ${over ? 'neg' : ''}"${tip('Horas excedentes', [`= horas consumidas (${h(k.consumed)}) − horas da franquia (${h(k.contracted)})`, 'Só conta o que passou da franquia; se o consumo ficou abaixo, é zero.'])}><span>Horas excedentes</span><b>${h(b.overage_hours)}</b></div>
-      <div class="mini"${tip('Valor da hora excedente', ['Valor hora/homem negociado com o parceiro para as horas acima da franquia.', 'Para alterar, use "Editar projeto".'])}><span>Valor da hora excedente</span><b>${brl(b.overage_rate)}</b></div>
-      <div class="mini bill ${over ? 'neg' : ''}"${tip('Fatura excedente a gerar', [`= horas excedentes (${h(b.overage_hours)}) × valor da hora excedente (${brl(b.overage_rate)})`, over ? 'É o valor da fatura que deve ser gerada além da franquia mensal.' : 'Nenhuma fatura excedente até agora.'])}><span>Fatura excedente a gerar</span><b>${brl(b.overage_value)}</b></div>
-      <div class="mini ${hasProj ? 'neg' : ''}"${tip('Fatura excedente projetada', [`= excedente projetado (${h(b.projected_overage_hours)}) × ${brl(b.overage_rate)}`, 'Inclui as horas reservadas: aprovadas e ainda não realizadas.'])}><span>Projetada (com reservadas)</span><b>${brl(b.projected_overage_value)}</b></div></div>
+      <div class="mini"${tip('Valor da hora excedente', ['Valor hora/homem negociado com o parceiro para as horas acima da franquia.', '# Valor sem impostos acrescidos.', 'Para alterar, use "Editar projeto".'])}><span>Valor da hora excedente</span><b>${brl(b.overage_rate)}</b><em class="tax">sem impostos</em></div>
+      <div class="mini bill ${over ? 'neg' : ''}"${tip('Fatura excedente a gerar', [`= horas excedentes (${h(b.overage_hours)}) × valor da hora excedente (${brl(b.overage_rate)})`, over ? 'É o valor da fatura que deve ser gerada além da franquia mensal.' : 'Nenhuma fatura excedente até agora.', '# Valor sem impostos acrescidos: impostos e retenções incidem à parte na emissão da nota.'])}><span>Fatura excedente a gerar</span><b>${brl(b.overage_value)}</b><em class="tax">sem impostos acrescidos</em></div></div>
       <p class="bill-line">${line}</p>
+      <p class="bill-tax"><b>Atenção:</b> os valores desta tela são <b>sem impostos acrescidos</b>; os impostos incidem à parte na emissão da fatura.</p>
       ${Number(b.rate) > 0 ? `<p class="small bill-base">Franquia: ${h(k.contracted)} × ${brl(b.rate)} (hora desenvolvimento parceiro) = ${brl(b.base_value)}.</p>` : ''}`;
   }
 
@@ -300,8 +299,8 @@ const Spot = (() => {
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
         <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
         <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
-        <div class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor.</small></div>
-        <div class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b></small></div>
+        <div class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor. <b>Informe o valor sem impostos.</b></small></div>
+        <div class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> <b>Informe o valor sem impostos.</b></small></div>
         <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
@@ -326,7 +325,7 @@ const Spot = (() => {
         document.getElementById('sv-f').style.display = cs.checked ? '' : 'none';
         const sim = () => {
           const v = SA.moneyValue(f.elements.partner_overage_rate.value), hint = document.getElementById('pho-h');
-          if (hint && v > 0) hint.innerHTML = `Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> Exemplo: 10 h excedentes = ${brl(v * 10)}.`;
+          if (hint && v > 0) hint.innerHTML = `Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> Exemplo: 10 h excedentes = ${brl(v * 10)} (sem impostos). <b>Informe o valor sem impostos.</b>`;
         };
         f.elements.partner_overage_rate.addEventListener('input', sim); sim();
         document.getElementById('pr-f').style.display = cs.checked ? 'none' : ''; document.getElementById('po-f').style.display = cs.checked ? 'none' : '';
