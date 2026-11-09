@@ -262,7 +262,7 @@
         ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
         ${evmPanel(p)}</section>
       <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
-        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
+        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${tab('ishikawa', 'Ishikawa')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
         <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;
     await renderTab();
   }
@@ -276,6 +276,7 @@
     act.innerHTML = t === 'finance' ? btn('new-fin', '+ Nota fiscal', 'data-kind="NF_SERVICO"') + btn('new-fin', '+ Fatura', 'data-kind="FATURA"', false)
       : t === 'docs' ? btn('new-doc', '+ Adicionar documento')
       : t === 'changes' ? btn('rp-new-change', '+ Nova change')
+      : t === 'ishikawa' ? btn('ish-new', '+ Novo diagrama')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
       : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar', `data-project="${view.projectId}"`, false);
@@ -287,6 +288,7 @@
     else if (t === 'finance') await renderFinance(host);
     else if (t === 'docs') await renderDocs(host);
     else if (t === 'changes') await Rep.changesTab(host, view.projectId);
+    else if (t === 'ishikawa') await Ish.tab(host, view.projectId);
     else if (t === 'triggers') await Mail.projectTab(host, view.projectId);
   }
 
@@ -798,6 +800,7 @@
       if (el.dataset.action.startsWith('sys-')) { await Sys.action(el); return; }
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
+      if (el.dataset.action.startsWith('ish-')) { await Ish.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
         case 'close': dlg.close(); break;

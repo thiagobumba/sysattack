@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 42;
+    private static final int SCHEMA_VERSION = 43;
 
     private Db() {}
 
@@ -307,6 +307,20 @@ public final class Db {
                     + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_changes_project ON project_changes(project_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS ishikawa ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,"
+                    + "problem VARCHAR(300) NOT NULL,"
+                    + "created_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_ishikawa_project ON ishikawa(project_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS ishikawa_causes ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "ishikawa_id BIGINT NOT NULL REFERENCES ishikawa(id) ON DELETE CASCADE,"
+                    + "category VARCHAR(20) NOT NULL,"
+                    + "text VARCHAR(200) NOT NULL,"
+                    + "parent_id BIGINT REFERENCES ishikawa_causes(id) ON DELETE CASCADE)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_ishikawa_causes ON ishikawa_causes(ishikawa_id)");
             s.execute("CREATE TABLE IF NOT EXISTS app_meta (k VARCHAR(60) PRIMARY KEY, v VARCHAR(400) NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS audit_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"

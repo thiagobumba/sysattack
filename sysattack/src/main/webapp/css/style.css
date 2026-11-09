@@ -599,3 +599,42 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .tip li { margin: 2px 0; }
 .tip code { display: block; margin: 4px 0 8px; padding: 6px 8px; background: #2c2c2c; color: #ffd9c2; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; }
 @media (max-width: 700px) { .tip { max-width: calc(100vw - 16px); } }
+
+/* Diagrama de Ishikawa */
+.ish-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.ish-bar label { font-weight: 600; font-size: 13px; }
+.ish-bar select { max-width: 420px; }
+.ish { overflow-x: auto; padding: 6px 2px 14px; }
+.ish-grid { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)) 230px; grid-template-rows: auto 14px auto; column-gap: 0; min-width: 920px; }
+.ish-row { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(3, 1fr); }
+.ish-row.t { grid-row: 1; } .ish-row.b { grid-row: 3; }
+.ish-spine { grid-column: 1 / 4; grid-row: 2; position: relative; }
+.ish-spine i { position: absolute; left: 0; right: -4px; top: 50%; height: 4px; margin-top: -2px; background: var(--ink); }
+.ish-spine i::after { content: ''; position: absolute; right: -14px; top: -8px; border: 10px solid transparent; border-left: 16px solid var(--ink); border-right-width: 0; }
+.ish-head { grid-column: 4; grid-row: 1 / 4; align-self: center; margin-left: 18px; background: var(--orange); color: #fff; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.ish-head small { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; opacity: .85; }
+.ish-head b { font-size: 17px; line-height: 1.35; font-weight: 600; word-break: break-word; }
+.ish-head .has-tip { display: flex; flex-direction: column; gap: 6px; }
+.ish-cat { position: relative; display: flex; flex-direction: column; padding: 0 34px 0 8px; min-height: 150px; }
+.ish-cat.bottom { flex-direction: column-reverse; }
+.ish-cat header { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.ish-cat.bottom header { margin: 8px 0 0; }
+.ish-cat-name { font-weight: 700; background: #f2f0ed; padding: 5px 12px; border-left: 3px solid var(--orange); }
+.ish-bone { position: absolute; top: 0; bottom: 0; right: 14px; width: 2px; background: #333; pointer-events: none; }
+.ish-cat.top .ish-bone { transform: skewX(18deg); transform-origin: bottom; }
+.ish-cat.bottom .ish-bone { transform: skewX(-18deg); transform-origin: top; }
+.ish-causes, .ish-subs { list-style: none; margin: 0; padding: 0; }
+.ish-causes { flex: 1; padding-bottom: 6px; }
+.ish-cat.bottom .ish-causes { padding: 6px 0 0; }
+.ish-causes > li { margin: 0 0 8px; }
+.ish-none { color: #999; font-size: 13px; font-style: italic; }
+.ish-c { display: flex; align-items: flex-start; gap: 2px; }
+.ish-t { cursor: pointer; font-size: 13.5px; line-height: 1.4; padding: 2px 4px; border-bottom: 1px dashed #bbb; }
+.ish-t:hover, .ish-t:focus-visible { background: #fff3ea; outline: none; }
+.ish-acts { display: inline-flex; opacity: 0; transition: opacity .1s; flex: none; }
+.ish-c:hover .ish-acts, .ish-c:focus-within .ish-acts { opacity: 1; }
+.ish-acts .icon-btn { width: 24px; height: 24px; }
+.ish-acts .icon-btn .ic { width: 15px; height: 15px; }
+.ish-subs { margin: 3px 0 0 14px; padding-left: 10px; border-left: 2px solid #ddd; }
+.ish-subs .ish-t { font-size: 12.5px; color: #444; border-bottom-style: dotted; }
+@media (max-width: 760px) { .ish-acts { opacity: 1; } }

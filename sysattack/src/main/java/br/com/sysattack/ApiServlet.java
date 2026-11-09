@@ -201,6 +201,7 @@ public class ApiServlet extends HttpServlet {
             case "security": requireAdmin(user); return Map.of("audit", Audit.recent(200));
             case "email": return EmailService.handle(m, s, req, resp, user);
             case "changes": return ChangeService.handle(m, s, req, user);
+            case "ishikawa": return IshikawaService.handle(m, s, req, user);
             case "reports": return ChangeService.reports(m);
             case "spot": return SpotService.handle(m, s, req, resp, user);
             default: throw new ApiException(404, "Rota inexistente.");
@@ -776,6 +777,8 @@ public class ApiServlet extends HttpServlet {
         if (n > 0) parts.add(n + " documento(s)");
         n = countOf("SELECT COUNT(*) n FROM project_changes WHERE project_id = ?", id);
         if (n > 0) parts.add(n + " change(s)");
+        n = countOf("SELECT COUNT(*) n FROM ishikawa WHERE project_id = ?", id);
+        if (n > 0) parts.add(n + " diagrama(s) de Ishikawa");
         n = countOf("SELECT COUNT(*) n FROM email_rules WHERE project_id = ?", id);
         if (n > 0) parts.add(n + " gatilho(s) de e-mail");
         if (parts.isEmpty()) return null;
