@@ -47,10 +47,10 @@ Abaixo ficam as telas do projeto, organizadas em cinco áreas. Escolha a área n
 
 | Área | Telas |
 |---|---|
-| **Cronograma e gráficos** | Cronograma (Gantt) · Burndown · PERT / Caminho crítico |
+| **Cronograma e gráficos** | Cronograma (Gantt) · Burndown · PERT / Caminho crítico · Prioridades (Eisenhower) · Ishikawa |
 | **Tarefas e marcos** | Tarefas · Marcos |
 | **Financeiro e documentos** | Financeiro · Documentos |
-| **Qualidade e mudanças** | Ishikawa · Changes |
+| **Mudanças** | Changes |
 | **Automação** (administrador) | Gatilhos de e-mail |
 
 ### Excluir um projeto
@@ -86,6 +86,8 @@ Uma frase no topo resume a situação ("Faltam 62 dias de trabalho… 56 dias de
 Monta a rede a partir do campo **Depende de**. Cada caixa mostra duração, início/término mais cedo (ES/EF), mais tarde (LS/LF) e **folga**. O **caminho crítico** (folga zero) aparece em vermelho: qualquer atraso nele atrasa o projeto. Opções: mostrar só o caminho crítico, ajustar à largura ou tamanho real. Há indicadores (duração pela rede × prazo planejado, tarefas críticas, tarefas sem dependência) e a tabela das 40 folgas mais apertadas. Sem dependências cadastradas, a tela pede que você as cadastre.
 
 ## Prioridades (matriz de Eisenhower)
+
+Disponível em dois lugares: no menu lateral (**Prioridades**, todos os projetos) e na aba **Prioridades (Eisenhower)** dentro de cada projeto (só as tarefas dele).
 
 Distribui as tarefas em aberto em quatro quadrantes:
 

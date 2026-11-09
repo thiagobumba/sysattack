@@ -106,6 +106,7 @@ Regras: o nível escolhido vira tarefa principal e o que está abaixo vira subta
 - **Duração pela rede** é comparada ao prazo planejado do projeto.
 
 ### Prioridades (Eisenhower, `js/prioridades.js`)
+Tela geral (menu) e aba por projeto, com as mesmas regras.
 Quatro quadrantes (Fazer agora, Agendar, Delegar, Eliminar ou adiar). *Importante* = ★ manual, projeto Meta Empresa ou prioridade Crítica/Alta. *Urgente* = fim em até N dias (3/7/14/30) ou atrasada. Filtros por responsável e por janela de urgência (a janela fica salva no navegador).
 
 ## 6. Saúde do projeto e indicadores de valor agregado
@@ -196,7 +197,7 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 
 - **Identidade** alinhada ao site da Momesso (laranja `#F45200`, creme `#FDDDB3`, fonte Inter, cantos retos), menu lateral escuro agrupado, cabeçalho de página com degradê, marca d'água e rodapé de direitos autorais.
 - **Hints detalhados** em selos, indicadores, abas e gráficos (título, explicação, fórmula, valores); abrem com mouse ou teclado.
-- **Navegação do projeto** em cinco áreas com telas agrupadas por tipo de ação.
+- **Navegação do projeto** em cinco áreas com telas agrupadas por tipo de ação (Cronograma e gráficos, Tarefas e marcos, Financeiro e documentos, Mudanças, Automação).
 - **Responsivo:** cartões em duas colunas no tablet/celular, gráficos que usam a largura real da tela (sem cortes), tabelas compactas.
 - **Acessibilidade:** foco visível nos campos, papéis ARIA nas abas, balões acessíveis por teclado.
 - **Confirmações** em toda exclusão.

@@ -34,12 +34,20 @@ const Prio = (() => {
     a.view.tasks = st.tasks; // para o botão de editar tarefa funcionar aqui
     a.view.projects = await api('GET', 'projects');
     a.main.innerHTML = a.pageHead(['SysAttack', 'Prioridades'], 'Matriz de prioridades', 'Tarefas em aberto organizadas por urgência e importância (matriz de Eisenhower).') + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">O que priorizar</h2></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">O que priorizar</h2></div><div id="pr-host"></div></section>`;
+    mount(document.getElementById('pr-host'));
+  }
+
+  // monta filtros, quadrantes e legenda dentro de um contêiner (tela Prioridades ou aba do projeto)
+  function mount(host) {
+    const a = A();
+    host.innerHTML = `
         <div class="filters"><label class="small" for="pr-who" style="align-self:center">Responsável</label><select id="pr-who" aria-label="Responsável"></select>
           <label class="small" for="pr-days" style="align-self:center">Urgente = vence em até</label>
           <select id="pr-days" aria-label="Limite de urgência">${[3, 7, 14, 30].map(n => `<option value="${n}"${n === st.days ? ' selected' : ''}>${n} dias</option>`).join('')}</select></div>
         <div id="pr-body"></div>
-        <p class="hint" style="margin-top:14px"><b>Importante</b> = tarefa marcada como importante, ou de projeto Meta Empresa ou de prioridade Crítica/Alta. <b>Urgente</b> = vence dentro do prazo escolhido ou já está atrasada. Entram só tarefas abertas (sem as concluídas, canceladas e tarefas-pai) de projetos que não estão concluídos nem pausados. Clique na ★ para marcar ou desmarcar uma tarefa como importante.</p></section>`;
+        <p class="hint" style="margin-top:14px"><b>Importante</b> = tarefa marcada como importante, ou de projeto Meta Empresa ou de prioridade Crítica/Alta. <b>Urgente</b> = vence dentro do prazo escolhido ou já está atrasada. Entram só tarefas abertas (sem as concluídas, canceladas e tarefas-pai) de projetos que não estão concluídos nem pausados. Clique na ★ para marcar ou desmarcar uma tarefa como importante.</p>`;
+
     const people = new Set();
     st.tasks.forEach(t => (t.responsible || '').split(',').map(x => x.trim()).filter(Boolean).forEach(x => people.add(x)));
     const me = a.me && a.me.name ? a.me.name : '';
@@ -110,5 +118,10 @@ const Prio = (() => {
       draw();
     }
   }
-  return { view, action };
+  // aba do projeto: só as tarefas dele
+  function tab(host, tasks) {
+    st.tasks = tasks; st.who = 'ALL';
+    mount(host);
+  }
+  return { view, tab, action };
 })();

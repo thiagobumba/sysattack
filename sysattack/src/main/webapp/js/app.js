@@ -246,10 +246,10 @@
     view.project = p; view.tasks = tasks; view.projectId = id; view.projects = [p];
     const leaf = tasks.filter(t => !t.child_count).length, ms = tasks.filter(t => t.is_milestone).length;
     view.nav = [
-      { k: 'plan', label: 'Cronograma e gráficos', tabs: [['gantt', 'Cronograma (Gantt)', 'Barras de tarefas no tempo, com dependências e marcos.'], ['burndown', 'Burndown', 'Quanto trabalho falta, comparado ao ritmo ideal até o prazo.'], ['pert', 'PERT / Caminho crítico', 'Rede de dependências: quais tarefas, se atrasarem, atrasam o projeto.']] },
+      { k: 'plan', label: 'Cronograma e gráficos', tabs: [['gantt', 'Cronograma (Gantt)', 'Barras de tarefas no tempo, com dependências e marcos.'], ['burndown', 'Burndown', 'Quanto trabalho falta, comparado ao ritmo ideal até o prazo.'], ['pert', 'PERT / Caminho crítico', 'Rede de dependências: quais tarefas, se atrasarem, atrasam o projeto.'], ['prio', 'Prioridades (Eisenhower)', 'Tarefas em aberto por urgência e importância: o que fazer agora, agendar, delegar ou adiar.'], ['ishikawa', 'Ishikawa', 'Investigue as causas de um problema (espinha de peixe).']] },
       { k: 'work', label: 'Tarefas e marcos', tabs: [['tasks', `Tarefas (${leaf})`, 'Lista e cadastro das tarefas do projeto.'], ['marcos', `Marcos (${ms})`, 'Entregas e datas-chave do projeto.']] },
       { k: 'money', label: 'Financeiro e documentos', tabs: [['finance', `Financeiro (${p.fin_count})`, 'Notas fiscais e faturas lançadas no projeto.'], ['docs', `Documentos (${p.doc_count})`, 'Arquivos e anexos do projeto.']] },
-      { k: 'quality', label: 'Qualidade e mudanças', tabs: [['ishikawa', 'Ishikawa', 'Investigue as causas de um problema (espinha de peixe).'], ['changes', 'Changes', 'Mudanças de escopo, prazo ou custo e seu impacto.']] },
+      { k: 'quality', label: 'Mudanças', tabs: [['changes', 'Changes', 'Mudanças de escopo, prazo ou custo e seu impacto.']] },
       ...(isAdmin() ? [{ k: 'auto', label: 'Automação', tabs: [['triggers', 'Gatilhos de e-mail', 'Regras que enviam e-mail automaticamente.']] }] : [])
     ];
     const tab = () => '';
@@ -292,7 +292,7 @@
     act.innerHTML = t === 'finance' ? btn('new-fin', '+ Nota fiscal', 'data-kind="NF_SERVICO"') + btn('new-fin', '+ Fatura', 'data-kind="FATURA"', false)
       : t === 'docs' ? btn('new-doc', '+ Adicionar documento')
       : t === 'changes' ? btn('rp-new-change', '+ Nova change')
-      : t === 'burndown' || t === 'pert' ? ''
+      : t === 'burndown' || t === 'pert' || t === 'prio' ? ''
       : t === 'ishikawa' ? btn('ish-new', '+ Novo diagrama')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
@@ -304,6 +304,7 @@
     else if (t === 'marcos') renderMilestones(host, view.tasks.filter(x => x.is_milestone), false);
     else if (t === 'burndown') Burn.render(host, view.project, view.tasks);
     else if (t === 'pert') Pert.render(host, view.project, view.tasks);
+    else if (t === 'prio') Prio.tab(host, view.tasks);
     else if (t === 'finance') await renderFinance(host);
     else if (t === 'docs') await renderDocs(host);
     else if (t === 'changes') await Rep.changesTab(host, view.projectId);
