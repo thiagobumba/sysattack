@@ -1,4 +1,4 @@
-# Atualiza o SysAttack na sua máquina: traz a branch do GitHub, apaga a pasta target e gera o .war novo.
+﻿# Atualiza o SysAttack na sua máquina: traz a branch do GitHub, apaga a pasta target e gera o .war novo.
 #
 # Uso (PowerShell, na pasta do repositório):
 #   .\atualizar.ps1 claude/relatorios          atualiza uma vez
@@ -63,7 +63,7 @@ try {
                 Log "Concluído em $($ultimo.Substring(0,8)). Troque o .war no Tomcat." "Green"
                 [console]::Beep(880, 300)
             } elseif ($ticks % 10 -eq 0) {
-                Log "Vigiando $Branch: sem novidades (versão $($ultimo.Substring(0,8)))."
+                Log "Vigiando ${Branch}: sem novidades (versão $($ultimo.Substring(0,8)))."
             }
         } catch {
             Log "Falha: $($_.Exception.Message)" "Red"

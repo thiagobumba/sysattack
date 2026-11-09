@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Restaura um backup do SysAttack (banco, documentos, ai.key e config.properties).
 
