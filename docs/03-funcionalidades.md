@@ -112,6 +112,9 @@ Regras: o nível escolhido vira tarefa principal e o que está abaixo vira subta
 - **Ciclos** são ignorados, com aviso; tarefas sem nenhuma ligação ficam fora da rede e são contadas à parte.
 - **Duração pela rede** é comparada ao prazo planejado do projeto.
 
+### Quadro Kanban (`js/kanban.js`)
+Aba **Quadro (Kanban)** do projeto. Colunas = situações (A fazer, Em andamento, Bloqueada, Concluída); só tarefas sem filhas viram cartão (a situação do pai é calculada). Arrastar, os botões ‹ › ou ← → alteram a situação usando `PUT /tasks/{id}` (mesmas regras do cadastro: concluir leva a 100%, reabrir tira de 100%). Dependência não concluída gera aviso de confirmação. Filtros: responsável e tarefa pai; canceladas ficam ocultas até marcar "Mostrar canceladas".
+
 ### Prioridades (Eisenhower, `js/prioridades.js`)
 Tela geral (menu) e aba por projeto, com as mesmas regras.
 Quatro quadrantes (Fazer agora, Agendar, Delegar, Eliminar ou adiar). *Importante* = ★ manual, projeto Meta Empresa ou prioridade Crítica/Alta. *Urgente* = fim em até N dias (3/7/14/30) ou atrasada. Filtros por responsável e por janela de urgência (a janela fica salva no navegador).

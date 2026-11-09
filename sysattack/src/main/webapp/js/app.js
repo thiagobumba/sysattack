@@ -247,7 +247,7 @@
     const leaf = tasks.filter(t => !t.child_count).length, ms = tasks.filter(t => t.is_milestone).length;
     view.nav = [
       { k: 'plan', label: 'Cronograma e gráficos', tabs: [['gantt', 'Cronograma (Gantt)', 'Barras de tarefas no tempo, com dependências e marcos.'], ['burndown', 'Burndown', 'Quanto trabalho falta, comparado ao ritmo ideal até o prazo.'], ['pert', 'PERT / Caminho crítico', 'Rede de dependências: quais tarefas, se atrasarem, atrasam o projeto.'], ['prio', 'Prioridades (Eisenhower)', 'Tarefas em aberto por urgência e importância: o que fazer agora, agendar, delegar ou adiar.'], ['ishikawa', 'Ishikawa', 'Investigue as causas de um problema (espinha de peixe).']] },
-      { k: 'work', label: 'Tarefas e marcos', tabs: [['tasks', `Tarefas (${leaf})`, 'Lista e cadastro das tarefas do projeto.'], ['marcos', `Marcos (${ms})`, 'Entregas e datas-chave do projeto.']] },
+      { k: 'work', label: 'Tarefas e marcos', tabs: [['tasks', `Tarefas (${leaf})`, 'Lista e cadastro das tarefas do projeto.'], ['kanban', 'Quadro (Kanban)', 'Cartões por situação: arraste para mudar a situação da tarefa.'], ['marcos', `Marcos (${ms})`, 'Entregas e datas-chave do projeto.']] },
       { k: 'money', label: 'Financeiro e documentos', tabs: [['finance', `Financeiro (${p.fin_count})`, 'Notas fiscais e faturas lançadas no projeto.'], ['docs', `Documentos (${p.doc_count})`, 'Arquivos e anexos do projeto.']] },
       { k: 'quality', label: 'Mudanças', tabs: [['changes', 'Changes', 'Mudanças de escopo, prazo ou custo e seu impacto.']] },
       ...(isAdmin() ? [{ k: 'auto', label: 'Automação', tabs: [['triggers', 'Gatilhos de e-mail', 'Regras que enviam e-mail automaticamente.']] }] : [])
@@ -296,11 +296,13 @@
       : t === 'ishikawa' ? btn('ish-new', '+ Novo diagrama')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
+      : t === 'kanban' ? btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false)
       : btn('new-task', '+ Nova tarefa') + btn('new-parent', '+ Nova tarefa pai', '', false) + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar', `data-project="${view.projectId}"`, false);
     if (t === 'gantt') {
       const p = view.project;
       Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
     } else if (t === 'tasks') host.innerHTML = taskTable(view.tasks, { tree: true });
+    else if (t === 'kanban') Kan.mount(host);
     else if (t === 'marcos') renderMilestones(host, view.tasks.filter(x => x.is_milestone), false);
     else if (t === 'burndown') Burn.render(host, view.project, view.tasks);
     else if (t === 'pert') Pert.render(host, view.project, view.tasks);
@@ -845,6 +847,7 @@
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
       if (el.dataset.action.startsWith('ish-')) { await Ish.action(el); return; }
+      if (el.dataset.action.startsWith('kb-')) { Kan.onClick(e); return; }
       if (el.dataset.action.startsWith('prio-')) { await Prio.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;

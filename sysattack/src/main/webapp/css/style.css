@@ -777,3 +777,37 @@ tr.row-parent td:first-child { box-shadow: inset 4px 0 0 var(--orange); }
 tr[hidden] { display: none; }
 .tbl-tasks td.strong:first-child { min-width: 340px; }
 .t-sum { white-space: nowrap; }
+
+/* Quadro Kanban do projeto */
+.kb-tools { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.kb-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.kb-col { background: #ece9e6; min-width: 0; border: 2px solid transparent; }
+.kb-col.over { border-color: var(--orange); background: #fbe9de; }
+.kb-ch { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-top: 3px solid #9a9a9a; background: #e1ddd9; }
+.kb-ch.o { border-color: var(--orange); } .kb-ch.g { border-color: #2e9b5b; } .kb-ch.r { border-color: #c0392b; }
+.kb-ch .cnt { background: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; }
+.kb-cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 90px; }
+.kb-empty { color: #888; font-size: 12px; text-align: center; margin: 22px 0; }
+.kb-card { background: #fff; border: 1px solid #dcdcdc; padding: 10px; cursor: grab; position: relative; }
+.kb-card:hover, .kb-card:focus-visible { border-color: #b9b9b9; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,.10); }
+.kb-card:focus-visible { border-color: var(--orange); }
+.kb-card.dragging { opacity: .45; } .kb-card.canceled { opacity: .6; }
+.kb-name { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0 0 7px; font: inherit; font-weight: 700; font-size: 13px; line-height: 1.35; color: #1a1a1a; cursor: pointer; overflow-wrap: anywhere; }
+.kb-name:hover { color: var(--orange); }
+.kb-meta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.kb-av { display: inline-flex; align-items: center; gap: 2px; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 12px; background: #f5dfc9; color: #7a3b00; font-size: 10px; font-weight: 700; justify-content: center; }
+.kb-av small { font-size: 9px; font-weight: 600; } .kb-av.ph { background: #eee; color: #888; }
+.kb-t { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #eee; color: #555; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-t.late { background: #fde0e0; color: #b3261e; font-weight: 600; } .kb-t.soon { background: #fdeccd; color: #8a5200; }
+.kb-t.lock { background: #fde0e0; color: #b3261e; } .kb-t.par { background: #fdeadf; color: #a53c00; }
+.kb-t.ok { background: #e4f3e8; color: #1e6b3a; } .kb-t.imp { background: #fff3c4; color: #8a6d00; }
+.kb-pb { height: 4px; background: #e4e4e4; margin-top: 8px; } .kb-pb i { display: block; height: 100%; background: var(--orange); }
+.kb-mv { display: flex; justify-content: space-between; margin-top: 8px; }
+.kb-mv button { border: 1px solid #d8d8d8; background: #fafafa; width: 26px; height: 22px; line-height: 1; cursor: pointer; font-size: 15px; color: #666; }
+.kb-mv button:hover { border-color: var(--orange); color: var(--orange); }
+.kb-more { border: 1px dashed #aaa; background: transparent; padding: 8px; cursor: pointer; color: #555; font: inherit; font-size: 12px; }
+.kb-sub { margin: 18px 0 8px; font-size: 13px; }
+.kb-cancel { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+@media (max-width: 980px) { .kb-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .kb-board { grid-template-columns: minmax(0, 1fr); } }
+.kb-chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; } .kb-chk input { width: auto; margin: 0; }
