@@ -782,6 +782,7 @@
       async d => {
         const body = { ...d, is_milestone: !!d.is_milestone, is_important: !!d.is_important, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
         if (taskId) delete body.project_id;
+        else if (projectId) body.project_id = projectId; // dentro do projeto não há seletor: usa o projeto atual
         await api(taskId ? 'PUT' : 'POST', taskId ? 'tasks/' + taskId : 'tasks', body);
         toast(taskId ? 'Salvo.' : 'Criado.');
       });
