@@ -9,9 +9,37 @@
   const PRIO_RANK = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
   const H_RANK = { VERMELHO: 0, AMARELO: 1, VERDE: 2, NAO_INICIADO: 3, PAUSADO: 4, CONCLUIDO: 5, CONCLUIDO_ESTOURO: 5 };
   const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', PAUSADO: 'h-grey', CONCLUIDO: 'h-done', CONCLUIDO_ESTOURO: 'h-red' };
-  const goalBadge = p => p.company_goal ? '<span class="badge b-goal" title="Projeto do plano de desenvolvimento da empresa">★ Meta Empresa</span> ' : '';
-  const prioBadge = p => goalBadge(p) + badge(PRIORITY, p.priority || 'MEDIA');
-  const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}" title="${esc((h.reasons || []).join(' · ') || h.label)}"><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
+  // ---- explicações detalhadas (balão ao passar o mouse)
+  const P_STATUS_TIP = {
+    PLANEJAMENTO: ['O projeto ainda não começou a ser executado.', '• A saúde aparece como "Não iniciado".', '• Prazo, custo e marcos ainda não geram alertas.', 'Mude para "Em andamento" quando a execução começar.'],
+    EM_ANDAMENTO: ['O projeto está em execução.', '• É a única situação em que a saúde é calculada (prazo, custo, marcos e mudanças).', '• Tarefas e marcos vencidos geram alertas e e-mails de atraso.'],
+    CONCLUIDO: ['O projeto foi encerrado.', '• A saúde deixa de ser calculada.', '• Se o custo lançado passou do orçamento, aparece "Concluído c/ estouro" em vermelho.', '• Fica na aba "Concluído" da carteira.'],
+    PAUSADO: ['O projeto está suspenso temporariamente.', '• Fica fora dos alertas de saúde e de atraso até voltar para "Em andamento".', '• Os dados e tarefas são mantidos.']
+  };
+  const pStatusBadge = st => Tip.wrap(badge(P_STATUS, st), 'Situação: ' + P_STATUS[st][0], P_STATUS_TIP[st]);
+  const PRIO_TIP = { CRITICA: 'Urgência máxima entre os projetos comuns. Aparece logo depois dos projetos Meta Empresa.', ALTA: 'Importante e com prazo que exige atenção. Vem depois dos críticos.', MEDIA: 'Prioridade padrão: segue o fluxo normal do portfólio.', BAIXA: 'Pode esperar; é o último a ser atendido quando há disputa por pessoas e tempo.' };
+  const ORDER_TIP = 'Ordem da carteira: Meta Empresa primeiro, depois Crítica, Alta, Média e Baixa. Dentro da mesma prioridade, os projetos com pior saúde aparecem antes.';
+  const goalBadge = p => p.company_goal ? Tip.wrap('<span class="badge b-goal">★ Meta Empresa</span>', 'Meta Empresa',
+    ['Projeto do plano de desenvolvimento da empresa.', 'Tem prioridade acima de "Crítica": sempre aparece primeiro na carteira, qualquer que seja a prioridade ou a saúde dos demais.', ORDER_TIP]) + ' ' : '';
+  const prioBadge = p => goalBadge(p) + Tip.wrap(badge(PRIORITY, p.priority || 'MEDIA'), 'Prioridade: ' + PRIORITY[p.priority || 'MEDIA'][0], [PRIO_TIP[p.priority || 'MEDIA'], ORDER_TIP]);
+  const LVL_WORD = { VERDE: 'saudável', AMARELO: 'atenção', VERMELHO: 'crítico', NA: 'não avaliado' };
+  const healthTip = h => {
+    if (!h) return [];
+    if (h.level === 'CONCLUIDO') return ['Projeto concluído: a saúde não é mais calculada.', 'Se o custo lançado passar do orçamento, o sistema mostra "Concluído c/ estouro".'];
+    if (h.level === 'CONCLUIDO_ESTOURO') return ['O projeto foi concluído, mas gastou mais do que o orçamento aprovado.', ...(h.reasons || []).map(r => '• ' + r), 'Vale registrar a lição aprendida e revisar as estimativas de projetos parecidos.'];
+    if (h.level === 'NAO_INICIADO') return ['Projeto em planejamento: ainda não começou, então prazo, custo e marcos não são avaliados.'];
+    if (h.level === 'PAUSADO') return ['Projeto pausado: fica fora da avaliação de saúde até voltar para "Em andamento".'];
+    const dims = h.dims || [];
+    return ['A cor é sempre a PIOR entre quatro verificações:',
+      ...dims.map(d => `• ${d.label} (${LVL_WORD[d.level] || d.level}): ${d.detail}`),
+      h.planned != null ? `Previsto pelo cronograma até hoje: ${h.planned}% · realizado: ${h.actual}%.` : '',
+      '# Como cada verificação é avaliada',
+      '• Prazo: atenção se o progresso estiver mais de 5 pontos percentuais abaixo do previsto ou houver tarefa atrasada; crítico acima de 15 pontos ou com a data final do projeto vencida.',
+      '• Custo: atenção quando o custo lançado passa de 90% do orçamento (ou quando a projeção de término ultrapassa o orçamento); crítico acima de 100%.',
+      '• Marcos: 1 marco atrasado = atenção; 2 ou mais = crítico.',
+      '• Mudanças: atenção com change pendente há mais de 7 dias ou changes aprovadas que somam dias de atraso; crítico se a pendente tem impacto em dias.'];
+  };
+  const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}"${Tip.attr('Saúde: ' + h.label, healthTip(h))}><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
   const byUrgency = (a, b) => ((b.company_goal ? 1 : 0) - (a.company_goal ? 1 : 0)) || (PRIO_RANK[a.priority || 'MEDIA'] - PRIO_RANK[b.priority || 'MEDIA']) || ((H_RANK[a.health.level] ?? 9) - (H_RANK[b.health.level] ?? 9)) || a.name.localeCompare(b.name);
   const T_STATUS = { A_FAZER: ['A fazer', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDA: ['Concluída', 'b-green'], BLOQUEADA: ['Bloqueada', 'b-dark'], CANCELADA: ['Cancelada', 'b-light'] };
   const ROLES = { ADMIN: 'Administrador', USER: 'Usuário' };
@@ -27,7 +55,16 @@
   const isAdmin = () => me.role === 'ADMIN';
   const isLate = t => t.status !== 'CONCLUIDA' && t.status !== 'CANCELADA' && t.end_date < todayIso();
   const badge = (map, k) => `<span class="badge ${map[k][1]}">${map[k][0]}</span>`;
-  const taskBadge = t => isLate(t) ? '<span class="badge b-red">Atrasada</span>' : badge(T_STATUS, t.status);
+  const T_STATUS_TIP = {
+    A_FAZER: ['A tarefa ainda não começou.', 'Fica "Atrasada" automaticamente se a data final passar sem ela ser concluída.'],
+    EM_ANDAMENTO: ['A tarefa está sendo executada.', 'Ao chegar a 100% de progresso, vira "Concluída". Se a data final passar, aparece como "Atrasada".'],
+    CONCLUIDA: ['A tarefa foi finalizada (100%).', 'Conta como entregue no progresso do projeto e nos indicadores de prazo.'],
+    BLOQUEADA: ['A tarefa está impedida de avançar (dependência externa, aprovação, material...).', 'Continua contando como pendente: se passar da data final, aparece como "Atrasada".'],
+    CANCELADA: ['A tarefa deixou de fazer sentido durante o projeto e foi cancelada.', '• Não conta como atrasada.', '• Fica fora do progresso, da saúde, do painel e dos e-mails de atraso.', '• Numa tarefa-pai, as filhas canceladas são ignoradas.']
+  };
+  const taskBadge = t => isLate(t)
+    ? Tip.wrap('<span class="badge b-red">Atrasada</span>', 'Atrasada', [`O prazo final (${fmt(t.end_date)}) já passou e a tarefa não está concluída nem cancelada.`, 'Para sair deste estado: conclua a tarefa, ajuste a data final ou cancele a tarefa se ela não faz mais sentido.'])
+    : Tip.wrap(badge(T_STATUS, t.status), 'Situação: ' + T_STATUS[t.status][0], T_STATUS_TIP[t.status]);
   const pbar = (p, done) => `<div class="pbar"><div class="pbar-track"><div class="pbar-fill${done ? ' done' : ''}" style="width:${p}%"></div></div><span>${p}%</span></div>`;
   const empty = (t, s) => `<div class="empty"><strong>${t}</strong>${s}</div>`;
   const fileSize = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
@@ -86,12 +123,29 @@
     }
     const over = e.eac != null && e.eac > e.bac, noCost = !(e.ac > 0);
     const eacTxt = e.eac == null ? 'Sem projeção' : money(e.eac);
+    const spiTxt = e.spi == null ? 'Ainda sem previsto' : e.spi >= 1 ? 'No ritmo ou à frente' : e.spi >= 0.9 ? 'Levemente atrasado' : 'Atrasado';
+    const cpiTxt = noCost ? 'Nenhum custo lançado' : e.ac > e.bac ? 'Custo lançado acima do orçamento' : e.cpi >= 1 ? 'Dentro do orçamento' : e.cpi >= 0.9 ? 'Levemente acima' : 'Gastando mais que entrega';
+    const base = [`Valor previsto = orçamento × ${e.planned_pct}% (o que o cronograma previa estar pronto hoje) = ${money(e.pv)}.`, `Valor realizado = orçamento × ${e.actual_pct}% (o que de fato está pronto) = ${money(e.ev)}.`,
+      'Os percentuais são médias ponderadas pela duração das tarefas; marcos e tarefas canceladas ficam de fora.'];
+    const tipSpi = ['Mede se o projeto está andando no ritmo que o cronograma previa.', '= SPI = valor realizado ÷ valor previsto até hoje', e.spi == null ? '= Ainda não há valor previsto (o cronograma ainda não começou).' : `= ${money(e.ev)} ÷ ${money(e.pv)} = ${idxFmt(e.spi)}`,
+      ...base, '# Como ler', '• 1,00 ou mais (verde): no ritmo ou à frente do cronograma.', '• 0,90 a 0,99 (amarelo): levemente atrasado.', '• Abaixo de 0,90 (vermelho): atrasado.',
+      `Hoje: ${spiTxt}.`, e.spi != null && e.spi < 1 ? 'Para recuperar: reveja as tarefas atrasadas, replaneje datas ou reforce o time.' : ''];
+    const tipCpi = noCost ? ['Mede quanto trabalho foi entregue para cada real gasto.', '= CPI = valor realizado ÷ custo lançado', 'Ainda não há lançamentos financeiros no projeto, então o índice não pode ser calculado. Lance os custos na aba Financeiro.']
+      : ['Mede quanto trabalho foi entregue para cada real gasto.', '= CPI = valor realizado ÷ custo lançado', `= ${money(e.ev)} ÷ ${money(e.ac)} = ${idxFmt(e.cpi)}`,
+      `Cada R$ 1,00 gasto entregou R$ ${idxFmt(e.cpi)} de trabalho. O custo lançado é a soma dos lançamentos da aba Financeiro.`, '# Como ler', '• 1,00 ou mais (verde): dentro do orçamento.', '• 0,90 a 0,99 (amarelo): gastando um pouco acima do entregue.', '• Abaixo de 0,90 (vermelho): gastando bem mais do que entrega.',
+      e.ac > e.bac ? `Atenção: o custo lançado (${money(e.ac)}) já passou do orçamento (${money(e.bac)}), então o cartão fica vermelho mesmo com índice próximo de 1.` : `Hoje: ${cpiTxt}.`];
+    const tipEac = ['Estimativa do que o projeto vai custar quando terminar, se o ritmo de gasto atual continuar.', '= EAC = orçamento ÷ CPI', noCost ? '= Sem custo lançado: a projeção é o próprio orçamento.' : `= ${money(e.bac)} ÷ ${idxFmt(e.cpi)} = ${eacTxt}`,
+      e.etc != null ? `Falta gastar (ETC): ${money(e.etc)}, ou seja, EAC menos o custo lançado de ${money(e.ac)}.` : '', over ? `Vermelho: a projeção passa do orçamento de ${money(e.bac)}.` : `Verde: a projeção fica dentro do orçamento de ${money(e.bac)}.`,
+      e.reliable ? '' : 'Atenção: com menos de 10% de progresso a projeção ainda é pouco confiável.'];
+    const tipVac = ['Quanto sobra (ou falta) do orçamento ao final do projeto, pela projeção.', '= Desvio = orçamento − EAC', e.vac == null ? '' : `= ${money(e.bac)} − ${eacTxt} = ${(e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}`,
+      '• Negativo (vermelho): estouro projetado do orçamento.', '• Positivo ou zero (verde): dentro do orçamento, com folga.',
+      e.vac != null && e.vac < 0 ? `Para evitar o estouro, é preciso cortar ${money(Math.abs(e.vac))} do custo restante ou aprovar mais orçamento (change).` : ''];
     return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b><span>${e.reliable ? '' : 'Projeção ainda pouco confiável: o progresso está abaixo de 10%.'}</span></div>
       <div class="evm-grid">
-        <div class="evm-card ${idxClass(e.spi)}" title="SPI = valor realizado ÷ valor previsto até hoje. Abaixo de 1 indica atraso."><small>Prazo (SPI)</small><b>${idxFmt(e.spi)}</b><span>${e.spi == null ? 'Ainda sem previsto' : e.spi >= 1 ? 'No ritmo ou à frente' : e.spi >= 0.9 ? 'Levemente atrasado' : 'Atrasado'}</span></div>
-        <div class="evm-card ${noCost ? '' : e.ac > e.bac ? 'bad' : idxClass(e.cpi)}" title="CPI = valor realizado ÷ custo lançado. Abaixo de 1 indica que cada R$ 1 gasto entregou menos de R$ 1 de trabalho."><small>Custo (CPI)</small><b>${noCost ? '—' : idxFmt(e.cpi)}</b><span>${noCost ? 'Nenhum custo lançado' : e.ac > e.bac ? 'Custo lançado acima do orçamento' : e.cpi >= 1 ? 'Dentro do orçamento' : e.cpi >= 0.9 ? 'Levemente acima' : 'Gastando mais que entrega'}</span></div>
-        <div class="evm-card ${over ? 'bad' : 'ok'}" title="EAC = orçamento ÷ CPI. Quanto o projeto deve custar no fim se o ritmo atual continuar."><small>Custo previsto no término (EAC)</small><b>${eacTxt}</b><span>Orçamento ${money(e.bac)}</span></div>
-        <div class="evm-card ${e.vac != null && e.vac < 0 ? 'bad' : 'ok'}" title="Desvio no término = orçamento − EAC. Negativo indica estouro projetado."><small>Desvio no término</small><b>${e.vac == null ? '—' : (e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}</b><span>${e.vac == null ? '' : e.vac < 0 ? 'Estouro projetado' : 'Dentro do orçamento'}</span></div>
+        <div class="evm-card ${idxClass(e.spi)}"${Tip.attr('Prazo (SPI) — Índice de desempenho de prazo', tipSpi)}><small>Prazo (SPI)</small><b>${idxFmt(e.spi)}</b><span>${spiTxt}</span></div>
+        <div class="evm-card ${noCost ? '' : e.ac > e.bac ? 'bad' : idxClass(e.cpi)}"${Tip.attr('Custo (CPI) — Índice de desempenho de custo', tipCpi)}><small>Custo (CPI)</small><b>${noCost ? '—' : idxFmt(e.cpi)}</b><span>${cpiTxt}</span></div>
+        <div class="evm-card ${over ? 'bad' : 'ok'}"${Tip.attr('Custo previsto no término (EAC)', tipEac)}><small>Custo previsto no término (EAC)</small><b>${eacTxt}</b><span>Orçamento ${money(e.bac)}</span></div>
+        <div class="evm-card ${e.vac != null && e.vac < 0 ? 'bad' : 'ok'}"${Tip.attr('Desvio no término (VAC)', tipVac)}><small>Desvio no término</small><b>${e.vac == null ? '—' : (e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}</b><span>${e.vac == null ? '' : e.vac < 0 ? 'Estouro projetado' : 'Dentro do orçamento'}</span></div>
       </div>
       <p class="hint" style="margin:10px 0 0">Previsto até hoje ${money(e.pv)} (${e.planned_pct}%) · Realizado ${money(e.ev)} (${e.actual_pct}%) · Custo lançado ${money(e.ac)}${over && e.reliable ? ' · <b class="late-txt">Atenção: a projeção passa do orçamento.</b>' : ''}</p></div>`;
   }
@@ -175,7 +229,7 @@
           <td class="nowrap">${fmt(p.start_date)} – ${fmt(p.end_date)}<span class="small">${duration(p.start_date, p.end_date)} dias</span></td>
           <td>${pbar(p.progress, p.status === 'CONCLUIDO')}</td>
           <td class="num">${Number(p.budget) > 0 ? money(p.budget) : '—'}</td>
-          <td>${badge(P_STATUS, p.status)}</td>
+          <td>${pStatusBadge(p.status)}</td>
           <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto" data-action="edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto" data-action="del-project" data-id="${p.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`
         : list.some(p => p.status === f.status) ? empty('Nenhum projeto com esse filtro', 'Troque a saúde ou a prioridade para ver os demais.')
@@ -196,10 +250,15 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Escopo inicial</h2><div class="bar-actions">
         <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Editar projeto</button></div></div>
         <p class="scope-text">${p.scope ? esc(p.scope) : 'Escopo ainda não informado.'}</p>
-        <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(P_STATUS, p.status)}</dd></div><div><dt>Saúde</dt><dd>${healthChip(p.health)}</dd></div><div><dt>Prioridade</dt><dd>${prioBadge(p)}</dd></div><div><dt>Responsável</dt><dd>${esc(p.owner || '—')}</dd></div>
-        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Fim</dt><dd>${fmt(p.end_date)}</dd></div>
-        <div><dt>Duração</dt><dd>${duration(p.start_date, p.end_date)} dias</dd></div><div><dt>Progresso</dt><dd>${p.progress}%</dd></div>
-        <div><dt>Orçamento</dt><dd>${Number(p.budget) > 0 ? money(p.budget) : '—'}</dd></div></dl>
+        <dl class="meta-grid"><div><dt>Situação</dt><dd>${pStatusBadge(p.status)}</dd></div><div><dt>Saúde</dt><dd>${healthChip(p.health)}</dd></div><div><dt>Prioridade</dt><dd>${prioBadge(p)}</dd></div>
+        <div><dt>Responsável</dt><dd>${Tip.wrap(esc(p.owner || '—'), 'Responsável', ['Pessoa responsável pelo projeto: quem responde pelo andamento e é cobrada nos alertas de prazo e custo.', 'Para trocar, use "Editar projeto".'])}</dd></div>
+        <div><dt>Início</dt><dd>${Tip.wrap(fmt(p.start_date), 'Início planejado', ['Data em que o projeto deve começar. As tarefas devem começar a partir dela; ao importar um cronograma você pode ajustar esta data.'])}</dd></div>
+        <div><dt>Fim</dt><dd>${Tip.wrap(fmt(p.end_date), 'Fim planejado', ['Data limite do projeto.', 'Com o projeto "Em andamento", passar desta data deixa a saúde de prazo em "Crítico".'])}</dd></div>
+        <div><dt>Duração</dt><dd>${Tip.wrap(duration(p.start_date, p.end_date) + ' dias', 'Duração', [`Dias corridos entre o início (${fmt(p.start_date)}) e o fim (${fmt(p.end_date)}), contando os dois dias.`, 'Inclui fins de semana e feriados.'])}</dd></div>
+        <div><dt>Progresso</dt><dd>${Tip.wrap(p.progress + '%', 'Progresso do projeto', ['Média do progresso das tarefas principais do projeto.', '• Tarefa-pai: calculada pelas filhas, ponderada pela duração de cada uma.', '• Tarefas canceladas não entram na conta.', '• Marcos não pesam no cálculo.', `Resultado atual: ${p.progress}% (${p.task_count} tarefa(s) ativas, ${p.late_count || 0} atrasada(s)).`])}</dd></div>
+        <div><dt>Orçamento</dt><dd>${Tip.wrap(Number(p.budget) > 0 ? money(p.budget) : '—', 'Orçamento (BAC)', ['Valor total aprovado para o projeto. É a base de todos os indicadores de custo.',
+          p.evm && p.evm.available ? `Custo lançado até agora: ${money(p.evm.ac)} (${Math.round(p.evm.ac / p.evm.bac * 100)}% do orçamento), somando os lançamentos da aba Financeiro.` : 'Sem custo lançado ou sem tarefas: os indicadores de custo ainda não podem ser calculados.',
+          p.evm && p.evm.available ? `Projeção de custo no término: ${money(p.evm.eac)} (${p.evm.eac > p.evm.bac ? 'acima' : 'dentro'} do orçamento).` : ''])}</dd></div></dl>
         ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
         ${evmPanel(p)}</section>
       <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">

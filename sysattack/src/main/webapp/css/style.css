@@ -585,3 +585,17 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .qr-frame { flex: none; width: 220px; height: 220px; box-sizing: border-box; padding: 10px; background: #fff; border: 1px solid #ddd; }
 .qr-frame svg { display: block; width: 100%; height: 100%; }
 .qr-key { flex: 1 1 200px; min-width: 0; }
+
+/* balões de explicação (Tip) */
+.has-tip { cursor: help; }
+[data-tip]:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.tip { position: fixed; z-index: 300; max-width: 400px; background: #1b1b1b; color: #ececec; padding: 14px 16px; font-size: 13px; line-height: 1.5;
+  border-left: 4px solid var(--orange); box-shadow: 0 10px 30px rgba(0,0,0,.35); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s; }
+.tip.on { opacity: 1; visibility: visible; }
+.tip .tip-t { display: block; font-size: 14px; color: #fff; margin-bottom: 6px; }
+.tip p { margin: 0 0 6px; }
+.tip .tip-h { margin: 10px 0 4px; font-weight: 700; color: #fff; }
+.tip ul { margin: 0 0 6px; padding-left: 18px; }
+.tip li { margin: 2px 0; }
+.tip code { display: block; margin: 4px 0 8px; padding: 6px 8px; background: #2c2c2c; color: #ffd9c2; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; }
+@media (max-width: 700px) { .tip { max-width: calc(100vw - 16px); } }
