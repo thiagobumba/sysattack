@@ -746,6 +746,7 @@
     const form = openDialog(taskId ? (t.is_milestone ? 'Editar marco' : 'Editar tarefa') : (preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
       <div class="field full"><label for="tn">Nome</label><input id="tn" name="name" maxlength="160" value="${esc(t.name)}" required></div>
       <div class="field full"><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone ? 'checked' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
+      <div class="field full"><label class="check"><input type="checkbox" name="is_important" ${t.is_important ? 'checked' : ''}> Marcar como importante (entra no quadrante "importante" da Matriz de prioridades, mesmo que o projeto não seja prioritário)</label></div>
       <div class="field"><label for="tpar">Tarefa pai</label><select id="tpar" name="parent_id" ${hasKids ? 'disabled' : ''}></select></div>
       <div class="field"><label for="td">Depende de</label><select id="td" name="depends_on"></select></div>
       <div class="field"><label for="tr">Responsável</label><input id="tr" name="responsible" maxlength="120" value="${esc(t.responsible)}"></div>
@@ -756,7 +757,7 @@
       ${hasKids ? '<p class="hint full" style="grid-column:1/-1">Esta tarefa tem filhas: início, fim, progresso e situação são calculados automaticamente a partir delas.</p>' : ''}
       <div class="field full"><label for="tx">Descrição</label><textarea id="tx" name="description" maxlength="4000" style="min-height:80px">${esc(t.description)}</textarea></div>`,
       async d => {
-        const body = { ...d, is_milestone: !!d.is_milestone, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
+        const body = { ...d, is_milestone: !!d.is_milestone, is_important: !!d.is_important, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
         if (taskId) delete body.project_id;
         await api(taskId ? 'PUT' : 'POST', taskId ? 'tasks/' + taskId : 'tasks', body);
         toast(taskId ? 'Salvo.' : 'Criado.');
@@ -801,6 +802,7 @@
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
       if (el.dataset.action.startsWith('ish-')) { await Ish.action(el); return; }
+      if (el.dataset.action.startsWith('prio-')) { await Prio.action(el); return; }
       switch (el.dataset.action) {
         case 'logout': await api('POST', 'logout'); location.replace('login.html'); break;
         case 'close': dlg.close(); break;
@@ -916,6 +918,7 @@
       if (name === 'projetos') await viewProjects();
       else if (name === 'projeto') await viewProject(Number(arg));
       else if (name === 'tarefas') await viewTasks();
+      else if (name === 'prioridades') await Prio.view();
       else if (name === 'marcos') await viewMilestones();
       else if (name === 'cronograma') await viewSchedule();
       else if (name === 'usuarios') await viewUsers();
@@ -935,7 +938,7 @@
     window.scrollTo(0, y);
   }
 
-  window.App = { get me() { return me; }, get main() { return main; }, dlg, api, openDialog, toast, pageHead, route };
+  window.App = { get me() { return me; }, get main() { return main; }, get view() { return view; }, isLate, T_STATUS, dayDiff, dlg, api, openDialog, toast, pageHead, route };
   window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
   // menu do celular: abre/fecha, fecha ao navegar e com Esc
   const sidebar = document.querySelector('.sidebar'), menuBtn = document.getElementById('menu-btn');

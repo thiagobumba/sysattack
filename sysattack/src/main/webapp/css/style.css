@@ -638,3 +638,29 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .ish-subs { margin: 3px 0 0 14px; padding-left: 10px; border-left: 2px solid #ddd; }
 .ish-subs .ish-t { font-size: 12.5px; color: #444; border-bottom-style: dotted; }
 @media (max-width: 760px) { .ish-acts { opacity: 1; } }
+
+/* Matriz de prioridades (Eisenhower) */
+.pq-axis { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 14px; margin-bottom: 6px; font-weight: 700; font-size: 13px; color: #555; }
+.pq-axis span:first-child { grid-column: 2; } .pq-axis span:last-child { grid-column: 3; }
+.pq-grid { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 14px; align-items: stretch; }
+.pq-side { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-weight: 700; font-size: 13px; color: #555; align-self: center; justify-self: center; }
+.pq { background: #fafafa; border-top: 4px solid #b5b5b5; display: flex; flex-direction: column; min-width: 0; }
+.pq.q-now { border-top-color: var(--red); } .pq.q-plan { border-top-color: #2e9e5b; } .pq.q-delegate { border-top-color: #e0a100; } .pq.q-drop { border-top-color: #9a9a9a; }
+.pq header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 6px; flex-wrap: wrap; }
+.pq header b { font-size: 15px; }
+.pq-list { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; }
+.pq-empty { color: #999; font-size: 13px; font-style: italic; margin: 6px 4px; }
+.pq-card { background: #fff; border: 1px solid #e6e6e6; padding: 9px 10px; display: flex; gap: 6px; align-items: flex-start; }
+.pq-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pq-name { background: none; border: 0; padding: 0; text-align: left; font: inherit; font-weight: 600; cursor: pointer; color: var(--ink); }
+.pq-name:hover { color: var(--orange); text-decoration: underline; }
+.pq-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12.5px; }
+.pq-due.late { color: var(--red); } .pq-due.soon { color: #b36b00; }
+.pq-why { background: #f2f0ed; color: #555; font-size: 11.5px; padding: 1px 7px; }
+.pq-star { flex: none; font-size: 20px; color: #aaa; width: 32px; height: 32px; }
+.pq-star.on { color: #e0a100; }
+@media (max-width: 860px) {
+  .pq-axis { display: none; }
+  .pq-grid { grid-template-columns: 1fr; }
+  .pq-side { display: none; }
+}

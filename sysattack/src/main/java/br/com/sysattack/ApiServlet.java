@@ -86,7 +86,7 @@ public class ApiServlet extends HttpServlet {
           + " FROM projects p";
 
     private static final String TASK_SQL =
-            "SELECT t.*, p.name project_name,"
+            "SELECT t.*, p.name project_name, p.priority project_priority, p.company_goal project_goal, p.status project_status,"
           + " (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) child_count"
           + " FROM tasks t JOIN projects p ON p.id = t.project_id";
 
@@ -879,6 +879,9 @@ public class ApiServlet extends HttpServlet {
                 }
             } else if (s.size() == 3 && s.get(2).equals("links") && m.equals("GET")) {
                 return Collections.singletonMap("message", taskDeleteBlock(t));
+            } else if (s.size() == 3 && s.get(2).equals("important") && m.equals("PUT")) {
+                Db.update("UPDATE tasks SET is_important = ? WHERE id = ?", bool(body(req), "important"), id);
+                return Db.one(TASK_SQL + " WHERE t.id = ?", id);
             } else if (s.size() == 3 && s.get(2).equals("done") && m.equals("PUT")) {
                 return markDone(t, body(req));
             }
@@ -912,6 +915,7 @@ public class ApiServlet extends HttpServlet {
         String desc = str(b, "description", "Descrição", 4000, false);
         String who = str(b, "responsible", "Responsável", 120, false);
         boolean milestone = bool(b, "is_milestone");
+        boolean important = bool(b, "is_important");
         int children = existing == null ? 0 : ((Number) existing.get("child_count")).intValue();
         Long oldParent = existing == null ? null : optNum(existing.get("parent_id"));
 
@@ -954,11 +958,11 @@ public class ApiServlet extends HttpServlet {
         if (dep != null) checkDependency(id, projectId, dep);
 
         if (id == null) {
-            id = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, who, start, end, progress, status, dep, parent, milestone);
+            id = Db.insert("INSERT INTO tasks(project_id,name,description,responsible,start_date,end_date,progress,status,depends_on,parent_id,is_milestone,is_important)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", projectId, name, desc, who, start, end, progress, status, dep, parent, milestone, important);
         } else {
-            Db.update("UPDATE tasks SET name=?, description=?, responsible=?, start_date=?, end_date=?, progress=?, status=?, depends_on=?, parent_id=?, is_milestone=? WHERE id=?",
-                    name, desc, who, start, end, progress, status, dep, parent, milestone, id);
+            Db.update("UPDATE tasks SET name=?, description=?, responsible=?, start_date=?, end_date=?, progress=?, status=?, depends_on=?, parent_id=?, is_milestone=?, is_important=? WHERE id=?",
+                    name, desc, who, start, end, progress, status, dep, parent, milestone, important, id);
         }
         TaskRules.rollup(parent);
         if (oldParent != null && !oldParent.equals(parent)) TaskRules.rollup(oldParent);
