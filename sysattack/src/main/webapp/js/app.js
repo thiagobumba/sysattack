@@ -296,7 +296,7 @@
       : t === 'ishikawa' ? btn('ish-new', '+ Novo diagrama')
       : t === 'triggers' ? btn('em-new-rule', '+ Novo gatilho')
       : t === 'marcos' ? btn('new-milestone', '+ Novo marco')
-      : btn('new-task', '+ Nova tarefa') + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar', `data-project="${view.projectId}"`, false);
+      : btn('new-task', '+ Nova tarefa') + btn('new-parent', '+ Nova tarefa pai', '', false) + btn('new-milestone', '+ Novo marco', '', false) + btn('mpp-open', 'Importar', `data-project="${view.projectId}"`, false);
     if (t === 'gantt') {
       const p = view.project;
       Gantt.render(host, ganttRows([p], view.tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
@@ -778,11 +778,12 @@
     const hasKids = !!(t0 && t0.child_count > 0);
     const projSel = !taskId && !projectId
       ? `<div class="field full"><label for="tp">Projeto</label><select id="tp" name="project_id" required>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>` : '';
-    const form = openDialog(taskId ? (t.is_milestone ? 'Editar marco' : 'Editar tarefa') : (preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
+    const form = openDialog(taskId ? (t.is_milestone ? 'Editar marco' : 'Editar tarefa') : (preset.asParent ? 'Nova tarefa pai' : preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
       <div class="field full"><label for="tn">Nome</label><input id="tn" name="name" maxlength="160" value="${esc(t.name)}" required></div>
       <div class="field full"><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone ? 'checked' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
       <div class="field full"><label class="check"><input type="checkbox" name="is_important" ${t.is_important ? 'checked' : ''}> Marcar como importante (entra no quadrante "importante" da Matriz de prioridades, mesmo que o projeto não seja prioritário)</label></div>
-      <div class="field"><label for="tpar">Tarefa pai</label><select id="tpar" name="parent_id" ${hasKids ? 'disabled' : ''}></select></div>
+      ${preset.asParent ? '<p class="hint full" style="grid-column:1/-1">Uma tarefa pai agrupa outras. Depois de salvar, use o botão <b>+ Filha</b> na linha dela para criar as tarefas dentro dela, ou edite tarefas existentes e escolha esta como “Pertence a”. Início, fim, progresso e situação passam a ser calculados pelas filhas.</p>' : ''}
+      <div class="field"><label for="tpar">Pertence a (tarefa pai)</label><select id="tpar" name="parent_id" ${hasKids || preset.asParent ? 'disabled' : ''}></select></div>
       <div class="field"><label for="td">Depende de</label><select id="td" name="depends_on"></select></div>
       <div class="field"><label for="tr">Responsável</label><input id="tr" name="responsible" maxlength="120" value="${esc(t.responsible)}"></div>
       <div class="field"><label for="ts">Situação</label><select id="ts" name="status" ${hasKids ? 'disabled' : ''}>${opts(T_STATUS, t.status)}</select></div>
@@ -800,14 +801,20 @@
       });
     const el = form.elements, ms = el.is_milestone, rng = el.progress, st = el.status;
     const currentProject = () => taskId || projectId ? t.project_id || projectId : Number(el.project_id.value);
-    const fillSelects = () => {
+    const fillSelects = (onlyDeps = false) => {
       const pid = currentProject();
       const same = allTasks.filter(x => x.project_id === pid && x.id !== taskId);
-      el.parent_id.innerHTML = '<option value="">Nenhuma (tarefa principal)</option>' + same.filter(x => !x.parent_id)
+      if (!onlyDeps) el.parent_id.innerHTML = '<option value="">Nenhuma — esta é uma tarefa principal (pode ter filhas)</option>' + same.filter(x => !x.parent_id)
         .map(x => `<option value="${x.id}"${x.id === t.parent_id ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
-      el.depends_on.innerHTML = '<option value="">Nenhuma</option>' + same.map(x => `<option value="${x.id}"${x.id === t.depends_on ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+      const curPar = Number(el.parent_id.value) || null, keep = Number(el.depends_on.value) || t.depends_on;
+      const o = x => `<option value="${x.id}"${x.id === keep ? ' selected' : ''}>${esc(x.name)}</option>`;
+      const sib = curPar ? same.filter(x => x.parent_id === curPar) : [], rest = same.filter(x => !sib.includes(x));
+      el.depends_on.innerHTML = '<option value="">Nenhuma</option>'
+        + (sib.length ? `<optgroup label="Irmãs (dentro da mesma tarefa pai)">${sib.map(o).join('')}</optgroup>` : '')
+        + (sib.length && rest.length ? `<optgroup label="Outras tarefas do projeto">${rest.map(o).join('')}</optgroup>` : rest.map(o).join(''));
     };
     fillSelects();
+    el.parent_id.addEventListener('change', () => fillSelects(true));
     if (el.project_id && !taskId && !projectId) el.project_id.addEventListener('change', () => { t.parent_id = null; fillSelects(); });
     const syncMs = () => { form.querySelector('#g-end').hidden = ms.checked; form.querySelector('#l-start').textContent = ms.checked ? 'Data do marco' : 'Início'; };
     ms.addEventListener('change', syncMs); syncMs();
@@ -897,6 +904,7 @@
           } catch (ex) { alert(ex.message); }
           break;
         case 'new-task': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null }); break;
+        case 'new-parent': openTaskForm(view.tasks, null, { projectId: view.projectId, asParent: true }); break;
         case 'new-milestone': openTaskForm(view.tasks, null, { projectId: inProject ? view.projectId : null, milestone: true }); break;
         case 'new-subtask': {
           const parent = view.tasks.find(x => x.id === id);

@@ -58,6 +58,9 @@ Nome (até 160 caracteres), descrição, responsável, início, fim, progresso (
 ### Situações
 A fazer · Em andamento · Concluída · Bloqueada · **Cancelada**.
 
+### Criar uma tarefa pai e suas filhas
+1. **+ Nova tarefa pai** (aba Tarefas do projeto) cria a tarefa principal. 2. **+ Filha**, na linha dela, cria cada filha. 3. Em cada filha, **Depende de** lista primeiro as irmãs, para definir a ordem entre elas. Também dá para editar uma tarefa existente e escolher o pai em **Pertence a**. Só há um nível de filhas.
+
 ### Como a lista mostra a hierarquia
 Pai: barra laranja à esquerda, botão ▾/▸ para ocultar as filhas (lembrado no navegador, chave `sa.collapsed`) e resumo das filhas. Filha: recuada, com linha de árvore. Dependência: "🔒 Bloqueada por …" enquanto a tarefa anterior não estiver concluída ou cancelada; depois, "✔ Liberada — … concluída". A dependência é sempre de uma única tarefa do mesmo projeto.
 
