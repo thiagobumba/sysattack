@@ -123,7 +123,7 @@ Limites: causa até 200 caracteres, problema até 300, no máximo 300 causas por
 
 ## Relatórios & Dashs
 
-Para todos os usuários (Projetos Spot não entram). Os relatórios são **de um projeto por vez**: a tela abre com uma explicação e a lista de projetos; escolha um (para fechamento, um projeto concluído) no campo **Projeto** ou clicando na lista. Há **Imprimir / salvar PDF**.
+Para todos os usuários (Projetos Spot não entram). Os relatórios são **de um projeto por vez**: a tela abre com uma explicação e a lista de projetos; escolha um (para fechamento, um projeto concluído) no campo **Projeto** ou clicando na lista. Há **Imprimir / salvar PDF**. Cada aba começa com um texto sobre a sua finalidade.
 - **Projetos:** Timeline, Itens em atraso, Previsto × Realizado, Quantidade de changes por projeto, Atrasos gerados por changes.
 - **Orçamentária:** Previsto × Realizado em R$, Custo do projeto total, Projeção de custo no término.
 

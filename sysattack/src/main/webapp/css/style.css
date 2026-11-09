@@ -818,3 +818,4 @@ tr[hidden] { display: none; }
 .rp-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 16px; }
 .rp-pick-item { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 14px; background: #fafafa; border: 1px solid #dcdcdc; border-left: 4px solid var(--orange); cursor: pointer; font: inherit; color: inherit; }
 .rp-pick-item:hover, .rp-pick-item:focus-visible { background: #fff; border-color: var(--orange); outline: none; }
+.rp-help { margin: 0 0 14px; padding: 12px 16px; background: #fff; border-left: 4px solid var(--orange); font-size: 13px; line-height: 1.55; color: #444; }

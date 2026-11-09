@@ -176,6 +176,13 @@ const Rep = (() => {
       <p class="hint" style="margin-top:10px">SPI = valor realizado ÷ valor previsto até hoje (prazo). CPI = valor realizado ÷ custo lançado. EAC = orçamento ÷ CPI. Desvio = orçamento − EAC. Valor realizado e previsto = orçamento × progresso (ponderado pela duração das tarefas). Abaixo de 1: atraso (SPI) ou gasto acima do entregue (CPI).</p>`;
   }
 
+  // texto de apoio no topo de cada aba (com o projeto já escolhido)
+  const HELP = {
+    projetos: ['Aba Projetos: prazo e entrega', 'Mostra se o projeto está cumprindo o cronograma: a <b>timeline</b> com fases e marcos, os <b>itens em atraso</b> a cobrar, o <b>previsto × realizado</b> (quanto do prazo já passou contra quanto foi entregue) e o efeito das <b>changes</b> no prazo. Use em reuniões de status e para conferir o que foi entregue no fechamento.'],
+    orcamentaria: ['Aba Orçamentária: custo do projeto', 'Mostra se o projeto está cabendo no dinheiro: o <b>orçamento contra o que já foi lançado</b>, a <b>projeção de custo no término</b> (SPI, CPI e EAC: se o ritmo atual estoura ou não o orçamento) e o <b>custo total</b> em notas fiscais de serviço e faturas. Para os números aparecerem, o projeto precisa de <b>orçamento</b> (Editar projeto), <b>tarefas</b> e <b>lançamentos na aba Financeiro</b>. Em projeto concluído, mostra o custo final.']
+  };
+  const help = k => `<p class="rp-help"><b>${HELP[k][0]}.</b> ${HELP[k][1]}</p>`;
+
   // tela inicial: explica para que servem os relatórios e pede para escolher um projeto
   function intro(d) {
     const byName = d.projects.slice().sort((a, b) => (a.status === 'CONCLUIDO') - (b.status === 'CONCLUIDO') || a.name.localeCompare(b.name));
@@ -198,12 +205,12 @@ const Rep = (() => {
     if (st.project && !projects.length) st.project = ''; // projeto excluído desde a última visita
     const body = !projects.length ? intro(d)
       : st.tab === 'projetos'
-      ? panel('Timeline do Projeto', 'Fases e tarefas de nível principal do projeto.', repTimeline(d, projects))
+      ? help('projetos') + panel('Timeline do Projeto', 'Fases e tarefas de nível principal do projeto.', repTimeline(d, projects))
         + panel('Itens em atraso', 'Tarefas e marcos abertos com o prazo vencido.', repLate(d, projects))
         + panel('Previsto × Realizado', 'Progresso esperado pelo cronograma contra o progresso informado.', repPlanned(d, projects))
         + panel('Quantidade de changes por projeto', 'Solicitações de mudança registradas, por situação.', repChangeCount(d, projects))
         + panel('Atrasos gerados por changes', 'Dias somados das changes aprovadas com impacto no prazo.', repChangeDelay(d, projects))
-      : panel('Previsto × Realizado (orçamento)', 'Orçamento do projeto contra o que já foi lançado, em R$.', repBudget(d, projects))
+      : help('orcamentaria') + panel('Previsto × Realizado (orçamento)', 'Orçamento do projeto contra o que já foi lançado, em R$.', repBudget(d, projects))
         + panel('Projeção de custo no término', 'Quanto cada projeto deve custar no fim, mantido o ritmo atual (valor agregado).', repEac(projects))
         + panel('Custo Projeto Total', 'Notas fiscais de serviço e faturas por projeto, em R$.', repCost(d, projects));
     A().main.innerHTML = A().pageHead(['SysAttack', 'Relatórios & Dashs'], 'Relatórios & Dashs', 'Indicadores dos projetos (os projetos spot não entram aqui).') +
