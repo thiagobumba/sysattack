@@ -59,7 +59,7 @@ Nome (até 160 caracteres), descrição, responsável, início, fim, progresso (
 A fazer · Em andamento · Concluída · Bloqueada · **Cancelada**.
 
 ### Como a lista mostra a hierarquia
-Pai: barra laranja à esquerda e selo "Pai · N filha(s)". Filha: recuada, com linha de árvore e selo "Filha". Dependência: selo azul "Depende de: …" na tarefa que espera, e selo verde "Libera N" na que é pré-requisito.
+Pai: barra laranja à esquerda, botão ▾/▸ para ocultar as filhas (lembrado no navegador, chave `sa.collapsed`) e resumo das filhas. Filha: recuada, com linha de árvore. Dependência: "🔒 Bloqueada por …" enquanto a tarefa anterior não estiver concluída ou cancelada; depois, "✔ Liberada — … concluída". A dependência é sempre de uma única tarefa do mesmo projeto.
 
 ### Regras
 - **Dois níveis:** tarefa principal e filhas. Uma filha não pode ter filhas.

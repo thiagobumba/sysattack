@@ -318,23 +318,25 @@
   }
 
   // ------------------------------------------------------------------ tabela de tarefas
+  const collapsedIds = () => { try { return new Set(JSON.parse(localStorage.getItem('sa.collapsed') || '[]')); } catch (e) { return new Set(); } };
+  const saveCollapsed = set => { try { localStorage.setItem('sa.collapsed', JSON.stringify([...set])); } catch (e) { /* sem armazenamento */ } };
   function taskTable(list, { tree = false, showProject = false } = {}) {
     if (!list.length) return empty('Nenhuma tarefa', 'Use “Nova tarefa” para quebrar o escopo em atividades com prazo. Crie tarefas pai e, dentro delas, tarefas filhas.');
     const byId = Object.fromEntries(list.map(t => [t.id, t]));
     const rows = tree ? treeOrder(list) : list.map(t => ({ t, level: 0 }));
-    return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Tarefa</th>${showProject ? '<th>Projeto</th>' : ''}<th>Início</th><th>Fim</th><th>Progresso</th><th>Situação</th><th></th></tr></thead><tbody>
+    return `<div class="table-wrap"><table class="tbl tbl-tasks"><thead><tr><th>Tarefa</th>${showProject ? '<th>Projeto</th>' : ''}<th>Início</th><th>Fim</th><th>Progresso</th><th>Situação</th><th></th></tr></thead><tbody>
       ${rows.map(({ t, level }, i) => {
         const lastKid = level && !(rows[i + 1] && rows[i + 1].level);
-        const dep = t.depends_on && byId[t.depends_on], blocks = list.filter(x => x.depends_on === t.id).length;
-        const chips = [
-          t.child_count ? `<span class="rel rel-parent" title="Tarefa pai: início, fim, progresso e situação são calculados pelas filhas">Pai · ${t.child_count} filha(s)</span>` : '',
-          level ? '<span class="rel rel-child" title="Tarefa filha">Filha</span>'
-            : (!tree && t.parent_id && byId[t.parent_id] ? `<span class="rel rel-child" title="Tarefa filha de ${esc(byId[t.parent_id].name)}">Filha de: ${esc(byId[t.parent_id].name)}</span>` : ''),
-          dep ? `<span class="rel rel-dep" title="Só deve começar depois de: ${esc(dep.name)}">Depende de: ${esc(dep.name)}</span>` : '',
-          blocks ? `<span class="rel rel-blocks" title="Outras tarefas dependem desta">Libera ${blocks}</span>` : ''
-        ].join('');
-        return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}</span>
-        <span class="small">${esc(t.responsible || 'Sem responsável')}</span>${chips ? `<span class="rels">${chips}</span>` : ''}</div></div></td>
+        const dep = t.depends_on && byId[t.depends_on], depDone = dep && (dep.status === 'CONCLUIDA' || dep.status === 'CANCELADA');
+        const kids = tree && t.child_count ? list.filter(k => k.parent_id === t.id) : [];
+        const collapsed = kids.length && collapsedIds().has(t.id), hide = level && collapsedIds().has(t.parent_id);
+        const sum = kids.length ? `<span class="t-sum">— ${kids.length} ${kids.length === 1 ? 'filha' : 'filhas'}${kids.filter(isLate).length ? ` · ${kids.filter(isLate).length} atrasada(s)` : ''} · ${Math.round(100 * kids.filter(k => k.status === 'CONCLUIDA').length / kids.length)}% concluído</span>` : (t.child_count ? `<span class="t-sum">— ${t.child_count} filha(s)</span>` : '');
+        const lock = dep && !(t.status === 'CONCLUIDA' || t.status === 'CANCELADA')
+          ? (depDone ? `<span class="lock fr" title="A tarefa anterior já terminou: pode começar">✔ Liberada — “${esc(dep.name)}” ${dep.status === 'CANCELADA' ? 'cancelada' : 'concluída'}</span>`
+            : `<span class="lock lk" title="Só deve começar depois que “${esc(dep.name)}” terminar">🔒 Bloqueada por “${esc(dep.name)}”</span>`)
+          : (dep ? `<span class="lock dn" title="Dependia de: ${esc(dep.name)}">↳ Dependia de “${esc(dep.name)}”</span>` : '');
+        return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"${level ? ` data-of="${t.parent_id}"` : ''}${hide ? ' hidden' : ''}><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${kids.length ? `<button type="button" class="t-tog" data-action="toggle-kids" data-id="${t.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas" title="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas">${collapsed ? '▸' : '▾'}</button>` : ''}${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)} ${sum}</span>
+        <span class="small">${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}</span>${lock ? `<span class="rels">${lock}</span>` : ''}</div></div></td>
         ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
         <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
         <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 10px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
@@ -912,6 +914,14 @@
           break;
         }
         case 'tab': view.tab = el.dataset.tab; drawNav(); await renderTab(); break;
+        case 'toggle-kids': {
+          const set = collapsedIds(), hide = !set.has(id);
+          hide ? set.add(id) : set.delete(id); saveCollapsed(set);
+          document.querySelectorAll(`tr[data-of="${id}"]`).forEach(r => { r.hidden = hide; });
+          el.textContent = hide ? '▸' : '▾'; el.setAttribute('aria-expanded', String(!hide));
+          el.title = el.ariaLabel = (hide ? 'Mostrar' : 'Ocultar') + ' as filhas';
+          break;
+        }
         case 'ms-tab': view.msTab = el.dataset.tab; if (view.msRender) view.msRender(); break;
         case 'ms-toggle': await api('PUT', `tasks/${id}/done`, { done: el.dataset.done !== '1' }); await route(); break;
         case 'new-fin': openFinanceForm(null, el.dataset.kind); break;
