@@ -690,3 +690,17 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .mini.st-bad { border-top-color: #b3261e; }
 .mini.st-ok { border-top-color: #2e7d32; }
 .mini.st-grey { border-top-color: #999; }
+
+/* PERT / caminho crítico */
+.pt-wrap { overflow: auto; border: 1px solid #e4e4e4; background: #fff; max-height: 640px; }
+.pt-svg { display: block; }
+.pt-edge { fill: none; stroke: #b5b5b5; stroke-width: 1.5; }
+.pt-edge.crit { stroke: #b3261e; stroke-width: 2.5; }
+.pt-node rect { fill: #fafafa; stroke: #9a9a9a; stroke-width: 1; }
+.pt-node.crit rect { fill: #fdf0ef; stroke: #b3261e; stroke-width: 2; }
+.pt-node line { stroke: #d6d6d6; }
+.pt-name { font-size: 12px; font-weight: 700; fill: #1a1a1a; }
+.pt-n { font-size: 11px; fill: #555; }
+.pt-n.b { font-weight: 700; fill: #1a1a1a; }
+.pt-h { margin: 22px 0 8px; font-size: 14px; }
+.pt-tbl .pt-crit td { color: #b3261e; font-weight: 600; }
