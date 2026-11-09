@@ -666,30 +666,42 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 }
 
 /* Burndown */
-.bd-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.bd-sum { padding: 14px 16px; margin-bottom: 16px; background: #f6f6f4; border-left: 4px solid #999; font-size: 15px; line-height: 1.55; }
+.bd-sum.ok { border-left-color: #2e7d32; }
+.bd-sum.bad { border-left-color: #b3261e; }
+.bd-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .bd-bar label { font-size: 12px; font-weight: 700; color: #555; }
-.bd-legend { display: flex; gap: 18px; font-size: 12.5px; color: #555; margin: 4px 0 6px; }
+.bd-help { margin-left: auto; color: #777; }
+.bd-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 12.5px; color: #555; margin: 4px 0 8px; }
 .bd-legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
 .bd-legend .l-ideal { border-color: #8a8a8a; border-top-style: dashed; }
 .bd-legend .l-real { border-color: #1a1a1a; border-top-width: 3px; }
 .bd-legend .l-proj { border-color: #b3261e; border-top-style: dotted; border-top-width: 3px; }
-.bd-svg { width: 100%; height: auto; display: block; background: #fff; border: 1px solid #e4e4e4; }
+.bd-chart { width: 100%; min-width: 0; }
+.bd-svg { display: block; background: #fff; border: 1px solid #e4e4e4; max-width: 100%; }
 .bd-grid { stroke: #ececec; stroke-width: 1; }
-.bd-ax { font-size: 11px; fill: #666; }
+.bd-grid.dark { stroke: #bdbdbd; }
+.bd-ax { font-size: 12px; fill: #666; }
+.bd-ax.unit { font-weight: 700; }
+.bd-lab { font-size: 12px; font-weight: 700; fill: #1a1a1a; }
+.bd-lab-today { fill: #2a6fb0; }
+.bd-lab-dead, .bd-lab-proj { fill: #b3261e; }
 .bd-ideal { stroke: #8a8a8a; stroke-width: 2; stroke-dasharray: 6 5; }
 .bd-real { fill: none; stroke: #1a1a1a; stroke-width: 2.5; }
+.bd-now { fill: #1a1a1a; stroke: #fff; stroke-width: 2; }
 .bd-proj { stroke: #b3261e; stroke-width: 2.5; stroke-dasharray: 2 5; stroke-linecap: round; }
 .bd-pend { fill: #b3261e; }
 .bd-today { stroke: #2a6fb0; stroke-width: 1.5; }
-.bd-dead { stroke: #b3261e; stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
-.bd-hit { fill: transparent; cursor: default; }
-.bd-hit:hover { fill: rgba(26,26,26,.25); }
+.bd-dead { stroke: #b3261e; stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+.bd-band { fill: transparent; cursor: crosshair; }
+.bd-band:hover { fill: rgba(42,111,176,.12); }
 .bd-notes { margin-top: 12px; color: #555; }
-.bd-notes p { margin: 4px 0; }
-.bd-warn { background: #fff7e0; border-left: 3px solid #d89b00; padding: 8px 10px; color: #5a4300; }
+.bd-notes p { margin: 6px 0; }
+.bd-warn { background: #fff7e0; border-left: 3px solid #d89b00; padding: 10px 12px; color: #5a4300; line-height: 1.5; }
 .mini.st-bad { border-top-color: #b3261e; }
 .mini.st-ok { border-top-color: #2e7d32; }
 .mini.st-grey { border-top-color: #999; }
+.proj-tabs { flex-wrap: wrap !important; overflow: visible !important; }
 
 /* PERT / caminho crítico */
 .pt-wrap { overflow: auto; border: 1px solid #e4e4e4; background: #fff; max-height: 640px; }
@@ -704,3 +716,4 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .pt-n.b { font-weight: 700; fill: #1a1a1a; }
 .pt-h { margin: 22px 0 8px; font-size: 14px; }
 .pt-tbl .pt-crit td { color: #b3261e; font-weight: 600; }
+.mini-kpis.wrapv .mini b { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; font-size: clamp(17px, 1.5vw, 21px); }

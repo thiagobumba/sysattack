@@ -2,7 +2,7 @@
 const Pert = (() => {
   const { esc, fmt, dayNum, isoOf } = SA;
   const day = v => (v ? String(v).slice(0, 10) : null);
-  const ctx = { host: null, project: null, tasks: [], only: false };
+  const ctx = { host: null, project: null, tasks: [], only: false, fit: false };
 
   function compute() {
     const all = ctx.tasks, byId = new Map(all.map(t => [t.id, t]));
@@ -80,7 +80,7 @@ const Pert = (() => {
         <text x="8" y="42" class="pt-n">ES ${n.es}</text><text x="${NW / 2}" y="42" text-anchor="middle" class="pt-n">dur ${n.d}</text><text x="${NW - 8}" y="42" text-anchor="end" class="pt-n">EF ${n.ef}</text>
         <text x="8" y="58" class="pt-n">LS ${n.ls}</text><text x="${NW / 2}" y="58" text-anchor="middle" class="pt-n b">folga ${n.slack}</text><text x="${NW - 8}" y="58" text-anchor="end" class="pt-n">LF ${n.lf}</text></g>`;
     }).join('');
-    return `<div class="pt-wrap"><svg class="pt-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Rede PERT do projeto">
+    return `<div class="pt-wrap"><svg class="pt-svg" ${ctx.fit ? 'style="width:100%;height:auto"' : `width="${W}" height="${H}"`} viewBox="0 0 ${W} ${H}" role="img" aria-label="Rede PERT do projeto">
       <defs><marker id="pt-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#8a8a8a"/></marker>
       <marker id="pt-arrc" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#b3261e"/></marker></defs>${edges}${nodes}</svg></div>`;
   }
@@ -99,13 +99,14 @@ const Pert = (() => {
     const rows = [...m.net].sort((a, b) => m.N.get(a).slack - m.N.get(b).slack || m.N.get(a).es - m.N.get(b).es).slice(0, 40).map(id => {
       const n = m.N.get(id); return `<tr class="${n.crit ? 'pt-crit' : ''}"><td>${esc(n.t.name)}</td><td>${esc(n.t.responsible || '—')}</td><td>${n.d}</td><td>${n.es}</td><td>${n.ef}</td><td>${n.slack}</td></tr>`;
     }).join('');
-    host.innerHTML = `<div class="mini-kpis">
+    host.innerHTML = `<div class="mini-kpis wrapv">
         ${kpi('Duração pela rede', m.end + ' dias', 'Duração pela rede', ['Soma dos dias do caminho mais longo entre as tarefas ligadas por dependência.', 'É o menor prazo possível se nada atrasar e houver gente para tudo em paralelo.', endIso ? `Terminaria em ${fmt(endIso)} se começasse em ${fmt(startIso)}.` : ''], over ? 'st-bad' : '')}
         ${kpi('Prazo planejado', planned != null ? planned + ' dias' : '—', 'Prazo planejado', ['Dias entre o início e o fim cadastrados no projeto.', planned != null ? `= ${m.end <= planned ? 'folga' : 'estouro'} de ${Math.abs(planned - m.end)} dia(s) frente à rede.` : ''])}
         ${kpi('Tarefas críticas', `${crit.length} de ${m.net.length}`, 'Tarefas críticas', ['Têm folga zero: se atrasarem um dia, o projeto atrasa um dia.', 'Formam o caminho crítico (em vermelho).'])}
         ${kpi('Sem dependência', String(m.isolated.length), 'Tarefas sem ligação', ['Não dependem de nenhuma tarefa e nenhuma depende delas, então ficam fora da rede.', 'Quanto mais ligações cadastradas, mais confiável é o caminho crítico.'])}
       </div>
       <div class="bd-bar"><label><input type="checkbox" id="pt-only"${ctx.only ? ' checked' : ''}> Mostrar só o caminho crítico</label>
+        <button type="button" class="btn btn-sm" id="pt-fit">${ctx.fit ? 'Tamanho real' : 'Ajustar à largura'}</button>
         <span class="small" style="margin-left:auto">Dias contados a partir do início do projeto (dia 0). ES/EF: mais cedo · LS/LF: mais tarde.</span></div>
       ${diagram(m)}
       <h3 class="pt-h">Folgas (as 40 mais apertadas)</h3>
@@ -113,6 +114,7 @@ const Pert = (() => {
       <div class="bd-notes small"><p>Todas as dependências são do tipo término-início (a sucessora começa quando a anterior termina). Marcos têm duração zero; tarefas-pai e canceladas ficam de fora; dependência em tarefa-pai vale para todas as filhas.</p>
         ${m.cyc ? `<p class="bd-warn">⚠ ${m.cyc} tarefa(s) em ciclo de dependência foram ignoradas.</p>` : ''}</div>`;
     const c = host.querySelector('#pt-only'); if (c) c.onchange = () => { ctx.only = c.checked; draw(); };
+    const f = host.querySelector('#pt-fit'); if (f) f.onclick = () => { ctx.fit = !ctx.fit; draw(); };
   }
 
   function render(host, project, tasks) { ctx.host = host; ctx.project = project; ctx.tasks = tasks; draw(); }
