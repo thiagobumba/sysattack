@@ -45,7 +45,7 @@ Mais detalhes e limites em [`../SEGURANCA.md`](../SEGURANCA.md).
 - **Situações:** Planejamento, Em andamento, Concluído, Pausado. A lista é dividida em abas por situação (padrão: Em andamento), com contagem.
 - **Prioridade:** Crítica, Alta, Média, Baixa. **★ Meta Empresa** coloca o projeto acima de qualquer prioridade na ordenação.
 - **Orçamento:** em R$, com máscara brasileira (1.234,56).
-- **Progresso do projeto:** média do progresso das tarefas principais (a tarefa-pai é calculada pelas filhas, ponderada pela duração); canceladas não entram.
+- **Progresso do projeto:** média do progresso das tarefas principais (a tarefa-pai é a média simples das filhas); canceladas não entram.
 - **Duração:** dias corridos entre início e fim, contando os dois.
 - **Exclusão protegida:** bloqueada se houver tarefas, lançamentos financeiros, documentos, changes, diagramas Ishikawa ou gatilhos de e-mail. A mensagem lista o que existe. A checagem vale também no servidor (HTTP 409).
 - **Projetos de exemplo:** criados só uma vez, em banco totalmente novo (marca `seeded` em `app_meta`); bancos em uso nunca os recebem de novo.
@@ -66,7 +66,7 @@ Pai: barra laranja à esquerda, botão ▾/▸ para ocultar as filhas (lembrado 
 
 ### Regras
 - **Dois níveis:** tarefa principal e filhas. Uma filha não pode ter filhas.
-- **Tarefa-pai** (`TaskRules.rollup`): progresso = média ponderada pela duração das filhas; situação derivada; filhas **canceladas são ignoradas**. As **datas (início e fim) são do próprio pai**, editáveis, e não mudam quando as filhas mudam (só são ajustadas ao período das filhas na importação de cronograma e nos dados de exemplo). Se todas as filhas forem canceladas, o pai fica Cancelado. Tarefa pai nunca é marco.
+- **Tarefa-pai** (`TaskRules.rollup`): progresso = média simples das filhas ativas (cada uma pesa igual); situação derivada; filhas **canceladas são ignoradas**. As **datas (início e fim) são do próprio pai**, editáveis, e não mudam quando as filhas mudam (só são ajustadas ao período das filhas na importação de cronograma e nos dados de exemplo). Se todas as filhas forem canceladas, o pai fica Cancelado. Tarefa pai nunca é marco.
 - **Dependência:** uma predecessora por tarefa, **do mesmo projeto**; o servidor (`checkDependency`) recusa dependência da tarefa nela mesma, predecessora inexistente e dependência circular.
 - **Cancelada:** fica fora de atraso, progresso, saúde, relatórios, burndown e PERT.
 - **Atrasada** (cálculo, não uma situação): fim anterior a hoje e situação diferente de Concluída/Cancelada.

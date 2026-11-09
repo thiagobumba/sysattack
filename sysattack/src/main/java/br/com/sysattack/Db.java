@@ -367,6 +367,8 @@ public final class Db {
             }
             h2Version = String.valueOf(one("SELECT H2VERSION() v").get("v"));
             if (one("SELECT id FROM users LIMIT 1") != null) markInitialized(); // instalações antigas
+            // progresso das tarefas pai pela regra atual (média simples das filhas); idempotente, roda a cada subida
+            for (Map<String, Object> pr : query("SELECT DISTINCT parent_id FROM tasks WHERE parent_id IS NOT NULL")) TaskRules.rollup(((Number) pr.get("parent_id")).longValue());
             Files.write(new File(dataDir, "schema.version").toPath(), String.valueOf(SCHEMA_VERSION).getBytes(StandardCharsets.UTF_8));
         } catch (SQLException | IOException e) {
             throw new IllegalStateException("Falha ao registrar os metadados do banco", e);

@@ -2,7 +2,6 @@ package br.com.sysattack;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -11,7 +10,8 @@ public final class TaskRules {
     private TaskRules() {}
 
     /**
-     * Recalcula progresso e situação de uma tarefa pai a partir das filhas (média ponderada pela duração).
+     * Recalcula progresso e situação de uma tarefa pai a partir das filhas (média simples: cada filha ativa pesa igual,
+     * para uma filha de prazo longo não esmagar as várias já concluídas).
      * As datas do pai são do próprio pai: mexer nas filhas não as altera.
      */
     public static void rollup(Long parentId) throws SQLException { rollup(parentId, false); }
@@ -38,9 +38,8 @@ public final class TaskRules {
             anyActive = true;
             if (min == null || s.isBefore(min)) min = s;
             if (max == null || e.isAfter(max)) max = e;
-            long dur = ChronoUnit.DAYS.between(s, e) + 1;
-            weight += dur;
-            sum += dur * p;
+            weight++;
+            sum += p;
             if (!"CONCLUIDA".equals(st)) allDone = false;
             if (p > 0 || "EM_ANDAMENTO".equals(st) || "CONCLUIDA".equals(st)) started = true;
         }
