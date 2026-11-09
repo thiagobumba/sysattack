@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- **Projetos: abas por situação** — Planejamento, Em andamento (aba padrão), Concluído e Pausado, cada uma com a contagem de projetos. Os filtros de saúde e prioridade continuam valendo dentro da aba. Ao vir de um atalho do painel por saúde, abre a primeira aba que tem projetos naquela saúde.
 - **2FA**: o QR code agora tem tamanho fixo e não cobre mais a chave manual nem o texto do passo 2; a chave não quebra no meio dos grupos.
 - **Exclusão de projeto** só é permitida sem vínculos: se houver tarefas/marcos, lançamentos financeiros, documentos, changes ou gatilhos de e-mail, aparece um aviso listando quantos itens existem e a exclusão é bloqueada (no servidor também). Só quando está livre aparece a pergunta "Tem certeza?".
 - **Exclusão de tarefa** é bloqueada enquanto houver relacionamento: tarefa com tarefa-pai, com dependência (Depende de), com filhas ou com outras tarefas dependendo dela. O aviso diz qual é o relacionamento e o que ajustar (ex.: editar e deixar \"Tarefa pai\" vazio). A validação também vale no servidor.

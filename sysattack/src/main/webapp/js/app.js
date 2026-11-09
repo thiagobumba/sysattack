@@ -144,10 +144,19 @@
     const list = await api('GET', 'projects');
     view.projects = list;
     const f = view.pf || (view.pf = { health: 'all', prio: 'all' });
-    if (view.pendingHealth) { f.health = view.pendingHealth; f.prio = 'all'; view.pendingHealth = null; }
+    if (!f.status) f.status = 'EM_ANDAMENTO'; // aba padrão
+    const ST_TABS = ['PLANEJAMENTO', 'EM_ANDAMENTO', 'CONCLUIDO', 'PAUSADO'];
+    const healthOk = (p, h) => h === 'all' || (h === 'OUTROS' ? !['VERMELHO', 'AMARELO', 'VERDE'].includes(p.health.level) : p.health.level === h);
+    if (view.pendingHealth) {
+      f.health = view.pendingHealth; f.prio = 'all'; view.pendingHealth = null;
+      // vindo do painel: abre a primeira aba que tem projetos com essa saúde
+      const hit = ['EM_ANDAMENTO', 'PLANEJAMENTO', 'PAUSADO', 'CONCLUIDO'].find(st => list.some(p => p.status === st && healthOk(p, f.health)));
+      if (hit) f.status = hit;
+    }
     main.innerHTML = pageHead(['SysAttack', 'Projetos'], 'Projetos', 'Escopo, prazos, orçamento e andamento de cada projeto.') + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Carteira de projetos</h2>
         <button class="btn btn-primary btn-sm" data-action="new-project">+ Novo projeto</button></div>
+        <div class="ms-tabs" id="pf-tabs" role="tablist">${ST_TABS.map(st => `<button type="button" class="ms-tab" role="tab" data-st="${st}">${P_STATUS[st][0]} <span class="cnt">${list.filter(p => p.status === st).length}</span></button>`).join('')}</div>
         <div class="filters"><select id="pf-h" aria-label="Filtrar por saúde"><option value="all">Todas as saúdes</option><option value="VERMELHO">Crítico</option><option value="AMARELO">Atenção</option><option value="VERDE">Saudável</option><option value="OUTROS">Não iniciado, pausado ou concluído</option></select>
           <select id="pf-p" aria-label="Filtrar por prioridade"><option value="all">Todas as prioridades</option><option value="META">Meta Empresa</option>${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>
         <div class="table-wrap" id="pf-body"></div>
@@ -156,8 +165,9 @@
     hs.value = f.health; ps.value = f.prio;
     const draw = () => {
       f.health = hs.value; f.prio = ps.value;
-      const rows = list.filter(p => (f.prio === 'all' || (f.prio === 'META' ? p.company_goal : (p.priority || 'MEDIA') === f.prio))
-        && (f.health === 'all' || (f.health === 'OUTROS' ? !['VERMELHO', 'AMARELO', 'VERDE'].includes(p.health.level) : p.health.level === f.health))).sort(byUrgency);
+      document.querySelectorAll('#pf-tabs .ms-tab').forEach(b => { const on = b.dataset.st === f.status; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+      const rows = list.filter(p => p.status === f.status && (f.prio === 'all' || (f.prio === 'META' ? p.company_goal : (p.priority || 'MEDIA') === f.prio))
+        && healthOk(p, f.health)).sort(byUrgency);
       document.getElementById('pf-body').innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Prioridade</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')} · ${p.task_count} tarefa(s)${p.late_count ? ` · <b class="late-txt">${p.late_count} atrasada(s)</b>` : ''}</span></td>
           <td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
@@ -167,9 +177,12 @@
           <td>${badge(P_STATUS, p.status)}</td>
           <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar projeto" data-action="edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto" data-action="del-project" data-id="${p.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>`
-        : list.length ? empty('Nenhum projeto com esse filtro', 'Troque a saúde ou a prioridade para ver os demais.') : empty('Nenhum projeto ainda', 'Crie o primeiro projeto com escopo, início e fim.');
+        : list.some(p => p.status === f.status) ? empty('Nenhum projeto com esse filtro', 'Troque a saúde ou a prioridade para ver os demais.')
+        : list.length ? empty(`Nenhum projeto em "${P_STATUS[f.status][0]}"`, 'Use as abas acima para ver os projetos nas outras situações.') : empty('Nenhum projeto ainda', 'Crie o primeiro projeto com escopo, início e fim.');
     };
-    hs.addEventListener('change', draw); ps.addEventListener('change', draw); draw();
+    hs.addEventListener('change', draw); ps.addEventListener('change', draw);
+    document.querySelectorAll('#pf-tabs .ms-tab').forEach(b => b.addEventListener('click', () => { f.status = b.dataset.st; draw(); }));
+    draw();
   }
 
   async function viewProject(id) {
