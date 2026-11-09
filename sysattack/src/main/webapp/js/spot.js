@@ -3,6 +3,16 @@ const Spot = (() => {
   const { esc, fmt, todayIso, ic } = SA;
   // projetos encerrados: só administrador altera, e toda alteração exige justificativa (vai no cabeçalho e fica no histórico)
   const closedIds = new Set();
+  let lastWhy = null; // justificativa informada há pouco (o envio da imagem logo após salvar reaproveita)
+  async function logoSender(sid) {
+    const extra = {};
+    if (closedIds.has(sid)) {
+      let why = lastWhy && lastWhy.sid === sid && Date.now() - lastWhy.t < 180000 ? lastWhy.why : await askJustification('Alterar projeto encerrado');
+      if (!why) throw new Error('Alteração cancelada.');
+      extra['X-Justification'] = encodeURIComponent(why);
+    }
+    return (m, blob) => Logo.send(m, `spot/${sid}/logo`, blob, extra);
+  }
   // vigência do contrato (início até data final): todas as telas do projeto olham para ela
   const vigRange = p => ({ s: p.start_date, e: p.end_date || '' });
   const clampDate = (iso, p) => (iso < p.start_date ? p.start_date : p.end_date && iso > p.end_date ? p.end_date : iso);
@@ -46,6 +56,7 @@ const Spot = (() => {
       if (sid != null && closedIds.has(sid)) {
         const why = await askJustification('Alterar projeto encerrado');
         if (!why) throw new Error('Alteração cancelada.');
+        lastWhy = { sid, why, t: Date.now() };
         return SA.api(method, url, body, { 'X-Justification': encodeURIComponent(why) });
       }
     }
@@ -135,7 +146,7 @@ const Spot = (() => {
     const rows = list.filter(p => kindOf(p) === listTab);
     const acts = p => `<td class="acts">${p.recurring && !p.closed_scope ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td>`;
-    const name = p => `<td class="strong">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></td>`;
+    const name = p => `<td class="strong"><span class="nm-wrap">${Logo.avatar('S', p, 'sm')}<span class="nm-txt">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></span></span></td>`;
     const tableHours = `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
@@ -164,7 +175,7 @@ const Spot = (() => {
     if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
-    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · ')) + `
+    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
@@ -294,6 +305,7 @@ const Spot = (() => {
     return (async () => {
       const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: listTab === 'CONTRATO', closed_scope: listTab === 'ESCOPO', status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
       A().openDialog(id ? 'Editar projeto spot' : copyFrom ? 'Copiar projeto spot' : 'Novo projeto spot', `
+        ${Logo.field('S', copyFrom ? {} : p)}
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
@@ -313,9 +325,10 @@ const Spot = (() => {
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); const lf = document.querySelector('#dlg form'); if (Logo.has(lf)) await Logo.apply('S', s.id, lf, await logoSender(s.id)); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
       // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
       const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
+      Logo.bind(f);
       const sync = () => {
         for (const n of ['hours_model', 'contracted_hours']) { f.elements[n].disabled = cs.checked; f.elements[n].required = !cs.checked && n === 'contracted_hours'; }
         if (cs.checked) rc.checked = false;

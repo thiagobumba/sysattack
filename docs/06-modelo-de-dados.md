@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **46**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **47**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -31,6 +31,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `project_changes` | `id`, `project_id`, `title`, `reason`, `requested_by`, `change_date`, `impact_days`, `impact_cost`, `status`, `created_by`, `created_at` |
 | `ishikawa` | `id`, `project_id`, `problem`, `created_by`, `created_at` |
 | `ishikawa_causes` | `id`, `ishikawa_id`, `category`, `text`, `parent_id` |
+| `project_logos` | `kind` (`P` projeto, `S` Spot), `ref_id`, `content_type`, `content` (BLOB), `size`, `updated_at` (chave: `kind` + `ref_id`) |
 | `app_meta` | `k`, `v` |
 | `audit_log` | `id`, `at`, `actor`, `action`, `detail`, `ip`, `ok` |
 

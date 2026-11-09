@@ -44,6 +44,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 | `GET /dashboard` | Indicadores da Visão geral |
 | `GET/POST /projects` | Listar (com saúde e EVM) e criar |
 | `GET/PUT/DELETE /projects/{id}` | Detalhe, alterar, excluir (409 se houver vínculos) |
+| `GET/PUT/POST/DELETE /projects/{id}/logo` | Imagem do projeto: `GET` devolve o arquivo; `PUT`/`POST` enviam o corpo binário (PNG/JPG/GIF/WEBP, máx. 1 MB, 413 se maior, 400 se o tipo não for imagem); `DELETE` remove. O projeto traz `logo_at` (data da imagem, nulo se não houver) |
 | `GET /projects/{id}/links` | O que impede a exclusão (`message`) |
 | `GET /projects/{id}/tasks` | Tarefas do projeto |
 | `GET /projects/{id}/finance` | Financeiro do projeto com totais |
@@ -73,6 +74,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 | `GET/POST /spot/{id}/demands` · `…/demands/{did}` | Demandas |
 | `GET/POST /spot/{id}/actions` · `…/actions/{aid}` | Ações e pendências |
 | `GET/POST /spot/{id}/invoices` · `…/invoices/{iid}` · `…/invoices/{iid}/file` | Notas do escopo fechado |
+| `GET/PUT/POST/DELETE /spot/{id}/logo` | Imagem do projeto Spot (mesmas regras de `/projects/{id}/logo`; em projeto encerrado exige administrador e `X-Justification`) |
 | `GET/POST /spot/{id}/files` | Arquivos do projeto |
 | `GET /spot/{id}/audit` | Histórico de alterações |
 | `POST /spot/{id}/import` | Importar Status Report (HTML), com prévia |

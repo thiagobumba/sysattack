@@ -33,7 +33,8 @@ final class SpotService {
     private static final String INVOICE_COLS = "id, spot_id, number, issue_date, due_date, amount, status, description, file_name, file_size, created_by, created_at";
     private static final Set<String> ACTION_KIND = Set.of("ACAO", "PENDENCIA");
 
-    private static final String PROJECT_SQL = "SELECT p.*, (SELECT MAX(r.created_at) FROM spot_reports r WHERE r.spot_id = p.id) last_report FROM spot_projects p";
+    private static final String PROJECT_SQL = "SELECT p.*, (SELECT MAX(r.created_at) FROM spot_reports r WHERE r.spot_id = p.id) last_report,"
+            + " (SELECT l.updated_at FROM project_logos l WHERE l.kind = 'S' AND l.ref_id = p.id) logo_at FROM spot_projects p";
 
     private SpotService() {}
 
@@ -101,10 +102,16 @@ final class SpotService {
             if (s.size() == 2) {
                 if (m.equals("GET")) return detail(id, req.getParameter("ref"));
                 if (m.equals("PUT")) { project(id); return saveProject(id, ApiServlet.body(req)); }
-                if (m.equals("DELETE")) { project(id); Db.update("DELETE FROM spot_projects WHERE id = ?", id); return Map.of("ok", true); }
+                if (m.equals("DELETE")) {
+                    project(id);
+                    Db.update("DELETE FROM project_logos WHERE kind = 'S' AND ref_id = ?", id);
+                    Db.update("DELETE FROM spot_projects WHERE id = ?", id);
+                    return Map.of("ok", true);
+                }
             } else if (s.size() == 3) {
                 project(id);
                 switch (s.get(2)) {
+                    case "logo": return LogoService.handle("S", id, m, req, resp);
                     case "hours":
                         if (m.equals("GET")) return listHours(id, req.getParameter("month"), req.getParameter("from"), req.getParameter("to"));
                         if (m.equals("POST")) return saveHour(null, id, ApiServlet.body(req), user);

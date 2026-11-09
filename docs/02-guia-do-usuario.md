@@ -37,6 +37,8 @@ Em **Usuários › Segurança da conta**: ative o 2FA (QR code ou chave manual),
 ### Criar e editar
 **Projetos › + Novo projeto** (ou "Editar projeto" na tela do projeto). Campos: nome, escopo inicial, responsável, situação, **prioridade** (Crítica, Alta, Média, Baixa), **★ Meta Empresa**, início, fim e **orçamento** (em R$, com máscara 1.234,56).
 
+**Imagem do projeto:** no mesmo formulário, "Escolher imagem" (logo ou foto, PNG, JPG, WEBP ou GIF) mostra a prévia; ela é gravada ao salvar e aparece como avatar ao lado do título. "Remover imagem" volta às iniciais. Vale igual nos Projetos Spot.
+
 ### Abas por situação
 A lista tem abas **Planejamento**, **Em andamento** (padrão), **Concluído** e **Pausado**, cada uma com a contagem de projetos. Há filtros de saúde e de prioridade.
 

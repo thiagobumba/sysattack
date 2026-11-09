@@ -77,9 +77,9 @@
     setTimeout(() => t.remove(), 3500);
   }
 
-  function pageHead(crumbs, title, sub) {
+  function pageHead(crumbs, title, sub, avatarHtml) {
     const c = crumbs.map((x, i) => x.href && i < crumbs.length - 1 ? `<a href="${x.href}">${esc(x.t)}</a>` : esc(x.t || x)).join(' / ');
-    return `<header class="page-head"><div><nav class="crumbs" aria-label="Navegação">${c}</nav><h1>${esc(title)}</h1>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>
+    return `<header class="page-head"><div><nav class="crumbs" aria-label="Navegação">${c}</nav><h1${avatarHtml ? ' class="with-av"' : ''}>${avatarHtml || ''}<span>${esc(title)}</span></h1>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>
       <div class="head-meta"><span class="hello">Olá, <b>${esc(me.name)}</b></span><button class="btn btn-sm" data-action="logout">Sair</button>
       <span><i class="dot"></i>Referência ${fmt(todayIso())}</span></div></header>`;
   }
@@ -160,7 +160,7 @@
       <a class="btn btn-sm" href="#/projetos">Ver projetos →</a></div>
       <div class="ptiles">${tile(n('VERMELHO'), 'Críticos', 'h-red', 'VERMELHO')}${tile(n('AMARELO'), 'Em atenção', 'h-amber', 'AMARELO')}${tile(n('VERDE'), 'Saudáveis', 'h-green', 'VERDE')}${tile(others, 'Não iniciados, pausados ou concluídos', 'h-grey', 'OUTROS')}</div>
       ${act.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Projeto que precisa de ação</th><th>Saúde</th><th>Prioridade</th><th>Motivo</th></tr></thead><tbody>
-        ${act.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')}</span></td><td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
+        ${act.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong"><span class="nm-wrap">${Logo.avatar('P', p, 'sm')}<span class="nm-txt">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')}</span></span></span></td><td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
           <td class="wrap">${esc(p.health.reasons.join(' · '))}</td></tr>`).join('')}</tbody></table></div>`
         : list.length ? '<p class="hint" style="margin:0">Nenhum projeto em atenção ou crítico no momento.</p>' : ''}</section>`;
   }
@@ -224,7 +224,7 @@
       const rows = list.filter(p => p.status === f.status && (f.prio === 'all' || (f.prio === 'META' ? p.company_goal : (p.priority || 'MEDIA') === f.prio))
         && healthOk(p, f.health)).sort(byUrgency);
       document.getElementById('pf-body').innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Prioridade</th><th>Período</th><th>Progresso</th><th class="num">Orçamento</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${rows.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')} · ${p.task_count} tarefa(s)${p.late_count ? ` · <b class="late-txt">${p.late_count} atrasada(s)</b>` : ''}</span></td>
+        ${rows.map(p => `<tr class="click" data-go="#/projeto/${p.id}"><td class="strong"><span class="nm-wrap">${Logo.avatar('P', p, 'sm')}<span class="nm-txt">${esc(p.name)}<span class="small">${esc(p.owner || 'Sem responsável')} · ${p.task_count} tarefa(s)${p.late_count ? ` · <b class="late-txt">${p.late_count} atrasada(s)</b>` : ''}</span></span></span></td>
           <td>${healthChip(p.health)}</td><td>${prioBadge(p)}</td>
           <td class="nowrap">${fmt(p.start_date)} – ${fmt(p.end_date)}<span class="small">${duration(p.start_date, p.end_date)} dias</span></td>
           <td>${pbar(p.progress, p.status === 'CONCLUIDO')}</td>
@@ -253,7 +253,7 @@
       ...(isAdmin() ? [{ k: 'auto', label: 'Automação', tabs: [['triggers', 'Gatilhos de e-mail', 'Regras que enviam e-mail automaticamente.']] }] : [])
     ];
     const tab = () => '';
-    main.innerHTML = pageHead(['SysAttack', { t: 'Projetos', href: '#/projetos' }, p.name], p.name, '') + `
+    main.innerHTML = pageHead(['SysAttack', { t: 'Projetos', href: '#/projetos' }, p.name], p.name, '', Logo.avatar('P', p, 'lg')) + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Escopo inicial</h2><div class="bar-actions">
         <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Editar projeto</button></div></div>
         <p class="scope-text">${p.scope ? esc(p.scope) : 'Escopo ainda não informado.'}</p>
@@ -729,7 +729,8 @@
 
   async function openProjectForm(id) {
     const p = id ? await api('GET', 'projects/' + id) : { name: '', owner: me.name, status: 'PLANEJAMENTO', scope: '', budget: '', start_date: todayIso(), end_date: addDays(todayIso(), 30) };
-    openDialog(id ? 'Editar projeto' : 'Novo projeto', `
+    const form = openDialog(id ? 'Editar projeto' : 'Novo projeto', `
+      ${Logo.field('P', p)}
       <div class="field full"><label for="n">Nome do projeto</label><input id="n" name="name" maxlength="160" value="${esc(p.name)}" required></div>
       <div class="field"><label for="o">Responsável</label><input id="o" name="owner" maxlength="120" value="${esc(p.owner)}"></div>
       <div class="field"><label for="s">Situação</label><select id="s" name="status">${opts(P_STATUS, p.status)}</select></div>
@@ -742,9 +743,11 @@
       async d => {
         d.company_goal = d.company_goal === 'on';
         const saved = await api(id ? 'PUT' : 'POST', id ? 'projects/' + id : 'projects', d);
+        await Logo.apply('P', saved.id, form);
         toast(id ? 'Projeto salvo.' : 'Projeto criado. Agora adicione as tarefas.');
         if (!id) location.hash = '#/projeto/' + saved.id;
       });
+    Logo.bind(form);
   }
 
   /** preset: { projectId, parentId, milestone }. allTasks: tarefas conhecidas (para pai e predecessora). */

@@ -736,3 +736,23 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 .mini.bill b { font-size: clamp(20px, 1.9vw, 26px); }
 .mini .tax { display: block; margin-top: 4px; font-size: 11.5px; font-style: normal; font-weight: 600; color: #8a6d00; }
 .bill-tax { margin: 6px 0 0; padding: 8px 12px; background: #fff7e0; border-left: 3px solid #d89b00; font-size: 13px; color: #5a4300; }
+
+/* Imagem (logo) do projeto: avatar e campo de upload */
+.avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; border-radius: 50%; background: #fff; border: 1px solid #dcdcd8; vertical-align: middle; }
+.avatar img { width: 100%; height: 100%; object-fit: contain; padding: 12%; box-sizing: border-box; display: block; }
+.avatar.ph { background: var(--cream, #FDDDB3); border-color: transparent; color: #5a3a12; font-weight: 700; letter-spacing: .02em; }
+.av-sm { width: 34px; height: 34px; font-size: 12px; }
+.av-md { width: 44px; height: 44px; font-size: 14px; }
+.av-lg { width: 64px; height: 64px; font-size: 20px; }
+.nm-wrap { display: flex; align-items: center; gap: 12px; }
+.nm-txt { display: block; min-width: 0; }
+.page-head h1.with-av { display: flex; align-items: center; gap: 16px; }
+.page-head h1.with-av .avatar { border-color: rgba(255,255,255,.5); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.logo-field .logo-row { display: flex; gap: 16px; align-items: center; }
+.logo-prev { flex: none; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; border: 1px dashed #bdbdb8; background: #fafaf8; overflow: hidden; }
+.logo-prev img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.logo-prev i { font-size: 12px; color: #8a8a8a; font-style: normal; text-align: center; padding: 6px; }
+.logo-ctl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.logo-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.logo-pick { cursor: pointer; }
+.logo-msg { color: #2e6b32; }

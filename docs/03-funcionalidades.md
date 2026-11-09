@@ -41,6 +41,7 @@ Mais detalhes e limites em [`../SEGURANCA.md`](../SEGURANCA.md).
 ## 2. Projetos
 
 - **Cadastro:** nome, escopo inicial, responsável, situação, prioridade, ★ Meta Empresa, início, fim, orçamento.
+- **Imagem do projeto (logo):** opcional, PNG/JPG/WEBP/GIF (sem SVG), reduzida no navegador para até 400 px, máx. 1 MB no servidor. Aparece como avatar ao lado do título, nas listas e na Visão geral; sem imagem, mostram-se as iniciais. Vale também para projetos Spot (em projeto encerrado, a troca exige justificativa). Guardada no banco (`project_logos`).
 - **Situações:** Planejamento, Em andamento, Concluído, Pausado. A lista é dividida em abas por situação (padrão: Em andamento), com contagem.
 - **Prioridade:** Crítica, Alta, Média, Baixa. **★ Meta Empresa** coloca o projeto acima de qualquer prioridade na ordenação.
 - **Orçamento:** em R$, com máscara brasileira (1.234,56).
@@ -192,7 +193,7 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Antes de atualizar o esquema** o arquivo do banco é copiado para `pre-update-*.mv.db` (guarda as 5 últimas).
 - **Restauração:** `restaurar-backup.ps1` (confere o SHA-256 e guarda o estado atual antes de restaurar).
 - **Segurança e dados** (tela): pasta em uso, endereço nos e-mails, backups e trilha de auditoria.
-- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 46); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
+- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 47); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
 
 ## 14. Interface e usabilidade
 

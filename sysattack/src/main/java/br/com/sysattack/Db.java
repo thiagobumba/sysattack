@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 46;
+    private static final int SCHEMA_VERSION = 47;
 
     private Db() {}
 
@@ -173,6 +173,15 @@ public final class Db {
             // valor da hora/homem negociado com o parceiro de desenvolvimento: normal e excedente (alimentam o faturamento do período)
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS partner_hour_rate DECIMAL(12,2) DEFAULT 0 NOT NULL");
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS partner_overage_rate DECIMAL(12,2) DEFAULT 0 NOT NULL");
+            // imagem (logo) do projeto: kind P = projeto, S = projeto Spot
+            s.execute("CREATE TABLE IF NOT EXISTS project_logos ("
+                    + "kind VARCHAR(1) NOT NULL,"
+                    + "ref_id BIGINT NOT NULL,"
+                    + "content_type VARCHAR(30) NOT NULL,"
+                    + "content BLOB NOT NULL,"
+                    + "size INT NOT NULL,"
+                    + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,"
+                    + "PRIMARY KEY (kind, ref_id))");
             s.execute("CREATE TABLE IF NOT EXISTS spot_invoices ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

@@ -82,7 +82,8 @@ public class ApiServlet extends HttpServlet {
           + "   AND t.status NOT IN ('CONCLUIDA','CANCELADA') AND t.end_date < CURRENT_DATE) late_count,"
           + " CAST(COALESCE((SELECT AVG(t.progress) FROM tasks t WHERE t.project_id = p.id AND t.parent_id IS NULL AND t.status <> 'CANCELADA'), 0) AS INT) progress,"
           + " (SELECT COUNT(*) FROM documents d WHERE d.project_id = p.id) doc_count,"
-          + " (SELECT COUNT(*) FROM finance_entries f WHERE f.project_id = p.id) fin_count"
+          + " (SELECT COUNT(*) FROM finance_entries f WHERE f.project_id = p.id) fin_count,"
+          + " (SELECT l.updated_at FROM project_logos l WHERE l.kind = 'P' AND l.ref_id = p.id) logo_at"
           + " FROM projects p";
 
     private static final String TASK_SQL =
@@ -191,7 +192,7 @@ public class ApiServlet extends HttpServlet {
                 requireAdmin(user);
                 return users(m, s, req, user);
             case "dashboard": return dashboard();
-            case "projects": return projects(m, s, req, user);
+            case "projects": return projects(m, s, req, resp, user);
             case "tasks": return tasks(m, s, req);
             case "finance": return finance(m, s, req);
             case "documents": return documents(m, s, req, resp, user);
@@ -719,7 +720,7 @@ public class ApiServlet extends HttpServlet {
 
     // ------------------------------------------------------------------ projetos
 
-    private Object projects(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+    private Object projects(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
         if (s.size() == 1) {
             if (m.equals("GET")) return withHealth(Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.id"));
             if (m.equals("POST")) return saveProject(null, body(req));
@@ -737,6 +738,7 @@ public class ApiServlet extends HttpServlet {
                             String stored = (String) d.get("stored_name");
                             Db.afterCommit(() -> deleteStored(stored)); // só apaga o arquivo depois que o banco confirmar
                         }
+                        Db.update("DELETE FROM project_logos WHERE kind = 'P' AND ref_id = ?", id);
                         Db.update("DELETE FROM projects WHERE id = ?", id);
                         return Map.of("ok", true);
                     default: break;
@@ -748,6 +750,7 @@ public class ApiServlet extends HttpServlet {
                     return Db.query(TASK_SQL + " WHERE t.project_id = ? ORDER BY t.start_date, t.id", id);
                 }
                 if (sub.equals("finance") && m.equals("GET")) return projectFinance(id);
+                if (sub.equals("logo")) { projectOr404(id); return LogoService.handle("P", id, m, req, resp); }
                 if (sub.equals("links") && m.equals("GET")) { projectOr404(id); return Collections.singletonMap("message", projectDeleteBlock(id)); }
                 if (sub.equals("import-preview") && m.equals("POST")) { projectOr404(id); return importPreview(req); }
                 if (sub.equals("import-tasks") && m.equals("POST")) { projectOr404(id); return importTasks(id, req, user); }
