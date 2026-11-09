@@ -162,7 +162,7 @@ Diagramas por projeto, com as 6 categorias (Método, Material, Mão de obra, Má
 
 ## 9. Relatórios & Dashs
 
-Para todos os usuários; projetos Spot não entram. **Projetos:** Timeline, Itens em atraso, Previsto × Realizado (progresso esperado pelo prazo × informado, ponderado pela duração), Quantidade de changes por projeto, Atrasos gerados por changes (só aprovadas com impacto em dias). **Orçamentária:** Previsto × Realizado em R$ e Custo do projeto total; inclui a Projeção de custo no término. Filtro por projeto e impressão/PDF. Tarefas canceladas ficam de fora.
+Para todos os usuários; projetos Spot não entram. Sempre **um projeto por vez** (sem a opção "Todos os projetos"): a tela inicial explica a finalidade e pede para escolher o projeto (lista clicável ou campo Projeto); Imprimir só habilita depois da escolha. **Projetos:** Timeline, Itens em atraso, Previsto × Realizado (progresso esperado pelo prazo × informado, ponderado pela duração), Quantidade de changes por projeto, Atrasos gerados por changes (só aprovadas com impacto em dias). **Orçamentária:** Previsto × Realizado em R$ e Custo do projeto total; inclui a Projeção de custo no término. Filtro por projeto e impressão/PDF. Tarefas canceladas ficam de fora.
 
 ## 10. Projetos Spot
 

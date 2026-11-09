@@ -9,7 +9,8 @@ const Rep = (() => {
   const CH = { PENDENTE: ['Pendente', 'b-orange'], APROVADA: ['Aprovada', 'b-green'], REJEITADA: ['Rejeitada', 'b-grey'] };
   const badge = (map, k) => `<span class="badge ${map[k][1]}">${map[k][0]}</span>`;
 
-  let st = { tab: 'projetos', project: 'all', data: null };
+  let st = { tab: 'projetos', project: '', data: null };
+  const STATUS = { PLANEJAMENTO: 'Planejamento', EM_ANDAMENTO: 'Em andamento', CONCLUIDO: 'Concluído', PAUSADO: 'Pausado' };
   let changeCtx = { projectId: null, list: [] };
 
   // ------------------------------------------------------------------ cálculos
@@ -29,7 +30,7 @@ const Rep = (() => {
     return w ? { planned: pv / w, actual: rv / w, tasks: ts.length } : { planned: 0, actual: 0, tasks: 0 };
   }
 
-  function visibleProjects(d) { return st.project === 'all' ? d.projects : d.projects.filter(p => String(p.id) === st.project); }
+  function visibleProjects(d) { return d.projects.filter(p => String(p.id) === st.project); }
 
   function hbar(value, max, color) {
     const w = max > 0 ? Math.min(100, value / max * 100) : 0;
@@ -175,16 +176,29 @@ const Rep = (() => {
       <p class="hint" style="margin-top:10px">SPI = valor realizado ÷ valor previsto até hoje (prazo). CPI = valor realizado ÷ custo lançado. EAC = orçamento ÷ CPI. Desvio = orçamento − EAC. Valor realizado e previsto = orçamento × progresso (ponderado pela duração das tarefas). Abaixo de 1: atraso (SPI) ou gasto acima do entregue (CPI).</p>`;
   }
 
+  // tela inicial: explica para que servem os relatórios e pede para escolher um projeto
+  function intro(d) {
+    const byName = d.projects.slice().sort((a, b) => (a.status === 'CONCLUIDO') - (b.status === 'CONCLUIDO') || a.name.localeCompare(b.name));
+    return `<section class="panel rp-intro"><div class="panel-head"><h2 class="panel-title">Para que servem os relatórios e dashs</h2></div>
+      <p>Aqui você acompanha <b>um projeto de cada vez</b>: cronograma e marcos, itens em atraso, progresso previsto × realizado, changes e impacto no prazo (aba <b>Projetos</b>), além de orçamento, projeção de custo no término e custo total (aba <b>Orçamentária</b>). Os números servem para reuniões de status, para fechar um projeto e para registrar o que foi entregue, e podem ser impressos ou salvos em PDF.</p>
+      <p><b>Como usar:</b> escolha o projeto no campo <b>Projeto</b> (acima, à direita) ou clique em um da lista abaixo. Para um fechamento, escolha um projeto <b>concluído</b>: os relatórios mostram o que foi planejado, o que foi entregue e quanto custou. Depois, alterne entre as abas Projetos e Orçamentária.</p>
+      ${byName.length ? `<div class="rp-pick">${byName.map(p => `<button type="button" class="rp-pick-item" data-action="rp-pick" data-id="${p.id}"><b>${esc(p.name)}</b><span class="small">${esc(STATUS[p.status] || p.status)}${p.owner ? ' · ' + esc(p.owner) : ''}</span></button>`).join('')}</div>`
+        : '<div class="empty"><strong>Nenhum projeto ainda</strong>Crie um projeto na tela Projetos para ver os relatórios aqui.</div>'}
+      <p class="hint" style="margin-top:14px">Os projetos Spot têm relatórios próprios, dentro de cada projeto Spot.</p></section>`;
+  }
+
   async function view() {
     if (!st.data || !st.fresh) st.data = await api('GET', 'reports');
     st.fresh = false;
     const d = st.data, projects = visibleProjects(d);
     const tab = (k, l) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="rp-tab" data-tab="${k}">${l}</button>`;
     const filter = `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label for="rp-p" class="hint">Projeto</label>
-      <select id="rp-p" style="min-height:36px;border:1px solid #cfcfcf;padding:0 10px;background:#fff"><option value="all">Todos os projetos</option>${d.projects.map(p => `<option value="${p.id}"${String(p.id) === st.project ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-      <button class="btn btn-sm" data-action="rp-print">Imprimir / salvar PDF</button></div>`;
-    const body = st.tab === 'projetos'
-      ? panel('Timeline do Projeto', st.project === 'all' ? 'Visão de todos os projetos com seus marcos.' : 'Fases e tarefas de nível principal do projeto.', repTimeline(d, projects))
+      <select id="rp-p" style="min-height:36px;border:1px solid #cfcfcf;padding:0 10px;background:#fff"><option value=""${st.project ? '' : ' selected'} disabled>Selecione um projeto…</option>${d.projects.map(p => `<option value="${p.id}"${String(p.id) === st.project ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+      <button class="btn btn-sm" data-action="rp-print"${st.project ? '' : ' disabled'}>Imprimir / salvar PDF</button></div>`;
+    if (st.project && !projects.length) st.project = ''; // projeto excluído desde a última visita
+    const body = !projects.length ? intro(d)
+      : st.tab === 'projetos'
+      ? panel('Timeline do Projeto', 'Fases e tarefas de nível principal do projeto.', repTimeline(d, projects))
         + panel('Itens em atraso', 'Tarefas e marcos abertos com o prazo vencido.', repLate(d, projects))
         + panel('Previsto × Realizado', 'Progresso esperado pelo cronograma contra o progresso informado.', repPlanned(d, projects))
         + panel('Quantidade de changes por projeto', 'Solicitações de mudança registradas, por situação.', repChangeCount(d, projects))
@@ -231,6 +245,7 @@ const Rep = (() => {
     switch (el.dataset.action) {
       case 'rp-tab': st.tab = el.dataset.tab; await view(); break;
       case 'rp-print': window.print(); break;
+      case 'rp-pick': st.project = String(id); await view(); break;
       case 'rp-new-change': changeForm(); break;
       case 'rp-edit-change': changeForm(id); break;
       case 'rp-del-change': if (confirm('Excluir esta change?')) { await api('DELETE', 'changes/' + id); A().toast('Change excluída.'); await A().route(); } break;
