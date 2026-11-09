@@ -79,11 +79,11 @@ const Spot = (() => {
 
   /** Fatura excedente: horas consumidas acima da franquia x valor da hora excedente negociado com o parceiro. */
   function billingCards(b, k) {
-    if (!b || !b.configured) return '';
+    if (!b) return '';
     const tip = (t, l) => Tip.attr(t, l);
     const over = Number(b.overage_hours) > 0, hasProj = Number(b.projected_overage_hours) > Number(b.overage_hours) + 0.001;
     const rateOk = Number(b.overage_rate) > 0;
-    const line = !rateOk ? 'Informe a <b>hora excedente desenvolvimento parceiro</b> no cadastro do projeto para calcular a fatura excedente.'
+    const line = !rateOk ? 'Os valores da hora ainda não foram informados. Use <b>Editar projeto</b> e preencha <b>Hora excedente desenvolvimento parceiro (R$/h)</b> para ver aqui o valor da fatura excedente.'
       : over ? `Consumidas <b>${h(k.consumed)}</b> − franquia <b>${h(k.contracted)}</b> = <b>${h(b.overage_hours)}</b> excedentes × <b>${brl(b.overage_rate)}</b> por hora = <b>${brl(b.overage_value)}</b> de fatura excedente.`
       : `Consumidas <b>${h(k.consumed)}</b> de <b>${h(k.contracted)}</b> da franquia: <b>nenhuma hora excedente</b>, então não há fatura excedente a gerar.${hasProj ? ` Com as horas reservadas (${h(k.reserved)}), o excedente projetado é de ${h(b.projected_overage_hours)}.` : ''}`;
     return `<h3 class="sub-h">Fatura excedente do período</h3><div class="mini-kpis fin wrapv">
