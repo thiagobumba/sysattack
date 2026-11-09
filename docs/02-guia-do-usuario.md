@@ -131,7 +131,7 @@ Menu **Projetos Spot**. A lista tem guias **Contrato** (recorrentes), **Escopo f
 
 - **Projeto:** nome, cliente, fornecedor/equipe, modelo (franquia mensal ou pacote), horas fixadas, início, data final (vigência), participantes do comitê, destinatários e observação de faturamento. **Escopo fechado** não controla horas; exige o valor do projeto em R$.
 - **Abas do projeto:** Resumo, Escopo e Financeiro (só escopo fechado), Apontamentos de horas, Demandas (com horas aprovadas), Ações e pendências, Relatório tradicional (só escopo fechado) e Relatórios com Claude.
-- **Faturamento e excedente:** preencha **Hora desenvolvimento parceiro** e **Hora excedente desenvolvimento parceiro** (valor da hora/homem negociado). O Resumo passa a mostrar a franquia em R$, o **excedente gerado**, o **total a faturar** e o **total projetado**.
+- **Fatura excedente:** preencha **Hora desenvolvimento parceiro** e **Hora excedente desenvolvimento parceiro** (valor da hora/homem negociado; vale só para projetos Spot que controlam horas). Se as horas consumidas passarem da franquia, o Resumo mostra as horas excedentes e a **fatura excedente a gerar** (horas excedentes × valor da hora excedente), com a conta escrita por extenso.
 - **Copiar projeto** (contratos recorrentes): copia o cadastro (inclusive os valores de hora); datas e observação ficam em branco e a situação vem como Ativo.
 - **Projeto encerrado:** só o administrador altera, com justificativa (mín. 10 caracteres) registrada no histórico.
 - **Importar Status Report da Fábrica (HTML):** com prévia para revisão, nas abas de apontamentos, demandas e ações.
