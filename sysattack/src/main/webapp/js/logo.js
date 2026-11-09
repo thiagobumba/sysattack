@@ -37,11 +37,17 @@ const Logo = (() => {
     if (!TYPES.includes(file.type)) throw new Error('Formato não aceito. Use PNG, JPG, WEBP ou GIF.');
     let bmp;
     try { bmp = await createImageBitmap(file); } catch (e) { throw new Error('Não foi possível ler essa imagem.'); }
-    let k = Math.min(1, MAX_PX / Math.max(bmp.width, bmp.height));
-    for (let i = 0; i < 4; i++, k *= 0.75) {
-      const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
-      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-      cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    // sempre quadrada: o avatar é redondo. Imagem já quase quadrada (ex.: selo redondo) ocupa tudo; as demais ganham uma margem
+    const ratio = bmp.width / bmp.height, squareish = ratio > 0.9 && ratio < 1.1;
+    let side = Math.min(MAX_PX, Math.max(bmp.width, bmp.height));
+    for (let i = 0; i < 4; i++, side = Math.round(side * 0.75)) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = Math.max(8, side);
+      const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
+      if (squareish) g.drawImage(bmp, 0, 0, cv.width, cv.height);
+      else {
+        const box = cv.width * 0.84, sc = Math.min(box / bmp.width, box / bmp.height), w = bmp.width * sc, h = bmp.height * sc;
+        g.drawImage(bmp, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+      }
       const blob = await toBlob(cv, 'image/png'); // PNG mantém a transparência
       if (blob && blob.size <= 900 * 1024) return blob;
     }

@@ -739,7 +739,7 @@ body > .app-copy { max-width: 900px; margin: 0 auto; }
 
 /* Imagem (logo) do projeto: avatar e campo de upload */
 .avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; border-radius: 50%; background: #fff; border: 1px solid #dcdcd8; vertical-align: middle; }
-.avatar img { width: 100%; height: 100%; object-fit: contain; padding: 12%; box-sizing: border-box; display: block; }
+.avatar img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .avatar.ph { background: var(--cream, #FDDDB3); border-color: transparent; color: #5a3a12; font-weight: 700; letter-spacing: .02em; }
 .av-sm { width: 34px; height: 34px; font-size: 12px; }
 .av-md { width: 44px; height: 44px; font-size: 14px; }
