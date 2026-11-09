@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **47**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **48**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -65,7 +65,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 ## Relações importantes
 
 - `tasks.project_id → projects.id`; `tasks.parent_id → tasks.id` (só um nível); `tasks.depends_on → tasks.id` (mesmo projeto, sem ciclos).
-- A tarefa-pai tem datas, progresso e situação **derivados** das filhas (`TaskRules.rollup`); não os edite diretamente.
+- A tarefa-pai tem progresso e situação **derivados** das filhas (`TaskRules.rollup`); as datas são do próprio pai. Pai nunca é marco (`is_milestone` é limpo no esquema 48).
 - `ishikawa_causes.parent_id → ishikawa_causes.id` (uma camada de subcausa).
 - Excluir projeto ou tarefa é bloqueado pela API enquanto houver vínculos (veja [03 – Funcionalidades](03-funcionalidades.md#2-projetos)).
 

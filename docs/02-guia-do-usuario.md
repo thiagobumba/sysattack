@@ -62,7 +62,7 @@ O sistema **não deixa excluir** projeto com vínculos (tarefas, lançamentos fi
 
 - **+ Nova tarefa** cria uma tarefa principal; **+ Filha** cria uma subtarefa (dois níveis). **+ Novo marco** cria um marco.
 - Campos: nome, descrição, responsável, início, fim, progresso, **situação** (A fazer, Em andamento, Concluída, Bloqueada, **Cancelada**), **Depende de** (uma tarefa predecessora), **Tarefa pai**, **Marcar como importante**.
-- A tarefa-pai é calculada pelas filhas: início = menor início, fim = maior fim, progresso = média ponderada pela duração, situação derivada. Filhas canceladas são ignoradas.
+- A tarefa-pai tem **progresso** (média ponderada pela duração) e **situação** calculados pelas filhas; filhas canceladas são ignoradas. O **início e o fim do pai são dele**: você os define na edição e mudar as datas das filhas **não altera** o pai. Uma tarefa pai não pode ser marco.
 - **Cancelada** é para tarefas que deixaram de fazer sentido. Ficam com selo cinza, barra hachurada no Gantt e **fora de todos os cálculos** (atraso, progresso, saúde, relatórios, burndown, PERT).
 - **Excluir tarefa:** bloqueado enquanto houver tarefa-pai, dependência, filhas ou outras tarefas dependendo dela; o aviso diz o que ajustar.
 - **Concluir marco:** um clique na área Marcos.

@@ -11,10 +11,16 @@ public final class TaskRules {
     private TaskRules() {}
 
     /**
-     * Recalcula início, fim, progresso e situação de uma tarefa pai a partir das filhas:
-     * início = menor início, fim = maior fim, progresso = média ponderada pela duração.
+     * Recalcula progresso e situação de uma tarefa pai a partir das filhas (média ponderada pela duração).
+     * As datas do pai são do próprio pai: mexer nas filhas não as altera.
      */
-    public static void rollup(Long parentId) throws SQLException {
+    public static void rollup(Long parentId) throws SQLException { rollup(parentId, false); }
+
+    /**
+     * Igual a {@link #rollup(Long)}; com {@code withDates} também ajusta o pai ao período das filhas
+     * (início = menor início, fim = maior fim). Só para quando o pai acaba de ser criado (importação, dados de exemplo).
+     */
+    public static void rollup(Long parentId, boolean withDates) throws SQLException {
         if (parentId == null) return;
         List<Map<String, Object>> kids = Db.query(
                 "SELECT start_date, end_date, progress, status FROM tasks WHERE parent_id = ?", parentId);
@@ -45,7 +51,11 @@ public final class TaskRules {
         int progress = (int) Math.round((double) sum / Math.max(1, weight));
         String status = allDone ? "CONCLUIDA" : started ? "EM_ANDAMENTO" : "A_FAZER";
         if (allDone) progress = 100;
-        Db.update("UPDATE tasks SET start_date = ?, end_date = ?, progress = ?, status = ? WHERE id = ?",
-                min, max, progress, status, parentId);
+        if (withDates) {
+            Db.update("UPDATE tasks SET start_date = ?, end_date = ?, progress = ?, status = ? WHERE id = ?",
+                    min, max, progress, status, parentId);
+        } else {
+            Db.update("UPDATE tasks SET progress = ?, status = ? WHERE id = ?", progress, status, parentId);
+        }
     }
 }

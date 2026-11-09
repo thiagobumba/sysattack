@@ -70,7 +70,7 @@ Use `Tip.attr('Título', ['linha', '• item', '# subtítulo', '= fórmula'])` n
 
 ## Armadilhas conhecidas
 
-- Tarefa-pai tem datas e progresso derivados: salvar direto os valores do pai é sobrescrito pelo `TaskRules.rollup`.
+- Tarefa-pai tem progresso e situação derivados (salvar direto os valores do pai é sobrescrito pelo `TaskRules.rollup`); as datas são do pai e só `rollup(id, true)` as ajusta às filhas (importação e seed).
 - Tarefas só têm **uma** predecessora; o PERT usa essa predecessora (e a do pai, quando houver).
 - Tarefas concluídas antes da coluna `completed_at` (esquema 45) não têm o dia real; os gráficos usam o fim planejado e avisam.
 - Gráficos em SVG precisam medir a largura real do contêiner; não use `viewBox` esticado (as fontes crescem junto).

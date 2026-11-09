@@ -79,7 +79,7 @@ Não existe usuário padrão. No primeiro acesso a tela de login pede a criaçã
 
 | Termo | Significado no SysAttack |
 |---|---|
-| **Tarefa-pai / filha** | Dois níveis apenas. O pai é calculado pelas filhas (datas, progresso, situação) |
+| **Tarefa-pai / filha** | Dois níveis apenas. O pai tem progresso e situação calculados pelas filhas; as datas são dele |
 | **Marco** | Tarefa marcada como marco; aparece como losango no Gantt e na área Marcos |
 | **Meta Empresa** | Marca (★) de projeto do plano de desenvolvimento da empresa; sobe a prioridade acima de Crítica |
 | **Saúde** | Verde, amarelo ou vermelho: o pior entre prazo, custo, marcos e mudanças |

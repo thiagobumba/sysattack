@@ -940,9 +940,11 @@ public class ApiServlet extends HttpServlet {
         LocalDate start, end;
         int progress;
         String status;
-        if (children > 0) { // pai com filhas: datas/progresso/situação vêm do cálculo das filhas
-            start = LocalDate.parse((String) existing.get("start_date"));
-            end = LocalDate.parse((String) existing.get("end_date"));
+        if (children > 0) { // pai com filhas: progresso e situação vêm das filhas; as datas são do próprio pai (editáveis) e uma tarefa pai nunca é marco
+            milestone = false;
+            start = date(b, "start_date", "Início");
+            end = date(b, "end_date", "Fim");
+            if (end.isBefore(start)) throw new ApiException(400, "A data final não pode ser anterior à inicial.");
             progress = ((Number) existing.get("progress")).intValue();
             status = (String) existing.get("status");
         } else {
@@ -1093,7 +1095,7 @@ public class ApiServlet extends HttpServlet {
                 skipped++;
             }
         }
-        for (Long p : parents) TaskRules.rollup(p);
+        for (Long p : parents) TaskRules.rollup(p, true);
         // opcional: estende as datas do projeto para caber no cronograma importado
         boolean adjusted = false;
         if (bool(b, "adjust_project") && min != null) {

@@ -66,7 +66,7 @@ Pai: barra laranja à esquerda, botão ▾/▸ para ocultar as filhas (lembrado 
 
 ### Regras
 - **Dois níveis:** tarefa principal e filhas. Uma filha não pode ter filhas.
-- **Tarefa-pai calculada** (`TaskRules.rollup`): início = menor início das filhas; fim = maior fim; progresso = média ponderada pela duração; situação derivada. Filhas **canceladas são ignoradas**; se todas forem canceladas, o pai fica Cancelado.
+- **Tarefa-pai** (`TaskRules.rollup`): progresso = média ponderada pela duração das filhas; situação derivada; filhas **canceladas são ignoradas**. As **datas (início e fim) são do próprio pai**, editáveis, e não mudam quando as filhas mudam (só são ajustadas ao período das filhas na importação de cronograma e nos dados de exemplo). Se todas as filhas forem canceladas, o pai fica Cancelado. Tarefa pai nunca é marco.
 - **Dependência:** uma predecessora por tarefa, **do mesmo projeto**; o servidor (`checkDependency`) recusa dependência da tarefa nela mesma, predecessora inexistente e dependência circular.
 - **Cancelada:** fica fora de atraso, progresso, saúde, relatórios, burndown e PERT.
 - **Atrasada** (cálculo, não uma situação): fim anterior a hoje e situação diferente de Concluída/Cancelada.
@@ -202,7 +202,7 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Antes de atualizar o esquema** o arquivo do banco é copiado para `pre-update-*.mv.db` (guarda as 5 últimas).
 - **Restauração:** `restaurar-backup.ps1` (confere o SHA-256 e guarda o estado atual antes de restaurar).
 - **Segurança e dados** (tela): pasta em uso, endereço nos e-mails, backups e trilha de auditoria.
-- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 47); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
+- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 48); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
 
 ## 14. Interface e usabilidade
 

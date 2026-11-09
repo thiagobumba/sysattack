@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 47;
+    private static final int SCHEMA_VERSION = 48;
 
     private Db() {}
 
@@ -182,6 +182,8 @@ public final class Db {
                     + "size INT NOT NULL,"
                     + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,"
                     + "PRIMARY KEY (kind, ref_id))");
+            // tarefa pai nunca é marco (os dois não combinam: o marco tem uma data só); corrige o que já existe
+            s.execute("UPDATE tasks SET is_milestone = FALSE WHERE is_milestone = TRUE AND id IN (SELECT DISTINCT parent_id FROM tasks WHERE parent_id IS NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_invoices ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
@@ -604,7 +606,7 @@ public final class Db {
             task(p1, "Comissionamento e testes", "", "Letícia", t.plusDays(46), t.plusDays(60), 0, "A_FAZER", mont, exe, false);
             task(p1, "GO LIVE · entrega ao cliente", "", "Adilson", t.plusDays(61), t.plusDays(61), 0, "A_FAZER", null, null, true);
             task(p1, "Treinamento da equipe", "", "Saimon", t.plusDays(62), t.plusDays(75), 0, "A_FAZER", null, null, false);
-            for (long p : new long[] {eng, sup, exe}) TaskRules.rollup(p);
+            for (long p : new long[] {eng, sup, exe}) TaskRules.rollup(p, true);
 
             fin(p1, "NF_SERVICO", "NF 1523", "Eletro Projetos Ltda", "Projeto elétrico", t.minusDays(12), t.minusDays(2), "18500.00", "PAGO", t.minusDays(3));
             fin(p1, "FATURA", "FAT-0092", "Locadora de Guindastes", "Locação de guindaste (montagem)", t.minusDays(1), t.plusDays(10), "7200.00", "PENDENTE", null);

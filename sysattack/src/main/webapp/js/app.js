@@ -780,19 +780,19 @@
     const hasKids = !!(t0 && t0.child_count > 0);
     const projSel = !taskId && !projectId
       ? `<div class="field full"><label for="tp">Projeto</label><select id="tp" name="project_id" required>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>` : '';
-    const form = openDialog(taskId ? (t.is_milestone ? 'Editar marco' : 'Editar tarefa') : (preset.asParent ? 'Nova tarefa pai' : preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
+    const form = openDialog(taskId ? (t.is_milestone && !hasKids ? 'Editar marco' : 'Editar tarefa') : (preset.asParent ? 'Nova tarefa pai' : preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
       <div class="field full"><label for="tn">Nome</label><input id="tn" name="name" maxlength="160" value="${esc(t.name)}" required></div>
-      <div class="field full"><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone ? 'checked' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
+      <div class="field full"${hasKids ? ' hidden' : ''}><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone && !hasKids ? 'checked' : ''} ${hasKids ? 'disabled' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
       <div class="field full"><label class="check"><input type="checkbox" name="is_important" ${t.is_important ? 'checked' : ''}> Marcar como importante (entra no quadrante "importante" da Matriz de prioridades, mesmo que o projeto não seja prioritário)</label></div>
       ${preset.asParent ? '<p class="hint full" style="grid-column:1/-1">Uma tarefa pai agrupa outras. Depois de salvar, use o botão <b>+ Filha</b> na linha dela para criar as tarefas dentro dela, ou edite tarefas existentes e escolha esta como “Pertence a”. Início, fim, progresso e situação passam a ser calculados pelas filhas.</p>' : ''}
       <div class="field"><label for="tpar">Pertence a (tarefa pai)</label><select id="tpar" name="parent_id" ${hasKids || preset.asParent ? 'disabled' : ''}></select></div>
       <div class="field"><label for="td">Depende de</label><select id="td" name="depends_on"></select></div>
       <div class="field"><label for="tr">Responsável</label><input id="tr" name="responsible" maxlength="120" value="${esc(t.responsible)}"></div>
       <div class="field"><label for="ts">Situação</label><select id="ts" name="status" ${hasKids ? 'disabled' : ''}>${opts(T_STATUS, t.status)}</select></div>
-      <div class="field"><label for="ta" id="l-start">Início</label><input id="ta" name="start_date" type="date" value="${t.start_date}" ${hasKids ? 'disabled' : 'required'}></div>
-      <div class="field" id="g-end"><label for="tb">Fim (prazo)</label><input id="tb" name="end_date" type="date" value="${t.end_date}" ${hasKids ? 'disabled' : 'required'}></div>
+      <div class="field"><label for="ta" id="l-start">Início</label><input id="ta" name="start_date" type="date" value="${t.start_date}" required></div>
+      <div class="field" id="g-end"><label for="tb">Fim (prazo)</label><input id="tb" name="end_date" type="date" value="${t.end_date}" required></div>
       <div class="field full"><label for="tg">Progresso</label><div class="range-row"><input id="tg" name="progress" type="range" min="0" max="100" step="5" value="${t.progress}" ${hasKids ? 'disabled' : ''}><output id="tgo">${t.progress}%</output></div></div>
-      ${hasKids ? '<p class="hint full" style="grid-column:1/-1">Esta tarefa tem filhas: início, fim, progresso e situação são calculados automaticamente a partir delas.</p>' : ''}
+      ${hasKids ? '<p class="hint full" style="grid-column:1/-1">Esta tarefa tem filhas: o <b>progresso</b> e a <b>situação</b> são calculados a partir delas. O <b>início</b> e o <b>fim</b> são desta tarefa: você define, e alterar as filhas não muda estas datas.</p>' : ''}
       <div class="field full"><label for="tx">Descrição</label><textarea id="tx" name="description" maxlength="4000" style="min-height:80px">${esc(t.description)}</textarea></div>`,
       async d => {
         const body = { ...d, is_milestone: !!d.is_milestone, is_important: !!d.is_important, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
