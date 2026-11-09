@@ -1,5 +1,7 @@
 # SysAttack — gestão de projetos
 
+> Documentação completa (guia do usuário, funcionalidades, API, modelo de dados e desenvolvimento) em [`../docs`](../docs/README.md).
+
 Java (Servlets) + H2 embutido (arquivo local) + HTML/CSS/JS puro.
 
 ## 1. Descubra a versão do seu Tomcat
