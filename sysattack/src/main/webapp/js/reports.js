@@ -162,7 +162,7 @@ const Rep = (() => {
   function repEac(projects) {
     const rows = projects.filter(p => p.status !== 'PLANEJAMENTO');
     if (!rows.length) return empty('Sem projetos em andamento', 'A projeção aparece quando o projeto sai do planejamento.');
-    const idx = v => v == null ? '—' : Number(v).toFixed(2).replace('.', ',');
+    const idx = v => v == null ? '—' : (v < 1 ? (Math.floor(v * 100) / 100) : Number(v)).toFixed(2).replace('.', ',');
     const cls = v => v == null ? '' : v >= 1 ? '' : v >= 0.9 ? 'warn-txt' : 'late-txt';
     return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Projeto</th><th class="num">Orçamento</th><th class="num">Custo lançado</th><th class="num">SPI</th><th class="num">CPI</th><th class="num">Projeção no término (EAC)</th><th class="num">Desvio</th></tr></thead><tbody>
       ${rows.map(p => { const e = p.evm || {};

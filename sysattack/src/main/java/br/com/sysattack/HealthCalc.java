@@ -60,7 +60,17 @@ final class HealthCalc {
                                        BigDecimal spent, LocalDate today) {
         String status = String.valueOf(p.get("status"));
         Map<String, Object> h = new LinkedHashMap<>();
-        if (status.equals("CONCLUIDO")) return neutral(h, "CONCLUIDO", "Concluído");
+        if (status.equals("CONCLUIDO")) {
+            BigDecimal bud = p.get("budget") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(p.get("budget")));
+            if (bud.signum() > 0 && spent.compareTo(bud) > 0) { // encerrado acima do orçamento: não pode parecer "tudo certo"
+                double pct = (spent.doubleValue() / bud.doubleValue() - 1) * 100;
+                neutral(h, "CONCLUIDO_ESTOURO", "Concluído c/ estouro");
+                h.put("reasons", List.of(String.format(java.util.Locale.forLanguageTag("pt-BR"),
+                        "Custo lançado R$ %,.2f acima do orçamento de R$ %,.2f (+%.1f%%)", spent.doubleValue(), bud.doubleValue(), pct)));
+                return h;
+            }
+            return neutral(h, "CONCLUIDO", "Concluído");
+        }
         if (status.equals("PLANEJAMENTO")) return neutral(h, "NAO_INICIADO", "Não iniciado");
         if (status.equals("PAUSADO")) return neutral(h, "PAUSADO", "Pausado");
 
@@ -164,12 +174,12 @@ final class HealthCalc {
         m.put("available", true);
         m.put("bac", round2(bac)); m.put("pv", round2(pvMoney)); m.put("ev", round2(evMoney)); m.put("ac", round2(ac));
         m.put("planned_pct", Math.round(planned)); m.put("actual_pct", Math.round(actual));
-        if (pvMoney > 0) m.put("spi", round2(evMoney / pvMoney));
+        if (pvMoney > 0) m.put("spi", round4(evMoney / pvMoney));
         boolean reliable = actual >= EVM_MIN_PROGRESS;
         m.put("reliable", reliable);
         if (ac > 0 && evMoney > 0) {
             double cpi = evMoney / ac, eac = bac / cpi;
-            m.put("cpi", round2(cpi)); m.put("eac", round2(eac)); m.put("vac", round2(bac - eac)); m.put("etc", round2(eac - ac));
+            m.put("cpi", round4(cpi)); m.put("eac", round2(eac)); m.put("vac", round2(bac - eac)); m.put("etc", round2(eac - ac));
             m.put("projects_overrun", reliable && eac > bac);
         } else if (ac <= 0) {
             m.put("eac", round2(bac)); m.put("vac", 0.0); m.put("etc", round2(bac)); m.put("projects_overrun", false);
@@ -180,6 +190,7 @@ final class HealthCalc {
     }
 
     private static double round2(double v) { return Math.round(v * 100.0) / 100.0; }
+    private static double round4(double v) { return Math.round(v * 10000.0) / 10000.0; }
 
     private static Map<String, Object> neutral(Map<String, Object> h, String level, String label) {
         h.put("level", level); h.put("label", label); h.put("dims", List.of()); h.put("reasons", List.of());

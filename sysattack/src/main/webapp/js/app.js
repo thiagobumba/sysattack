@@ -7,8 +7,8 @@
   const P_STATUS = { PLANEJAMENTO: ['Planejamento', 'b-grey'], EM_ANDAMENTO: ['Em andamento', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'], PAUSADO: ['Pausado', 'b-dark'] };
   const PRIORITY = { CRITICA: ['Crítica', 'b-red'], ALTA: ['Alta', 'b-orange'], MEDIA: ['Média', 'b-grey'], BAIXA: ['Baixa', 'b-light'] };
   const PRIO_RANK = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
-  const H_RANK = { VERMELHO: 0, AMARELO: 1, VERDE: 2, NAO_INICIADO: 3, PAUSADO: 4, CONCLUIDO: 5 };
-  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', PAUSADO: 'h-grey', CONCLUIDO: 'h-done' };
+  const H_RANK = { VERMELHO: 0, AMARELO: 1, VERDE: 2, NAO_INICIADO: 3, PAUSADO: 4, CONCLUIDO: 5, CONCLUIDO_ESTOURO: 5 };
+  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', PAUSADO: 'h-grey', CONCLUIDO: 'h-done', CONCLUIDO_ESTOURO: 'h-red' };
   const goalBadge = p => p.company_goal ? '<span class="badge b-goal" title="Projeto do plano de desenvolvimento da empresa">★ Meta Empresa</span> ' : '';
   const prioBadge = p => goalBadge(p) + badge(PRIORITY, p.priority || 'MEDIA');
   const healthChip = (h, withReason) => h ? `<span class="health ${H_CLASS[h.level] || 'h-grey'}" title="${esc((h.reasons || []).join(' · ') || h.label)}"><i></i>${esc(h.label)}</span>${withReason && h.reasons && h.reasons.length ? `<span class="small">${esc(h.reasons[0])}</span>` : ''}` : '—';
@@ -75,7 +75,8 @@
 
   // ------------------------------------------------------------------ indicadores de custo e prazo (EVM)
   const idxClass = v => v == null ? '' : v >= 1 ? 'ok' : v >= 0.9 ? 'warn' : 'bad';
-  const idxFmt = v => v == null ? '—' : Number(v).toFixed(2).replace('.', ',');
+  // abaixo de 1 nunca arredonda para 1,00 (0,996 aparece como 0,99)
+  const idxFmt = v => v == null ? '—' : (v < 1 ? (Math.floor(v * 100) / 100) : Number(v)).toFixed(2).replace('.', ',');
   function evmPanel(p) {
     const e = p.evm;
     if (!e) return '';
@@ -88,7 +89,7 @@
     return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b><span>${e.reliable ? '' : 'Projeção ainda pouco confiável: o progresso está abaixo de 10%.'}</span></div>
       <div class="evm-grid">
         <div class="evm-card ${idxClass(e.spi)}" title="SPI = valor realizado ÷ valor previsto até hoje. Abaixo de 1 indica atraso."><small>Prazo (SPI)</small><b>${idxFmt(e.spi)}</b><span>${e.spi == null ? 'Ainda sem previsto' : e.spi >= 1 ? 'No ritmo ou à frente' : e.spi >= 0.9 ? 'Levemente atrasado' : 'Atrasado'}</span></div>
-        <div class="evm-card ${noCost ? '' : idxClass(e.cpi)}" title="CPI = valor realizado ÷ custo lançado. Abaixo de 1 indica que cada R$ 1 gasto entregou menos de R$ 1 de trabalho."><small>Custo (CPI)</small><b>${noCost ? '—' : idxFmt(e.cpi)}</b><span>${noCost ? 'Nenhum custo lançado' : e.cpi >= 1 ? 'Dentro do orçamento' : e.cpi >= 0.9 ? 'Levemente acima' : 'Gastando mais que entrega'}</span></div>
+        <div class="evm-card ${noCost ? '' : e.ac > e.bac ? 'bad' : idxClass(e.cpi)}" title="CPI = valor realizado ÷ custo lançado. Abaixo de 1 indica que cada R$ 1 gasto entregou menos de R$ 1 de trabalho."><small>Custo (CPI)</small><b>${noCost ? '—' : idxFmt(e.cpi)}</b><span>${noCost ? 'Nenhum custo lançado' : e.ac > e.bac ? 'Custo lançado acima do orçamento' : e.cpi >= 1 ? 'Dentro do orçamento' : e.cpi >= 0.9 ? 'Levemente acima' : 'Gastando mais que entrega'}</span></div>
         <div class="evm-card ${over ? 'bad' : 'ok'}" title="EAC = orçamento ÷ CPI. Quanto o projeto deve custar no fim se o ritmo atual continuar."><small>Custo previsto no término (EAC)</small><b>${eacTxt}</b><span>Orçamento ${money(e.bac)}</span></div>
         <div class="evm-card ${e.vac != null && e.vac < 0 ? 'bad' : 'ok'}" title="Desvio no término = orçamento − EAC. Negativo indica estouro projetado."><small>Desvio no término</small><b>${e.vac == null ? '—' : (e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}</b><span>${e.vac == null ? '' : e.vac < 0 ? 'Estouro projetado' : 'Dentro do orçamento'}</span></div>
       </div>

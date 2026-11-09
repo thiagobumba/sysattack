@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- **Correção: projeto que estourou o orçamento aparecia como "tudo certo".** (1) O CPI era arredondado antes de comparar: 0,9964 virava 1,00 e o cartão ficava verde com "Dentro do orçamento". Agora a comparação usa o valor exato, valores abaixo de 1 nunca são exibidos como 1,00 (0,9964 aparece como 0,99) e, se o custo lançado já passou do orçamento, o cartão de custo fica vermelho com "Custo lançado acima do orçamento". (2) Projeto **Concluído** com custo acima do orçamento agora aparece na lista como "Concluído c/ estouro" (vermelho), com o motivo ao passar o mouse (valor e percentual acima), em vez do "Concluído" neutro.
 - **Projetos: abas por situação** — Planejamento, Em andamento (aba padrão), Concluído e Pausado, cada uma com a contagem de projetos. Os filtros de saúde e prioridade continuam valendo dentro da aba. Ao vir de um atalho do painel por saúde, abre a primeira aba que tem projetos naquela saúde.
 - **2FA**: o QR code agora tem tamanho fixo e não cobre mais a chave manual nem o texto do passo 2; a chave não quebra no meio dos grupos.
 - **Exclusão de projeto** só é permitida sem vínculos: se houver tarefas/marcos, lançamentos financeiros, documentos, changes ou gatilhos de e-mail, aparece um aviso listando quantos itens existem e a exclusão é bloqueada (no servidor também). Só quando está livre aparece a pergunta "Tem certeza?".
