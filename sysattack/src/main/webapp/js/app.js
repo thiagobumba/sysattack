@@ -245,7 +245,14 @@
     if (view.projectId !== id) view.tab = 'gantt';
     view.project = p; view.tasks = tasks; view.projectId = id; view.projects = [p];
     const leaf = tasks.filter(t => !t.child_count).length, ms = tasks.filter(t => t.is_milestone).length;
-    const tab = (k, label) => `<button class="tab ${view.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}">${label}</button>`;
+    view.nav = [
+      { k: 'plan', label: 'Cronograma e gráficos', tabs: [['gantt', 'Cronograma (Gantt)', 'Barras de tarefas no tempo, com dependências e marcos.'], ['burndown', 'Burndown', 'Quanto trabalho falta, comparado ao ritmo ideal até o prazo.'], ['pert', 'PERT / Caminho crítico', 'Rede de dependências: quais tarefas, se atrasarem, atrasam o projeto.']] },
+      { k: 'work', label: 'Tarefas e marcos', tabs: [['tasks', `Tarefas (${leaf})`, 'Lista e cadastro das tarefas do projeto.'], ['marcos', `Marcos (${ms})`, 'Entregas e datas-chave do projeto.']] },
+      { k: 'money', label: 'Financeiro e documentos', tabs: [['finance', `Financeiro (${p.fin_count})`, 'Notas fiscais e faturas lançadas no projeto.'], ['docs', `Documentos (${p.doc_count})`, 'Arquivos e anexos do projeto.']] },
+      { k: 'quality', label: 'Qualidade e mudanças', tabs: [['ishikawa', 'Ishikawa', 'Investigue as causas de um problema (espinha de peixe).'], ['changes', 'Changes', 'Mudanças de escopo, prazo ou custo e seu impacto.']] },
+      ...(isAdmin() ? [{ k: 'auto', label: 'Automação', tabs: [['triggers', 'Gatilhos de e-mail', 'Regras que enviam e-mail automaticamente.']] }] : [])
+    ];
+    const tab = () => '';
     main.innerHTML = pageHead(['SysAttack', { t: 'Projetos', href: '#/projetos' }, p.name], p.name, '') + `
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Escopo inicial</h2><div class="bar-actions">
         <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Editar projeto</button></div></div>
@@ -261,10 +268,19 @@
           p.evm && p.evm.available ? `Projeção de custo no término: ${money(p.evm.eac)} (${p.evm.eac > p.evm.bac ? 'acima' : 'dentro'} do orçamento).` : ''])}</dd></div></dl>
         ${p.health && p.health.dims && p.health.dims.length ? `<div class="hdims">${p.health.dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
         ${evmPanel(p)}</section>
-      <section class="panel"><div class="tabs proj-tabs" style="margin:0 0 18px">
-        ${tab('gantt', 'Cronograma (Gantt)')}${tab('tasks', `Tarefas (${leaf})`)}${tab('marcos', `Marcos (${ms})`)}${tab('burndown', 'Burndown')}${tab('pert', 'PERT / Caminho crítico')}${tab('finance', `Financeiro (${p.fin_count})`)}${tab('docs', `Documentos (${p.doc_count})`)}${tab('changes', 'Changes')}${tab('ishikawa', 'Ishikawa')}${isAdmin() ? tab('triggers', 'Gatilhos de e-mail') : ''}</div>
+      <section class="panel"><div id="proj-nav"></div>
         <div class="bar-actions" id="tab-actions" style="margin-bottom:16px"></div><div id="tab-body"></div></section>`;
+    drawNav();
     await renderTab();
+  }
+
+  function drawNav() {
+    const nav = document.getElementById('proj-nav'); if (!nav) return;
+    const g = view.nav.find(x => x.tabs.some(t => t[0] === view.tab)) || view.nav[0];
+    const cur = g.tabs.find(t => t[0] === view.tab) || g.tabs[0];
+    view.last = view.last || {}; view.last[g.k] = cur[0];
+    nav.innerHTML = `<div class="tabs proj-tabs pn-groups" role="tablist" aria-label="Áreas do projeto">${view.nav.map(x => `<button type="button" role="tab" class="tab${x === g ? ' active' : ''}" aria-selected="${x === g}" data-action="tab" data-tab="${(view.last[x.k] || x.tabs[0][0])}">${x.label}</button>`).join('')}</div>
+      <div class="pn-sub" role="tablist" aria-label="${esc(g.label)}">${g.tabs.map(t => `<button type="button" role="tab" class="pn-pill${t[0] === cur[0] ? ' active' : ''}" aria-selected="${t[0] === cur[0]}" data-action="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}<span class="pn-hint">${esc(cur[2])}</span></div>`;
   }
 
   const btn = (action, label, extra = '', primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${action}" ${extra}>${label}</button>`;
@@ -880,7 +896,7 @@
           if (confirm(`Tem certeza que deseja excluir a tarefa "${t ? t.name : ''}"? Esta ação não pode ser desfeita.`)) { await api('DELETE', 'tasks/' + id); toast('Tarefa excluída.'); await route(); }
           break;
         }
-        case 'tab': view.tab = el.dataset.tab; document.querySelectorAll('.tabs .tab').forEach(b => b.classList.toggle('active', b === el)); await renderTab(); break;
+        case 'tab': view.tab = el.dataset.tab; drawNav(); await renderTab(); break;
         case 'ms-tab': view.msTab = el.dataset.tab; if (view.msRender) view.msRender(); break;
         case 'ms-toggle': await api('PUT', `tasks/${id}/done`, { done: el.dataset.done !== '1' }); await route(); break;
         case 'new-fin': openFinanceForm(null, el.dataset.kind); break;
