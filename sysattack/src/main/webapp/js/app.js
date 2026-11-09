@@ -369,17 +369,26 @@
         ${d.description ? `<small style="display:block;margin-top:2px">${esc(d.description)}</small>` : ''}</div>
         <div class="doc-acts">${PREVIEW.includes(ext) ? `<button class="btn btn-sm" data-action="doc-view" data-id="${d.id}">Visualizar</button>` : ''}
         <a class="btn btn-sm" href="api/documents/${d.id}/file?download=1">Baixar</a>
-        ${canDel ? `<button class="icon-btn del" title="Excluir" aria-label="Excluir documento" data-action="del-doc" data-id="${d.id}">${ic('trash')}</button>` : ''}</div></div>`; }).join('')}</div>`
+        ${canDel ? `<button class="icon-btn" title="Editar" aria-label="Editar documento" data-action="edit-doc" data-id="${d.id}">${ic('edit')}</button>
+        <button class="icon-btn del" title="Excluir" aria-label="Excluir documento" data-action="del-doc" data-id="${d.id}">${ic('trash')}</button>` : ''}</div></div>`; }).join('')}</div>`
       : empty('Nenhum documento', 'Guarde aqui PDFs, especificações, contratos, desenhos e outros arquivos do projeto (até 25 MB cada).');
   }
 
-  function openDocForm() {
-    openDialog('Adicionar documento', `
-      <div class="field full"><label for="df">Arquivo (até 25 MB)</label><input id="df" name="file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.dwg,.dxf"></div>
-      <div class="field"><label for="dt">Título (opcional)</label><input id="dt" name="title" maxlength="160" placeholder="Se vazio, usa o nome do arquivo"></div>
-      <div class="field"><label for="dc">Categoria</label><select id="dc" name="category">${Object.entries(DOC_CAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-      <div class="field full"><label for="dd">Descrição (opcional)</label><textarea id="dd" name="description" maxlength="500" style="min-height:70px"></textarea></div>`,
+  function openDocForm(doc) {
+    const cats = Object.entries(DOC_CAT).map(([k, v]) => `<option value="${k}"${doc && doc.category === k ? ' selected' : ''}>${v}</option>`).join('');
+    openDialog(doc ? 'Editar documento' : 'Adicionar documento', (doc
+      ? `<p class="hint full" style="margin:0">Arquivo: <b>${esc(doc.file_name)}</b> (para trocar o arquivo, envie um novo documento).</p>
+      <div class="field"><label for="dt">Título</label><input id="dt" name="title" maxlength="160" required value="${esc(doc.title)}"></div>`
+      : `<div class="field full"><label for="df">Arquivo (até 25 MB)</label><input id="df" name="file" type="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.dwg,.dxf"></div>
+      <div class="field"><label for="dt">Título (opcional)</label><input id="dt" name="title" maxlength="160" placeholder="Se vazio, usa o nome do arquivo"></div>`) + `
+      <div class="field"><label for="dc">Categoria</label><select id="dc" name="category">${cats}</select></div>
+      <div class="field full"><label for="dd">Descrição (opcional)</label><textarea id="dd" name="description" maxlength="500" style="min-height:70px">${doc ? esc(doc.description || '') : ''}</textarea></div>`,
       async d => {
+        if (doc) {
+          await api('PUT', 'documents/' + doc.id, { title: (d.title || '').trim(), category: d.category, description: d.description || '' });
+          toast('Documento atualizado.');
+          return;
+        }
         const file = d.file;
         if (!file || !file.name) throw new Error('Selecione um arquivo.');
         if (file.size > 25 * 1024 * 1024) throw new Error('O arquivo é maior que 25 MB.');
@@ -390,7 +399,7 @@
         if (r.status === 401) { location.replace('login.html'); return; }
         if (!r.ok) throw new Error((data && data.error) || 'Falha ao enviar o arquivo.');
         toast('Documento enviado.');
-      }, 'Enviar');
+      }, doc ? 'Salvar' : 'Enviar');
   }
 
   function openPreview(d) {
@@ -825,6 +834,7 @@
           }
           break;
         case 'new-doc': openDocForm(); break;
+        case 'edit-doc': openDocForm(view.docs.find(x => x.id === id)); break;
         case 'doc-view': openPreview(view.docs.find(x => x.id === id)); break;
         case 'del-doc':
           if (confirm('Excluir este documento?')) { await api('DELETE', 'documents/' + id); toast('Documento excluído.'); await route(); }

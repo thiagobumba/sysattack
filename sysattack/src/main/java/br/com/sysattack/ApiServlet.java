@@ -1289,9 +1289,22 @@ public class ApiServlet extends HttpServlet {
             Map<String, Object> d = Db.one("SELECT * FROM documents WHERE id = ?", id);
             if (d == null) throw new ApiException(404, "Documento não encontrado.");
             if (s.size() == 3 && s.get(2).equals("file") && m.equals("GET")) return serveFile(d, req, resp);
+            boolean owner = d.get("uploaded_by_id") != null
+                    && ((Number) d.get("uploaded_by_id")).longValue() == ((Number) user.get("id")).longValue();
+            if (s.size() == 2 && m.equals("PUT")) {
+                if (!owner && !"ADMIN".equals(user.get("role"))) {
+                    throw new ApiException(403, "Só o administrador ou quem enviou o documento pode editá-lo.");
+                }
+                JsonObject b = body(req);
+                String title = str(b, "title", "Título", 160, true);
+                String category = str(b, "category", "Categoria", 20, true);
+                if (!DOC_CATEGORY.contains(category)) throw new ApiException(400, "Categoria inválida.");
+                String description = str(b, "description", "Descrição", 500, false);
+                Db.update("UPDATE documents SET title = ?, category = ?, description = ? WHERE id = ?", title, category, description, id);
+                Audit.log(req, (String) user.get("email"), "DOCUMENTO_EDITADO", title + " (id " + id + ")", true);
+                return Db.one(DOC_SQL + " WHERE id = ?", id);
+            }
             if (s.size() == 2 && m.equals("DELETE")) {
-                boolean owner = d.get("uploaded_by_id") != null
-                        && ((Number) d.get("uploaded_by_id")).longValue() == ((Number) user.get("id")).longValue();
                 if (!owner && !"ADMIN".equals(user.get("role"))) {
                     throw new ApiException(403, "Só o administrador ou quem enviou o documento pode excluí-lo.");
                 }
