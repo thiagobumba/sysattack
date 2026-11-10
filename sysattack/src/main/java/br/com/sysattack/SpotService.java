@@ -730,7 +730,7 @@ final class SpotService {
             }
         } else if (s.size() == 4 && s.get(3).equals("html") && m.equals("GET")) {
             resp.setContentType("text/html; charset=UTF-8");
-            resp.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+            resp.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
             resp.getWriter().write(renderReport(r, false));
             return ApiServlet.FILE_SENT;
         } else if (s.size() == 4 && s.get(3).equals("send") && m.equals("POST")) {
