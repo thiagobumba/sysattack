@@ -347,20 +347,20 @@ const Spot = (() => {
     const c = p.evo.eco, rate = Number(c.rate) || 0, est = Number(c.estimated), exe = Number(c.executed);
     if (!c.features.length) return `<p class="hint">Ainda sem dados de economia.</p>${empty('Sem economia calculada', 'Informe a Estimativa Beecloud (h) nas demandas e o Esforço (h) do time interno na feature entregue. Em Editar projeto, informe o valor da hora do time externo.')}${c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa.</p>` : ''}`;
     const money = rate > 0, unit = v => money ? brl(v * rate) : hh(v);
-    // série mensal acumulada, sem buracos entre o primeiro mês e o mês atual
+    // eixo = do mês de início ao mês final do projeto (sem data final, até o mês atual); o acumulado só avança até o mês atual
     const by = Object.fromEntries(c.months.map(m => [m.month, Number(m.estimated)]));
-    const keys = Object.keys(by).sort();
+    const now = todayIso().slice(0, 7), first = String(p.start_date || '').slice(0, 7) || Object.keys(by).sort()[0] || now;
+    const lastK = String(p.end_date || '').slice(0, 7) || now, endK = lastK < first ? now : lastK;
     const series = [];
-    if (keys.length) {
-      let [y, m] = keys[0].split('-').map(Number); const now = todayIso().slice(0, 7); let acc = 0;
-      for (let i = 0; i < 60; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k > now && k > keys[keys.length - 1]) break; acc += by[k] || 0; series.push({ k, v: acc, label: MES[m - 1] }); if (++m > 12) { m = 1; y++; } }
-    }
-    const W = 520, H = 190, L = 24, R = 24, T = 14, B = 26, mx = Math.max(...series.map(s => s.v), 1);
+    { let [y, m] = first.split('-').map(Number), acc = 0;
+      for (let i = 0; i < 60; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k > endK && !(k <= now && by[k])) break; if (k <= now) acc += by[k] || 0; series.push({ k, v: k <= now ? acc : null, label: MES[m - 1] + (m === 1 || !series.length ? ' ' + String(y).slice(2) : '') }); if (++m > 12) { m = 1; y++; } } }
+    const pts = series.filter(s => s.v !== null);
+    const W = 520, H = 190, L = 24, R = 24, T = 14, B = 26, mx = Math.max(...pts.map(s => s.v), 1);
     const X = i => L + (series.length < 2 ? (W - L - R) / 2 : i * (W - L - R) / (series.length - 1)), Y = v => T + (H - T - B) * (1 - v / mx);
-    const chart = series.length ? `<svg viewBox="0 0 ${W} ${H}" class="eco-svg" role="img" aria-label="${money ? 'Reais' : 'Horas'} que deixamos de gastar por mês, acumulado">
+    const chart = series.length ? `<svg viewBox="0 0 ${W} ${H}" class="eco-svg" role="img" aria-label="${money ? 'Reais' : 'Horas'} que deixamos de gastar por mês, acumulado, de ${series[0].k} a ${series[series.length - 1].k}">
       ${[0, .5, 1].map(f => `<line x1="${L}" x2="${W - R}" y1="${Y(mx * f)}" y2="${Y(mx * f)}" stroke="#e5e5e5"/>`).join('')}
-      <polyline fill="none" stroke="#1a7f37" stroke-width="3" points="${series.map((s, i) => `${X(i)},${Y(s.v)}`).join(' ')}"/>
-      ${series.map((s, i) => `<circle cx="${X(i)}" cy="${Y(s.v)}" r="4" fill="#1a7f37"><title>${s.label}: ${unit(s.v)}</title></circle><text x="${X(i)}" y="${H - 8}" font-size="11" fill="#666" text-anchor="middle">${s.label}</text>`).join('')}</svg>` : '';
+      <polyline fill="none" stroke="#1a7f37" stroke-width="3" points="${series.map((s, i) => s.v === null ? '' : `${X(i)},${Y(s.v)}`).filter(Boolean).join(' ')}"/>
+      ${series.map((s, i) => `${s.v === null ? '' : `<circle cx="${X(i)}" cy="${Y(s.v)}" r="4" fill="#1a7f37"><title>${s.label}: ${unit(s.v)}</title></circle>`}<text x="${X(i)}" y="${H - 8}" font-size="11" fill="#666" text-anchor="middle">${s.label}</text>`).join('')}</svg>` : '';
     const items = [...c.features].sort((a, b) => b.estimated - a.estimated);
     const mxf = Math.max(...items.map(f => Number(f.estimated)), 1);
     const eff = est > 0 ? Math.round(exe / est * 100) : 0, saved = est - exe;
@@ -381,47 +381,62 @@ const Spot = (() => {
       <p class="hint" style="margin-top:10px">Como é calculado: R$ = estimativa Beecloud (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
   }
 
-  /** HTML do relatório do projeto evolutivo (estilos inline: serve para o navegador, o PDF e anexo de e-mail). */
+  /** HTML do relatório do projeto evolutivo. Só tabelas e estilos inline (Outlook), classes só para o ajuste em telas estreitas. */
+  const T0 = ' role="presentation" cellpadding="0" cellspacing="0" border="0"';
   function evoReportHtml(p, rows, feats, o) {
-    const INK = '#1a1a1a', MUTED = '#5f5f66', LINE = '#dddde0', ORANGE = '#f45200';
+    const INK = '#1a1a1a', MUTED = '#5f5f66', LINE = '#dddde0', ORANGE = '#f45200', SOFT = '#f6f6f4';
     const inP = d => d && (!o.from || String(d).slice(0, 10) >= o.from) && (!o.to || String(d).slice(0, 10) <= o.to);
     const rq = rows.filter(r => !o.from && !o.to ? true : inP(r.received_at) || inP(r.delivered_at));
     const fs = feats.filter(f => !o.from && !o.to ? true : rows.some(r => r.feature_id === f.id && inP(r.delivered_at)));
     const cnt = k => rq.filter(r => r.status === k).length;
-    const th = 'text-align:left;padding:6px 8px;border-bottom:2px solid ' + INK + ';font-size:12px', td = 'padding:6px 8px;border-bottom:1px solid ' + LINE + ';font-size:13px;vertical-align:top';
-    const h2 = s => `<h2 style="font-size:17px;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid ${ORANGE}">${s}</h2>`;
-    const stat = (l, v) => `<td style="padding:10px 12px;border:1px solid ${LINE};text-align:center"><div style="font-size:24px;font-weight:700">${v}</div><div style="font-size:11px;color:${MUTED}">${l}</div></td>`;
-    let b = '';
+    const gap = n => `<table${T0} width="100%"><tr><td height="${n}" style="height:${n}px;font-size:1px;line-height:1px">&nbsp;</td></tr></table>`;
+    const sec = s => `${gap(10)}<table${T0} width="100%"><tr><td style="padding:12px 0 6px;font-size:18px;font-weight:bold;color:${INK};border-bottom:2px solid ${ORANGE}">${s}</td></tr></table>${gap(10)}`;
+    const note = s => `<p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:${MUTED}">${s}</p>`;
+    const cells = list => { const w = Math.floor(100 / list.length); return `<table${T0} width="100%"><tr>${list.map(([l, v]) => `<td class="stc" width="${w}%" valign="top" align="center" bgcolor="${SOFT}" style="background-color:${SOFT};padding:12px 8px;border:1px solid ${LINE};text-align:center"><div style="font-size:24px;line-height:1.2;font-weight:bold;color:${INK}">${v}</div><div style="font-size:12px;line-height:1.3;color:${MUTED}">${l}</div></td>`).join('')}</tr></table>`; };
+    const th = (s, al) => `<td bgcolor="${SOFT}" style="background-color:${SOFT};padding:8px 10px;border-bottom:2px solid ${INK};font-size:12px;font-weight:bold;text-align:${al || 'left'}">${s}</td>`;
+    const td = (s, al) => `<td valign="top" style="padding:8px 10px;border-bottom:1px solid ${LINE};font-size:13px;line-height:1.4;text-align:${al || 'left'}">${s}</td>`;
+    let b = `<table${T0} width="100%"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td style="padding:2px 0 2px 16px"><div style="font-size:13px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div>
+      <div style="font-size:26px;line-height:1.2;font-weight:bold;color:${INK};padding:2px 0">${esc(p.name)}</div>
+      <div style="font-size:13px;color:${MUTED}">Período: ${o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período'} · Emitido em ${fmt(todayIso())}</div></td></tr></table>`;
     if (o.sum) {
-      b += h2('Resumo') + `<table style="border-collapse:collapse;width:100%"><tr>${stat('Pedidos', rq.length)}${stat('Triagem', cnt('TRIAGEM'))}${stat('Em estimativa', cnt('EM_ESTIMATIVA'))}${stat('Estimado', cnt('ESTIMADO'))}${stat('Em desenvolvimento', cnt('EM_DESENVOLVIMENTO'))}${stat('Em homologação', cnt('EM_HOMOLOGACAO'))}${stat('Entregue', cnt('ENTREGUE'))}</tr></table>
-        <p style="font-size:13px;color:${MUTED}">${fs.length} feature(s) entregue(s)${cnt('RECUSADA') ? ` · ${cnt('RECUSADA')} pedido(s) recusado(s)` : ''}.</p>`;
+      b += sec('Resumo') + cells([['Pedidos', rq.length], ['Triagem', cnt('TRIAGEM')], ['Em estimativa', cnt('EM_ESTIMATIVA')], ['Estimado', cnt('ESTIMADO')]]) + gap(8)
+        + cells([['Em desenvolvimento', cnt('EM_DESENVOLVIMENTO')], ['Em homologação', cnt('EM_HOMOLOGACAO')], ['Entregue', cnt('ENTREGUE')]].concat(cnt('RECUSADA') ? [['Recusada', cnt('RECUSADA')]] : []))
+        + note(`${fs.length} feature(s) entregue(s) no período.`);
     }
     if (o.eco) {
       const c = p.evo.eco, rate = Number(c.rate) > 0, items = c.features.filter(f => fs.some(x => x.id === f.id));
       const est = items.reduce((s, f) => s + Number(f.estimated), 0), ex = items.reduce((s, f) => s + Number(f.executed), 0);
-      b += h2('Economia com o time interno');
-      b += items.length ? `<table style="border-collapse:collapse;width:100%"><tr>${stat('Estimado pela Beecloud', hh(est))}${stat('Executado pelo time interno', hh(ex))}${stat('Horas a menos', hh(est - ex))}${stat('Deixamos de gastar', rate ? brl(est * Number(c.rate)) : '—')}</tr></table>
-        <table style="border-collapse:collapse;width:100%;margin-top:10px"><tr><th style="${th}">Feature</th><th style="${th};text-align:right">Estimado</th><th style="${th};text-align:right">Executado</th></tr>${items.map(f => `<tr><td style="${td}">${fmtNo(f.number)} ${esc(f.name)}</td><td style="${td};text-align:right">${hh(f.estimated)}</td><td style="${td};text-align:right">${hh(f.executed)}</td></tr>`).join('')}</table>
-        ${rate ? `<p style="font-size:12px;color:${MUTED}">Valor evitado = horas estimadas pela Beecloud × ${brl(c.rate)}/h.</p>` : ''}`
-        : `<p style="font-size:13px;color:${MUTED}">Sem features com estimativa e esforço informados no período.</p>`;
+      b += sec('Economia com o time interno');
+      b += items.length ? cells([['Estimado pela Beecloud', hh(est)], ['Executado pelo time interno', hh(ex)], ['Horas a menos', hh(est - ex)], ['Deixamos de gastar', rate ? brl(est * Number(c.rate)) : '—']]) + gap(10)
+        + `<table${T0} width="100%"><tr>${th('Feature')}${th('Estimado', 'right')}${th('Executado', 'right')}</tr>${items.map(f => `<tr>${td(`<b>${fmtNo(f.number)}</b> ${esc(f.name)}`)}${td(hh(f.estimated), 'right')}${td(hh(f.executed), 'right')}</tr>`).join('')}</table>`
+        + (rate ? note(`Valor evitado = horas estimadas pela Beecloud × ${brl(c.rate)}/h.`) : '')
+        : note('Sem features com estimativa e esforço informados no período.');
     }
     if (o.feat) {
-      b += h2('Features entregues') + (fs.length ? fs.map(f => { const rs = rows.filter(r => r.feature_id === f.id), fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return `<div style="margin:0 0 14px;padding:10px 12px;border:1px solid ${LINE};border-left:4px solid ${ORANGE};page-break-inside:avoid">
-        <div style="font-size:14px"><b>${fmtNo(f.number)} · ${esc(f.name)}</b>${f.module ? ` <span style="color:${MUTED}">(${esc(f.module)})</span>` : ''}</div>
+      b += sec('Features entregues') + (fs.length ? fs.map(f => { const rs = rows.filter(r => r.feature_id === f.id), fl = (st.ffiles || []).filter(x => x.feature_id === f.id);
+        return `<table${T0} width="100%" style="page-break-inside:avoid"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td bgcolor="#ffffff" style="background-color:#ffffff;padding:12px 14px;border:1px solid ${LINE};border-left:0">
+        <div style="font-size:15px;line-height:1.4"><b>${fmtNo(f.number)} · ${esc(f.name)}</b>${f.module ? ` <span style="color:${MUTED}">(${esc(f.module)})</span>` : ''}</div>
         ${Number(f.effort_hours) > 0 ? `<div style="font-size:12px;color:${MUTED}">Esforço do time interno: ${hh(f.effort_hours)}</div>` : ''}
-        <p style="font-size:13px;margin:8px 0">${f.documentation ? esc(f.documentation).replace(/\n/g, '<br>') : '<i>Sem descrição do que foi feito.</i>'}</p>
+        <p style="margin:8px 0;font-size:13px;line-height:1.5">${f.documentation ? esc(f.documentation).replace(/\n/g, '<br>') : '<i>Sem descrição do que foi feito.</i>'}</p>
         ${fl.length ? `<div style="font-size:12px;color:${MUTED}">Anexos: ${fl.map(x => esc(x.file_name)).join(', ')}</div>` : ''}
-        ${rs.map(r => `<div style="font-size:12px;margin-top:6px"><b>Pedido:</b> ${esc(r.title)}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}${r.delivered_at ? ' · entregue em ' + fmt(String(r.delivered_at).slice(0, 10)) : ''}</div>`).join('')}</div>`; }).join('') : `<p style="font-size:13px;color:${MUTED}">Nenhuma feature entregue no período.</p>`);
+        ${rs.map(r => `<div style="font-size:12px;line-height:1.4;margin-top:6px"><b>Pedido:</b> ${esc(r.title)}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}${r.delivered_at ? ' · entregue em ' + fmt(String(r.delivered_at).slice(0, 10)) : ''}</div>`).join('')}</td></tr></table>${gap(10)}`; }).join('') : note('Nenhuma feature entregue no período.'));
     }
     if (o.dem) {
-      b += h2('Demandas') + (rq.length ? `<table style="border-collapse:collapse;width:100%"><tr><th style="${th}">Recebido</th><th style="${th}">Chamado</th><th style="${th}">Pedido</th><th style="${th}">Solicitante</th><th style="${th}">Situação</th><th style="${th}">Feature</th></tr>${rq.map(r => `<tr><td style="${td}">${fmt(String(r.received_at).slice(0, 10))}</td><td style="${td}">${esc(r.ticket_no || (r.channel === 'EMAIL' ? 'E-mail' : '—'))}</td><td style="${td}">${esc(r.title)}</td><td style="${td}">${esc(r.requester || '—')}</td><td style="${td}">${esc(R_STATUS[r.status][0])}</td><td style="${td}">${r.feature_id ? fmtNo(r.feature_no) : '—'}</td></tr>`).join('')}</table>` : `<p style="font-size:13px;color:${MUTED}">Nenhum pedido no período.</p>`);
+      b += sec('Demandas') + (rq.length ? `<table${T0} width="100%"><tr>${th('Pedido')}${th('Situação')}${th('Feature')}</tr>${rq.map(r => `<tr>${td(`<b>${esc(r.title)}</b><div style="font-size:12px;color:${MUTED}">${fmt(String(r.received_at).slice(0, 10))} · ${esc(r.ticket_no || (r.channel === 'EMAIL' ? 'E-mail' : 'TIFlux'))}${r.requester ? ' · ' + esc(r.requester) : ''}</div>`)}${td(esc(R_STATUS[r.status][0]))}${td(r.feature_id ? fmtNo(r.feature_no) : '—')}</tr>`).join('')}</table>` : note('Nenhum pedido no período.'));
     }
-    const per = o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período';
-    return `<div style="border-bottom:4px solid ${ORANGE};padding-bottom:10px"><div style="font-size:12px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div><h1 style="font-size:24px;margin:2px 0">${esc(p.name)}</h1><div style="font-size:12px;color:${MUTED}">Período: ${per} · Emitido em ${fmt(todayIso())}</div></div>${b}`;
+    return b;
   }
   const evoReportTitle = (p, o) => `Relatório · ${p.name}${o.from || o.to ? ' · ' + (o.from ? fmt(o.from) : 'início') + ' a ' + (o.to ? fmt(o.to) : 'hoje') : ''}`;
-  /** Documento completo (preview, download e edição): mesma moldura que o servidor usa. */
-  const evoReportDoc = (title, body, edit) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{margin:14mm}${edit ? 'body{outline:none}' : ''}</style></head><body style="margin:0;padding:24px 30px;background:#fff"><div style="max-width:780px;margin:0 auto;font-family:'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a">${body}</div></body></html>`;
+  const EVO_CSS = "body,table,td,th,p{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a}table{border-collapse:collapse}img{border:0}@media only screen and (max-width:620px){.stc{display:inline-block!important;width:48%!important;box-sizing:border-box!important;vertical-align:top}.pad{padding:12px 8px 24px!important}.cp{padding:16px 14px!important}}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:14mm}}";
+  /** Documento completo (preview, download e edição): mesma moldura que o servidor usa. Só o miolo (#rb) é editável. */
+  const evoReportDoc = (title, body, logo) => `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${EVO_CSS}#rb:focus{outline:none}</style></head><body bgcolor="#f6f6f4" style="margin:0;background-color:#f6f6f4;font-size:14px"><table${T0} width="100%" bgcolor="#f6f6f4"><tr><td align="center" class="pad" style="padding:22px 18px 40px"><table${T0} width="100%" style="max-width:760px"><tr><td bgcolor="#ffffff" class="cp" style="background-color:#ffffff;padding:24px 28px">
+    <table${T0} width="100%"><tr><td valign="middle" style="padding:0 0 14px"><img src="${logo}" alt="Momesso" width="150" style="display:block;border:0;width:150px;height:auto"></td><td valign="middle" align="right" style="padding:0 0 14px;font-size:12px;color:#888888">Relatório do projeto</td></tr><tr><td colspan="2" height="1" bgcolor="#e3e3e3" style="background-color:#e3e3e3;font-size:1px;line-height:1px">&nbsp;</td></tr><tr><td colspan="2" height="18" style="font-size:1px;line-height:1px">&nbsp;</td></tr></table>
+    <div id="rb">${body}</div></td></tr></table></td></tr></table></body></html>`;
+  const EVO_LOGO = 'img/logo-light-bg.png';
+  /** Para baixar o HTML: a logo vai embutida (data URI), assim o arquivo funciona em qualquer lugar. */
+  async function evoLogoData() {
+    try { const r = await fetch(EVO_LOGO); const bl = await r.blob(); return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(bl); }); } catch (e) { return EVO_LOGO; }
+  }
 
   function renderEvoReport(host, p, rows) {
     const o = st.rep = st.rep || { from: '', to: '', sum: true, eco: true, feat: true, dem: true };
@@ -439,7 +454,7 @@ const Spot = (() => {
         <td class="acts">${locked() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar relatório" data-action="sp-edit-evo" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum relatório gerado', 'Confira o preview e clique em “Gerar relatório”: ele fica guardado aqui para editar, imprimir ou enviar por e-mail.');
     }).catch(() => {});
-    const draw = () => { st.repBody = evoReportHtml(p, rows, st.features || [], o); st.repTitle = evoReportTitle(p, o); document.getElementById('rp-frame').srcdoc = st.repHtml = evoReportDoc(st.repTitle, st.repBody); };
+    const draw = () => { st.repBody = evoReportHtml(p, rows, st.features || [], o); st.repTitle = evoReportTitle(p, o); document.getElementById('rp-frame').srcdoc = evoReportDoc(st.repTitle, st.repBody, EVO_LOGO); };
     host.querySelector('#rpf').addEventListener('change', e => { o.from = e.target.value; draw(); });
     host.querySelector('#rpt').addEventListener('change', e => { o.to = e.target.value; draw(); });
     host.querySelectorAll('[data-rp]').forEach(c => c.addEventListener('change', () => { o[c.dataset.rp] = c.checked; draw(); }));
@@ -912,14 +927,14 @@ const Spot = (() => {
       <p class="hint full" style="margin:0">Clique no texto do relatório para ajustar. As cores e a estrutura (tabelas, títulos) são mantidas.</p>
       <iframe id="er-frame" class="preview full" title="Editor do relatório" style="height:52vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>`,
       async d => {
-        const body = document.getElementById('er-frame').contentDocument.body.firstElementChild;
+        const body = document.getElementById('er-frame').contentDocument.getElementById('rb');
         await api('PUT', 'spot/reports/' + id, { title: d.titulo, html: body.innerHTML });
         A().toast('Relatório salvo.');
       });
     dlg.className = 'wide';
     const fr = document.getElementById('er-frame');
-    fr.addEventListener('load', () => { fr.contentDocument.designMode = 'on'; });
-    fr.srcdoc = evoReportDoc(r.title, r.data.html, true);
+    fr.addEventListener('load', () => { fr.contentDocument.getElementById('rb').contentEditable = 'true'; });
+    fr.srcdoc = evoReportDoc(r.title, r.data.html, EVO_LOGO);
     dlg.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { fr.contentWindow.focus(); fr.contentDocument.execCommand(b.dataset.ex, false, null); }));
   }
 
@@ -1309,7 +1324,7 @@ const Spot = (() => {
       case 'sp-del-report': await del('spot/reports/' + id, 'Excluir este relatório?'); break;
       case 'sp-edit-report': dlg.close(); await editReport(id); break;
       case 'sp-send-report': dlg.close(); await sendReport(id); break;
-      case 'sp-rep-html': { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([st.repHtml], { type: 'text/html;charset=utf-8' })); a.download = 'relatorio-' + String(st.data.name || 'projeto').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + todayIso() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); A().toast('Relatório HTML gerado.'); break; }
+      case 'sp-rep-html': { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([evoReportDoc(st.repTitle, st.repBody, await evoLogoData())], { type: 'text/html;charset=utf-8' })); a.download = 'relatorio-' + String(st.data.name || 'projeto').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + todayIso() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); A().toast('Relatório HTML gerado.'); break; }
       case 'sp-rep-save': { const r = await api('POST', `spot/${st.id}/reports/evo`, { titulo: st.repTitle, html: st.repBody, ref_date: todayIso() }); A().toast('Relatório gerado.'); await openReport(r.id); break; }
       case 'sp-edit-evo': dlg.close(); await evoReportEditor(id); break;
       case 'sp-rep-pdf': { const f = document.getElementById('rp-frame'); if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } break; }
