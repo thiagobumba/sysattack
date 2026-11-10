@@ -517,7 +517,7 @@ const Spot = (() => {
     const x = id ? st.requests.find(r => r.id === id) : { channel: 'TIFLUX', ticket_no: '', requester: '', received_at: todayIso(), title: '', description: '', status: 'TRIAGEM', assignee: '', solution: '', delivered_at: '', feature: '', module: '' };
     A().openDialog(id ? 'Editar demanda' : 'Nova demanda', `
       <div class="field"><label for="rc">Canal</label><select id="rc" name="channel">${opts(R_CHANNEL, x.channel)}</select></div>
-      <div class="field"><label for="rn">Nº do chamado <span class="opt">(opcional)</span></label><input id="rn" name="ticket_no" maxlength="40" value="${esc(x.ticket_no)}"></div>
+      <div class="field" id="rn-f"><label for="rn">Nº do chamado TIFlux <span class="opt">(opcional)</span></label><input id="rn" name="ticket_no" maxlength="40" value="${esc(x.ticket_no)}"></div>
       <div class="field"><label for="rr">Solicitante</label><input id="rr" name="requester" maxlength="160" value="${esc(x.requester)}" placeholder="Nome · área"></div>
       <div class="field"><label for="rd">Recebido em</label><input id="rd" name="received_at" type="date" value="${String(x.received_at).slice(0, 10)}" required></div>
       <div class="field full"><label for="rt">Pedido (título)</label><input id="rt" name="title" maxlength="200" value="${esc(x.title)}" required></div>
@@ -530,6 +530,10 @@ const Spot = (() => {
       <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>
       <p class="hint full">Ao marcar “Entregue”, informe a feature. Pedidos parecidos podem usar o mesmo nome de feature: eles aparecem agrupados na aba Features entregues.</p>`,
       async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...d, delivered_at: d.delivered_at || null }); A().toast('Demanda salva.'); });
+    // por e-mail não há chamado TIFlux: esconde o campo e limpa o número
+    const f = document.querySelector('#dlg form'), ch = f.elements.channel, tk = f.elements.ticket_no;
+    const chSync = () => { const mail = ch.value === 'EMAIL'; document.getElementById('rn-f').style.display = mail ? 'none' : ''; if (mail) tk.value = ''; };
+    ch.addEventListener('change', chSync); chSync();
   }
 
   function actionForm(id) {
