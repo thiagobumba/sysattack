@@ -67,7 +67,7 @@ const Spot = (() => {
   const A_STATUS = { PENDENTE: ['Pendente', 'b-red'], A_CONFIRMAR: ['A confirmar', 'b-orange'], PARCIAL: ['Parcial', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'] };
   const S_STATUS = { ATIVO: ['Ativo', 'b-green'], PAUSADO: ['Pausado', 'b-orange'], ENCERRADO: ['Encerrado', 'b-grey'] };
   const MODEL = { MENSAL: 'Franquia mensal', PACOTE: 'Pacote de horas' };
-  const R_STATUS = { TRIAGEM: ['Triagem', 'b-grey'], EM_DESENVOLVIMENTO: ['Em desenvolvimento', 'b-orange'], EM_HOMOLOGACAO: ['Em homologação', 'b-dark'], ENTREGUE: ['Entregue', 'b-green'], RECUSADA: ['Recusada', 'b-red'] };
+  const R_STATUS = { TRIAGEM: ['Triagem', 'b-grey'], EM_ESTIMATIVA: ['Em estimativa', 'b-orange'], ESTIMADO: ['Estimado', 'b-dark'], EM_DESENVOLVIMENTO: ['Em desenvolvimento', 'b-orange'], EM_HOMOLOGACAO: ['Em homologação', 'b-dark'], ENTREGUE: ['Entregue', 'b-green'], RECUSADA: ['Recusada', 'b-red'] };
   const R_CHANNEL = { TIFLUX: 'TIFlux', EMAIL: 'E-mail' };
   const P_KIND = { PADRAO: 'Spot padrão', EVOL_SF: 'Evolutivas Salesforce', EVOL_PT: 'Evolutivas Protheus' };
   const isEvo = p => !!p && !!p.kind && p.kind !== 'PADRAO';
@@ -246,10 +246,10 @@ const Spot = (() => {
           <td>${healthChip(p.scope.health)}${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
           <td class="num strong">${brl(p.project_value)}<span class="small">${brl(p.finance.invoiced)} faturado (${p.finance.pct_invoiced}%)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
-    const tableEvo = `<table class="tbl"><thead><tr><th>Projeto</th><th>Tipo</th><th class="num">Pedidos</th><th class="num">Entregues</th><th class="num">Em andamento</th><th class="num">Na triagem</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableEvo = `<table class="tbl"><thead><tr><th>Projeto</th><th>Tipo</th><th class="num">Pedidos</th><th class="num">Entregues</th><th class="num">Em andamento</th><th class="num">Na triagem</th><th class="num">Estimado / Executado</th><th class="num">Economia</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}<td>${esc(P_KIND[p.kind] || '')}</td>
           <td class="num strong">${p.evo.total}</td><td class="num">${p.evo.delivered}<span class="small">${p.evo.features} feature(s)</span></td><td class="num">${p.evo.doing}</td>
-          <td class="num ${p.evo.triage ? 'late-txt' : ''}">${p.evo.triage}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
+          <td class="num ${p.evo.triage ? 'late-txt' : ''}">${p.evo.triage}</td><td class="num">${p.evo.eco && p.evo.eco.features.length ? hh(p.evo.eco.estimated) + ' / ' + hh(p.evo.eco.executed) : '—'}</td><td class="num strong">${p.evo.eco && p.evo.eco.features.length && Number(p.evo.eco.rate) > 0 ? brl(p.evo.eco.avoided) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
         ${kinds.map(k => `<button class="tab ${listTab === k ? 'active' : ''}" data-action="sp-list-tab" data-kind="${k}">${KINDS[k]} (${count(k)})</button>`).join('')}</div>
@@ -293,6 +293,27 @@ const Spot = (() => {
     [st.requests, st.rfiles, st.features, st.ffiles] = await Promise.all([api('GET', `spot/${id}/requests`), api('GET', `spot/${id}/request-files`), api('GET', `spot/${id}/features`), api('GET', `spot/${id}/feature-files`)]);
   }
 
+  const hh = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' h';
+  /** Placar de economia: o que a Beecloud estimou x o que o time interno gastou. */
+  function ecoPanel(p) {
+    const c = p.evo.eco;
+    if (!c) return '';
+    const miss = c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa da Beecloud ficaram fora do cálculo.</p>` : '';
+    if (!c.features.length) return `<div class="eco"><h3 class="evo-h">Economia com o time interno</h3><p class="hint" style="margin:0">Ainda sem dados. Informe a <b>Estimativa Beecloud (h)</b> nas demandas e o <b>Esforço (h)</b> do time interno na feature entregue para ver quanto deixamos de gastar.</p>${miss}</div>`;
+    const mx = Math.max(...c.features.map(f => Math.max(f.estimated, f.executed)), 1);
+    const rate = Number(c.rate) > 0;
+    return `<div class="eco"><h3 class="evo-h">Economia com o time interno</h3>
+      <div class="eco-cards">
+        <div class="eco-c"><span>Estimado pela Beecloud</span><b>${hh(c.estimated)}</b>${rate ? `<small>${brl(c.avoided)} se fosse externo</small>` : ''}</div>
+        <div class="eco-c"><span>Executado pelo time interno</span><b>${hh(c.executed)}</b></div>
+        <div class="eco-c"><span>Horas a menos</span><b class="${c.saved_hours >= 0 ? 'pos' : 'neg'}">${hh(c.saved_hours)}</b><small>${c.saved_pct}% da estimativa</small></div>
+        <div class="eco-c eco-main"><span>Deixamos de gastar</span><b>${rate ? brl(c.avoided) : '—'}</b>${rate ? `<small>${hh(c.estimated)} × ${brl(c.rate)}/h</small>` : '<small>Informe o valor da hora do time externo em Editar projeto</small>'}</div>
+      </div>
+      <ul class="eco-bars" aria-label="Estimado x executado por feature">${c.features.map(f => `<li><span class="eco-n"><b>${fmtNo(f.number)}</b> ${esc(f.name)}</span>
+        <span class="eco-b"><i class="est" style="width:${(f.estimated / mx * 100).toFixed(1)}%"></i><em>${hh(f.estimated)} estimado</em></span>
+        <span class="eco-b"><i class="exe" style="width:${(f.executed / mx * 100).toFixed(1)}%"></i><em>${hh(f.executed)} executado</em></span></li>`).join('')}</ul>${miss}</div>`;
+  }
+
   /** Topo do projeto evolutivo: a jornada em quatro etapas e os números que o dono precisa ver primeiro. */
   function evoHead(p) {
     const rq = st.requests || [], e = p.evo;
@@ -307,10 +328,11 @@ const Spot = (() => {
       <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
       ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
       <ol class="jr" aria-label="Etapas do atendimento">
-        <li>${step('TRIAGEM', 'Triagem', by('TRIAGEM'), 'g')}</li><li>${step('EM_DESENVOLVIMENTO', 'Em desenvolvimento', by('EM_DESENVOLVIMENTO'), 'o')}</li>
+        <li>${step('TRIAGEM', 'Triagem', by('TRIAGEM'), 'g')}</li><li>${step('EM_ESTIMATIVA', 'Em estimativa', by('EM_ESTIMATIVA'), 'o')}</li><li>${step('ESTIMADO', 'Estimado', by('ESTIMADO'), 'd')}</li><li>${step('EM_DESENVOLVIMENTO', 'Em desenvolvimento', by('EM_DESENVOLVIMENTO'), 'o')}</li>
         <li>${step('EM_HOMOLOGACAO', 'Em homologação', by('EM_HOMOLOGACAO'), 'd')}</li><li>${step('ENTREGUE', 'Entregue', by('ENTREGUE'), 'v')}</li></ol>
       <p class="jr-note">${e.total} pedido(s) recebido(s)${e.refused ? ` · <button type="button" class="linkish" data-action="sp-jr" data-f="RECUSADA">${e.refused} recusado(s)</button>` : ''}</p>
       <div class="jr-insights">${ins('Features geradas', e.features, '', 'sp-jr-feat')}${ins('Tempo médio de atendimento', avg === null ? '—' : ageTxt(avg), '')}${ins('Mais antigo em aberto', oldest === null ? '—' : ageTxt(oldest), oldest > 15 ? 'neg' : '')}${ins('Features sem documentação', nodoc, nodoc ? 'warn' : '', nodoc ? 'sp-jr-feat' : '')}</div>
+      ${ecoPanel(p)}
       <details class="jr-det"><summary>Detalhes do projeto</summary>
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Tipo</dt><dd><span class="badge b-dark">${esc(P_KIND[p.kind])}</span></dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
@@ -318,6 +340,7 @@ const Spot = (() => {
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</details></section>`;
   }
 
+  const ftEco = (f, rows) => { const est = rows.filter(r => r.feature_id === f.id && r.status === 'ENTREGUE').reduce((s, r) => s + Number(r.estimate_hours || 0), 0), ex = Number(f.effort_hours || 0); return est > 0 || ex > 0 ? `<p class="ft-eco"><b>Estimado × Executado:</b> ${est > 0 ? hh(est) : 'sem estimativa'} × ${ex > 0 ? hh(ex) : 'sem esforço'}${est > 0 && ex > 0 ? ` · <b class="${est >= ex ? 'pos' : 'neg'}">${est >= ex ? 'economia de ' : 'acima em '}${hh(Math.abs(est - ex))}</b>` : ''}</p>` : ''; };
   const stageBadge = r => badge(R_STATUS, r.status);
   const clipsFor = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
 
@@ -341,7 +364,7 @@ const Spot = (() => {
     } else if (st.tab === 'demandas') {
       const f = st.reqFilter || 'ABERTAS', q0 = st.reqQ || '';
       const chip = (k, l) => `<button class="btn btn-sm${f === k ? ' btn-primary' : ''}" data-action="sp-req-filter" data-f="${k}">${l}</button>`;
-      host.innerHTML = `<div class="ev-tools"><div class="ev-chips">${chip('ABERTAS', 'Em aberto')}${chip('ENTREGUE', 'Entregues')}${chip('RECUSADA', 'Recusadas')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>
+      host.innerHTML = `<div class="ev-tools"><div class="ev-chips">${chip('ABERTAS', 'Em aberto')}${chip('EM_ESTIMATIVA', 'Aguardando Beecloud')}${chip('ENTREGUE', 'Entregues')}${chip('RECUSADA', 'Recusadas')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>
         <input type="search" id="rq-q" class="ev-search" placeholder="Buscar por pedido, solicitante, chamado ou feature" aria-label="Buscar demandas" value="${esc(q0)}"></div><div id="rq-list"></div>`;
       const draw = () => {
         const q = (st.reqQ || '').trim().toLowerCase();
@@ -352,7 +375,7 @@ const Spot = (() => {
         document.getElementById('rq-list').innerHTML = shown.length
           ? `<div class="rq-list">${shown.map(r => `<article class="rq-card st-${r.status}">
               <header><div class="rq-id">${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></div><h4>${esc(r.title)}</h4><div class="rq-st">${stageBadge(r)}${acts(r)}</div></header>
-              <dl class="rq-facts">${fact('Recebido', fmt(String(r.received_at).slice(0, 10)))}${fact('Solicitante', esc(r.requester || '—'))}${fact('Responsável do TI', esc(r.assignee || '—'))}${r.delivered_at ? fact('Entregue em', fmt(String(r.delivered_at).slice(0, 10))) : ''}${r.validated_by ? fact('Validado por', esc(r.validated_by)) : ''}${r.feature_id ? fact('Feature', `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}${r.feature_module ? ` <span class="small" style="display:inline">· ${esc(r.feature_module)}</span>` : ''}`) : ''}</dl>
+              <dl class="rq-facts">${fact('Recebido', fmt(String(r.received_at).slice(0, 10)))}${fact('Solicitante', esc(r.requester || '—'))}${fact('Responsável do TI', esc(r.assignee || '—'))}${r.delivered_at ? fact('Entregue em', fmt(String(r.delivered_at).slice(0, 10))) : ''}${r.validated_by ? fact('Validado por', esc(r.validated_by)) : ''}${Number(r.estimate_hours) > 0 ? fact('Estimativa Beecloud', hh(r.estimate_hours)) : ''}${r.feature_id ? fact('Feature', `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}${r.feature_module ? ` <span class="small" style="display:inline">· ${esc(r.feature_module)}</span>` : ''}`) : ''}</dl>
               ${r.description || r.solution || clipsFor(r) ? `<div class="rq-txt">${r.description ? `<p><b>Pedido:</b> ${cut(r.description, 220)}</p>` : ''}${r.solution ? `<p><b>O que o TI fez:</b> ${cut(r.solution, 220)}</p>` : ''}${clipsFor(r)}</div>` : ''}</article>`).join('')}</div><p class="hint" style="margin-top:8px">${shown.length} de ${rows.length} pedido(s)</p>`
           : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro ou a busca para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.');
       };
@@ -377,8 +400,9 @@ const Spot = (() => {
         document.getElementById('ft-list').innerHTML = list.length ? list.map(f => {
           const reqs = rows.filter(r => r.feature_id === f.id), nf = (st.ffiles || []).filter(x => x.feature_id === f.id).length;
           return `<details class="ft-card" data-fid="${f.id}"${st.ftOpen.has(f.id) || q ? ' open' : ''}><summary><span class="badge b-dark">${fmtNo(f.number)}</span><b class="ft-name">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${hasDoc(f) ? (nf ? `<span class="small ft-meta">📎 ${nf}</span>` : '') : '<span class="badge b-orange">sem documentação</span>'}
-            <span class="small ft-meta ft-when">${f.request_count} pedido(s)${f.delivered_at ? ' · ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span></summary>
+            <span class="small ft-meta ft-when">${Number(f.effort_hours) > 0 ? hh(f.effort_hours) + ' · ' : ''}${f.request_count} pedido(s)${f.delivered_at ? ' · ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span></summary>
             <div class="ft-body">${locked() ? '' : `<div class="ft-act"><button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button></div>`}
+            ${ftEco(f, rows)}
             ${f.documentation ? `<div class="ft-doc"><b>O que foi feito</b><p>${esc(f.documentation)}</p></div>` : '<p class="hint">Ainda sem descrição do que foi feito.</p>'}${fclips(f) ? `<div class="small ft-files">${fclips(f)}</div>` : ''}
             ${reqs.length ? `<h4 class="ft-sub">Pedidos que originaram</h4>${reqs.map(r => `<div class="ft-req">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}${clipsFor(r)}</div>`).join('')}` : ''}</div></details>`;
         }).join('') : empty('Nenhuma feature neste filtro', 'Escolha outro tipo de objeto, “Todos”, ou limpe a busca.');
@@ -516,6 +540,7 @@ const Spot = (() => {
         <div data-std class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor. <b>Informe o valor sem impostos.</b></small></div>
         <div data-std class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> <b>Informe o valor sem impostos.</b></small></div>
         <div data-std class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
+        <div class="field" id="er-f"><label for="er">Valor da hora do time externo (R$/h) <span class="opt">(Beecloud)</span></label>${SA.moneyInput('er', 'external_rate', Number(p.external_rate) ? p.external_rate : '')}<small class="fhint">Usado para calcular quanto deixamos de gastar: horas estimadas pela Beecloud × este valor.</small></div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
@@ -536,6 +561,7 @@ const Spot = (() => {
         const evo = kd.value !== 'PADRAO';
         document.getElementById('sk-h').textContent = evo ? 'Reúne os pedidos que chegam por e-mail ou chamado TIFlux, o que o TI fez e a feature entregue. Não controla horas.' : '';
         f.querySelectorAll('[data-std]').forEach(e => { e.style.display = evo ? 'none' : ''; });
+        document.getElementById('er-f').style.display = evo ? '' : 'none'; f.elements.external_rate.disabled = !evo;
         if (evo) { cs.checked = false; rc.checked = false; }
         for (const n of ['hours_model', 'contracted_hours', 'partner_hour_rate', 'partner_overage_rate', 'project_value']) { f.elements[n].disabled = evo || f.elements[n].disabled; }
         if (!evo) sync();
@@ -629,6 +655,7 @@ const Spot = (() => {
       <div class="field full"><label for="rx">O que foi pedido</label><textarea id="rx" name="description" maxlength="2000">${esc(x.description)}</textarea></div>
       <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
       <div class="field"><label for="ra">Responsável do TI <span class="opt" id="ra-req" hidden>(obrigatório ao entregar)</span></label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
+      <div class="field" id="es-f"><label for="re2">Estimativa Beecloud (h) <span class="opt" id="es-req" hidden>(obrigatório)</span></label><input id="re2" name="estimate_hours" type="number" min="0" step="0.25" value="${Number(x.estimate_hours) > 0 ? x.estimate_hours : ''}" placeholder="Ex.: 16"><small class="fhint" id="es-h"></small></div>
       <div class="field full" id="vb-f"><label for="rv">Validado por <span class="opt">(e-mails; separe vários com ;)</span></label><input id="rv" name="validated_by" maxlength="1000" value="${esc(x.validated_by || '')}" placeholder="maria@empresa.com; joao@empresa.com"></div>
       <div class="field full" id="ro-f"><label for="ro">O que o TI fez para resolver <span class="opt">(obrigatório)</span></label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
       <div class="field full"><label for="rfl">Anexos do pedido <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
@@ -641,6 +668,7 @@ const Spot = (() => {
           <small class="fhint">Pedidos parecidos podem entrar na mesma feature.</small></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><label for="ffn">Nome da feature</label><input id="ffn" name="feature_name" maxlength="200" placeholder="Ex.: Regra de desconto máximo"></div>
           <div><label for="ffm">Módulo / objeto</label><input id="ffm" name="feature_module" maxlength="80" placeholder="${st.data.kind === 'EVOL_PT' ? 'Ex.: Faturamento · MATA410' : 'Ex.: Oportunidade'}"></div></div>
+        <div><label for="ffe">Esforço do time interno (h) <span class="opt">(obrigatório ao entregar)</span></label><input id="ffe" name="feature_effort" type="number" min="0" step="0.25" placeholder="Horas que o nosso time levou"></div>
         <div><label for="ffd">O que foi feito (documentação)</label><textarea id="ffd" name="feature_doc" maxlength="4000" placeholder="Descreva a solução entregue, configurações, regras e como testar."></textarea></div>
         <div><label for="ffl">Anexos da documentação</label><div id="ff-list"></div><input id="ffl" name="ffiles" type="file" multiple accept="${FILE_ACCEPT}"></div>
         <div id="ff-no" style="font-weight:700"></div></div>
@@ -651,7 +679,9 @@ const Spot = (() => {
           if (!String(d.solution || '').trim()) throw new Error('Informe o que o TI fez para resolver.');
           if (!String(d.assignee || '').trim()) throw new Error('Informe o responsável do TI.');
           if (!d.feature_id && !String(d.feature_name || '').trim()) throw new Error('Informe o nome da feature entregue.');
+          if (!(Number(d.feature_effort) > 0)) throw new Error('Informe o esforço (horas) do time interno na feature.');
         }
+        if (d.status === 'ESTIMADO' && !(Number(d.estimate_hours) > 0)) throw new Error('Informe a estimativa da Beecloud (horas).');
         const files = [...f.elements.files.files], ffiles = d.status === 'ENTREGUE' ? [...f.elements.ffiles.files] : [];
         const h0 = await uploadHeaders(files.concat(ffiles));
         const { files: _a, ffiles: _b, ...body } = d;
@@ -668,17 +698,20 @@ const Spot = (() => {
     const chSync = () => { const mail = ch.value === 'EMAIL'; document.getElementById('rn-f').style.display = mail ? 'none' : ''; if (mail) tk.value = ''; };
     ch.addEventListener('change', chSync); chSync();
     // caixinha da feature: aparece ao marcar Entregue; escolher uma feature existente preenche e trava o nome
-    const box = document.getElementById('ft-box'), stt = f.elements.status, fs = f.elements.feature_id, fn = f.elements.feature_name, fm = f.elements.feature_module, fd = f.elements.feature_doc;
+    const box = document.getElementById('ft-box'), stt = f.elements.status, fs = f.elements.feature_id, fn = f.elements.feature_name, fm = f.elements.feature_module, fd = f.elements.feature_doc, fe = f.elements.feature_effort, es = f.elements.estimate_hours;
     let prevEx = false;
     const fsync = () => {
       const ex = feats.find(z => String(z.id) === fs.value);
       fn.disabled = !!ex;
-      if (ex) { fn.value = ex.name; fm.value = ex.module || ''; fd.value = ex.documentation || ''; prevEx = true; } else if (prevEx) { fn.value = ''; fm.value = ''; fd.value = ''; prevEx = false; }
+      if (ex) { fn.value = ex.name; fm.value = ex.module || ''; fd.value = ex.documentation || ''; fe.value = Number(ex.effort_hours) > 0 ? ex.effort_hours : ''; prevEx = true; } else if (prevEx) { fn.value = ''; fm.value = ''; fd.value = ''; fe.value = ''; prevEx = false; }
       document.getElementById('ff-no').textContent = ex ? `Feature ${fmtNo(ex.number)}` : `Ao salvar será gerado o número ${fmtNo(nextNo)}`;
       document.getElementById('ff-list').innerHTML = ex ? fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === ex.id), 'ff') : '';
       bindFileDel('ff-files', 'ff', 'spot/ffiles/');
     };
-    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; document.getElementById('ro-f').style.display = on ? '' : 'none'; document.getElementById('vb-f').style.display = on || stt.value === 'EM_HOMOLOGACAO' ? '' : 'none'; document.getElementById('ra-req').hidden = !on; if (on) fsync(); };
+    const rate = Number(st.data.external_rate) || 0;
+    const esync = () => { const v = stt.value, show = ['ESTIMADO', 'EM_DESENVOLVIMENTO', 'EM_HOMOLOGACAO', 'ENTREGUE'].includes(v); document.getElementById('es-f').style.display = show ? '' : 'none'; document.getElementById('es-req').hidden = v !== 'ESTIMADO'; const n = Number(es.value); document.getElementById('es-h').textContent = n > 0 && rate > 0 ? `${brl(n * rate)} se fosse feito pelo time externo.` : ''; };
+    es.addEventListener('input', esync); stt.addEventListener('change', esync);
+    const bsync = () => { esync(); const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; document.getElementById('ro-f').style.display = on ? '' : 'none'; document.getElementById('vb-f').style.display = on || stt.value === 'EM_HOMOLOGACAO' ? '' : 'none'; document.getElementById('ra-req').hidden = !on; if (on) fsync(); };
     fs.addEventListener('change', fsync); stt.addEventListener('change', bsync); bsync();
   }
 
@@ -687,6 +720,7 @@ const Spot = (() => {
     A().openDialog(`Documentar ${fmtNo(f.number)}`, `
       <div class="field"><label for="fn1">Nome da feature</label><input id="fn1" name="name" maxlength="200" value="${esc(f.name)}" required></div>
       <div class="field"><label for="fm1">Módulo / objeto</label><input id="fm1" name="module" maxlength="80" value="${esc(f.module || '')}"></div>
+      <div class="field"><label for="fe1">Esforço do time interno (h)</label><input id="fe1" name="effort_hours" type="number" min="0" step="0.25" value="${Number(f.effort_hours) > 0 ? f.effort_hours : ''}"></div>
       <div class="field full"><label for="fd1">O que foi feito (documentação)</label><textarea id="fd1" name="documentation" maxlength="4000">${esc(f.documentation || '')}</textarea></div>
       <div class="field full"><label for="fl1">Anexos da documentação</label>${fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === id), 'ff')}<input id="fl1" name="ffiles" type="file" multiple accept="${FILE_ACCEPT}"><small class="fhint">PDF, imagens, texto, Word, Excel ou ZIP; até 25 MB cada.</small></div>`,
       async d => {

@@ -1027,3 +1027,22 @@ button.jr-ins { cursor: pointer; } button.jr-ins:hover { border-color: var(--ink
 .rq-txt { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13.5px; color: #333; }
 .rq-txt p { margin: 0 0 4px; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .rq-card header { grid-template-columns: minmax(0, 1fr) auto; } .rq-card h4 { grid-column: 1 / -1; order: 3; } .rq-card { padding: 12px; } }
+
+/* economia: estimativa externa x esforço interno */
+.jr{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1100px){.jr{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.jr{grid-template-columns:repeat(2,1fr)}}
+.eco{margin-top:18px;padding-top:14px;border-top:1px solid var(--line,#e3e3e3)}
+.eco-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.eco-c{display:flex;flex-direction:column;gap:2px;padding:12px;border:1px solid var(--line,#e3e3e3);border-radius:8px;background:#fff}
+.eco-c span{font-size:12px;color:#666}.eco-c b{font-size:22px}.eco-c small{font-size:12px;color:#666}
+.eco-c b.pos,.ft-eco b.pos{color:#1a7f37}.eco-c b.neg,.ft-eco b.neg{color:#c0392b}
+.eco-main{background:#fff7f1;border-color:var(--orange,#f26b21)}.eco-main b{color:var(--orange,#f26b21)}
+.eco-bars{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+.eco-bars li{display:grid;gap:3px}.eco-n{font-size:13px}
+.eco-b{position:relative;display:block;height:18px;background:#f3f3f3;border-radius:4px;overflow:hidden}
+.eco-b i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.eco-b .est{background:#9aa5b1}.eco-b .exe{background:var(--orange,#f26b21)}
+.eco-b em{position:relative;font-style:normal;font-size:11px;padding-left:6px;line-height:18px}
+.eco-warn{margin:8px 0 0}.ft-eco{margin:8px 0}
+@media(max-width:800px){.eco-cards{grid-template-columns:repeat(2,1fr)}}

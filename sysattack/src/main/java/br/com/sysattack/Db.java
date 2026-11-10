@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 54;
+    private static final int SCHEMA_VERSION = 55;
 
     private Db() {}
 
@@ -253,6 +253,10 @@ public final class Db {
             s.execute("CREATE INDEX IF NOT EXISTS idx_spot_features ON spot_features(spot_id, number)");
             s.execute("ALTER TABLE spot_requests ADD COLUMN IF NOT EXISTS feature_id BIGINT REFERENCES spot_features(id) ON DELETE SET NULL");
             s.execute("ALTER TABLE spot_requests ADD COLUMN IF NOT EXISTS validated_by VARCHAR(500) DEFAULT '' NOT NULL");
+            // estimativa do time externo (Beecloud) x esforço do time interno
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS external_rate DECIMAL(12,2) DEFAULT 0 NOT NULL");
+            s.execute("ALTER TABLE spot_requests ADD COLUMN IF NOT EXISTS estimate_hours DECIMAL(8,2)");
+            s.execute("ALTER TABLE spot_features ADD COLUMN IF NOT EXISTS effort_hours DECIMAL(8,2)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_feature_files ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "feature_id BIGINT NOT NULL REFERENCES spot_features(id) ON DELETE CASCADE,"

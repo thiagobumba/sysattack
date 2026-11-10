@@ -29,7 +29,7 @@ final class SpotService {
     private static final Set<String> SPOT_STATUS = Set.of("ATIVO", "PAUSADO", "ENCERRADO");
     private static final Set<String> DEMAND_STATUS = Set.of("EM_ANALISE", "APROVADO", "EM_ANDAMENTO", "EM_HOMOLOGACAO", "EM_ESPERA", "CONCLUIDA", "CANCELADA");
     private static final String REQ_SQL = "SELECT r.*, f.number feature_no, f.name feature_name, f.module feature_module FROM spot_requests r LEFT JOIN spot_features f ON f.id = r.feature_id";
-    private static final Set<String> REQ_STATUS = Set.of("TRIAGEM", "EM_DESENVOLVIMENTO", "EM_HOMOLOGACAO", "ENTREGUE", "RECUSADA");
+    private static final Set<String> REQ_STATUS = Set.of("TRIAGEM", "EM_ESTIMATIVA", "ESTIMADO", "EM_DESENVOLVIMENTO", "EM_HOMOLOGACAO", "ENTREGUE", "RECUSADA");
     private static final Set<String> REQ_CHANNEL = Set.of("TIFLUX", "EMAIL");
     private static final Set<String> SPOT_KIND = Set.of("PADRAO", "EVOL_SF", "EVOL_PT");
     private static final Set<String> ACTION_STATUS = Set.of("PENDENTE", "A_CONFIRMAR", "PARCIAL", "CONCLUIDO");
@@ -506,7 +506,8 @@ final class SpotService {
         String name = ApiServlet.str(b, "name", "Nome da feature", 200, true);
         String module = ApiServlet.str(b, "module", "Módulo / objeto", 80, false);
         String doc = ApiServlet.str(b, "documentation", "Documentação", 4000, false);
-        Db.update("UPDATE spot_features SET name = ?, module = ?, documentation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", name, module, doc, id);
+        BigDecimal effort = optHours(b, "effort_hours", "Esforço do time interno (horas)");
+        Db.update("UPDATE spot_features SET name = ?, module = ?, documentation = ?, effort_hours = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", name, module, doc, effort, id);
         Db.update("UPDATE spot_requests SET feature = ?, module = ? WHERE feature_id = ?", name, module, id);
         return Db.one("SELECT * FROM spot_features WHERE id = ?", id);
     }
@@ -522,7 +523,43 @@ final class SpotService {
                 + " COUNT(DISTINCT feature_id) features"
                 + " FROM spot_requests WHERE spot_id = ?", spotId);
         for (String k : new String[]{"total", "delivered", "doing", "triage", "refused", "features"}) r.put(k, row.get(k) == null ? 0L : ((Number) row.get(k)).longValue());
+        r.put("eco", evoEconomy(spotId));
         return r;
+    }
+
+    /** Horas opcionais: vazio vira nulo; aceita vírgula e até 2 casas, máximo 99.999 h. */
+    private static BigDecimal optHours(JsonObject b, String key, String label) {
+        com.google.gson.JsonElement e = b.get(key);
+        if (e == null || e.isJsonNull() || e.getAsString().trim().isEmpty()) return null;
+        BigDecimal h = ApiServlet.money(b, key, label, false);
+        if (h.compareTo(new BigDecimal("99999")) > 0) throw new ApiException(400, "Valor inválido no campo: " + label + ".");
+        return h;
+    }
+
+    /** Economia do projeto evolutivo: estimativa da Beecloud (h) das demandas entregues x esforço do time interno (h) das features. */
+    private static Map<String, Object> evoEconomy(long spotId) throws SQLException {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        BigDecimal rate = (BigDecimal) Db.one("SELECT external_rate FROM spot_projects WHERE id = ?", spotId).get("external_rate");
+        BigDecimal est = BigDecimal.ZERO, exec = BigDecimal.ZERO;
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map<String, Object> f : Db.query("SELECT f.id, f.number, f.name, f.effort_hours,"
+                + " (SELECT COALESCE(SUM(r.estimate_hours), 0) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE') est"
+                + " FROM spot_features f WHERE f.spot_id = ? AND f.effort_hours IS NOT NULL ORDER BY f.number DESC", spotId)) {
+            BigDecimal e = (BigDecimal) f.get("est"), x = (BigDecimal) f.get("effort_hours");
+            if (e.signum() <= 0) continue; // sem estimativa da Beecloud não há o que comparar
+            est = est.add(e); exec = exec.add(x);
+            Map<String, Object> it = new java.util.LinkedHashMap<>();
+            it.put("id", f.get("id")); it.put("number", f.get("number")); it.put("name", f.get("name")); it.put("estimated", e); it.put("executed", x);
+            items.add(it);
+        }
+        long noEst = ((Number) Db.one("SELECT COUNT(*) n FROM spot_requests WHERE spot_id = ? AND status = 'ENTREGUE' AND (estimate_hours IS NULL OR estimate_hours = 0)", spotId).get("n")).longValue();
+        BigDecimal saved = est.subtract(exec);
+        out.put("rate", rate); out.put("estimated", est); out.put("executed", exec); out.put("saved_hours", saved);
+        out.put("saved_pct", est.signum() > 0 ? saved.multiply(new BigDecimal(100)).divide(est, 0, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO);
+        out.put("avoided", est.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP)); // o que teria sido pago ao time externo
+        out.put("saved_value", saved.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP)); // diferença de horas em reais
+        out.put("features", items); out.put("no_estimate", noEst);
+        return out;
     }
 
     /** "Validado por": e-mails separados por ponto e vírgula (aceita também vírgula); guarda "a@x.com; b@y.com". */
@@ -549,9 +586,11 @@ final class SpotService {
         String assignee = ApiServlet.str(b, "assignee", "Responsável do TI", 120, false);
         String solution = ApiServlet.str(b, "solution", "Solução do TI", 2000, false);
         LocalDate delivered = ApiServlet.optDate(b, "delivered_at", "Entregue em");
+        BigDecimal estimate = optHours(b, "estimate_hours", "Estimativa Beecloud (horas)");
         String validatedBy = normalizeValidators(ApiServlet.str(b, "validated_by", "Validado por", 1000, false));
         if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
         if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
+        if (status.equals("ESTIMADO") && (estimate == null || estimate.signum() <= 0)) throw new ApiException(400, "Informe a estimativa da Beecloud (horas).");
         if (status.equals("ENTREGUE")) {
             if (solution.isEmpty()) throw new ApiException(400, "Para entregar, informe o que o TI fez para resolver.");
             if (assignee.isEmpty()) throw new ApiException(400, "Para entregar, informe o responsável do TI.");
@@ -566,23 +605,26 @@ final class SpotService {
             String fName = ApiServlet.str(b, "feature_name", "Nome da feature", 200, false);
             String fModule = ApiServlet.str(b, "feature_module", "Módulo / objeto", 80, false);
             String fDoc = ApiServlet.str(b, "feature_doc", "O que foi feito (documentação)", 4000, false);
+            BigDecimal fEffort = optHours(b, "feature_effort", "Esforço do time interno (horas)");
             if (fid != null) {
                 if (Db.one("SELECT id FROM spot_features WHERE id = ? AND spot_id = ?", fid, spotId) == null) throw new ApiException(400, "A feature precisa ser do mesmo projeto.");
                 if (b.has("feature_module")) Db.update("UPDATE spot_features SET module = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fModule, fid);
+                if (fEffort != null) Db.update("UPDATE spot_features SET effort_hours = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fEffort, fid);
                 if (b.has("feature_doc")) Db.update("UPDATE spot_features SET documentation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fDoc, fid);
             } else {
                 if (fName.isEmpty()) throw new ApiException(400, "Para marcar como entregue, informe o nome da feature entregue.");
-                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,documentation,created_by) VALUES(?,?,?,?,?,?)", spotId, nextFeatureNumber(spotId), fName, fModule, fDoc, "");
+                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,documentation,effort_hours,created_by) VALUES(?,?,?,?,?,?,?)", spotId, nextFeatureNumber(spotId), fName, fModule, fDoc, fEffort, "");
             }
-            Map<String, Object> f = Db.one("SELECT name, module FROM spot_features WHERE id = ?", fid);
+            Map<String, Object> f = Db.one("SELECT name, module, effort_hours FROM spot_features WHERE id = ?", fid);
+            if (f.get("effort_hours") == null || ((BigDecimal) f.get("effort_hours")).signum() <= 0) throw new ApiException(400, "Para entregar, informe o esforço (horas) do time interno na feature.");
             featureId = fid; feature = String.valueOf(f.get("name")); module = String.valueOf(f.get("module"));
         }
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module,feature_id,validated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy);
+            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module,feature_id,validated_by,estimate_hours) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy, estimate);
         } else {
-            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, feature_id=?, validated_by=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy, id);
+            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, feature_id=?, validated_by=?, estimate_hours=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy, estimate, id);
         }
         return Db.one(REQ_SQL + " WHERE r.id = ?", id);
     }
@@ -604,6 +646,7 @@ final class SpotService {
         String model = closedScope || evo ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
         BigDecimal hours = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
         // valor da hora do parceiro (normal e excedente): opcionais, só para projetos que controlam horas
+        BigDecimal extRate = evo ? ApiServlet.money(b, "external_rate", "Valor da hora do time externo (R$/h)", false) : BigDecimal.ZERO.setScale(2);
         BigDecimal rate = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_hour_rate", "Hora desenvolvimento parceiro (R$)", false);
         BigDecimal overRate = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_overage_rate", "Hora excedente desenvolvimento parceiro (R$)", false);
         LocalDate start = ApiServlet.date(b, "start_date", "Início");
@@ -618,11 +661,11 @@ final class SpotService {
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value,partner_hour_rate,partner_overage_rate,kind,ticket_url)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value,partner_hour_rate,partner_overage_rate,kind,ticket_url,external_rate)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl, extRate);
         } else {
             Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=?, partner_hour_rate=?, partner_overage_rate=?, kind=?, ticket_url=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl, id);
+                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=?, partner_hour_rate=?, partner_overage_rate=?, kind=?, ticket_url=?, external_rate=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl, extRate, id);
         }
         return project(id);
     }
