@@ -539,6 +539,8 @@ final class SpotService {
         if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
         if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (status.equals("ENTREGUE")) {
+            if (solution.isEmpty()) throw new ApiException(400, "Para entregar, informe o que o TI fez para resolver.");
+            if (assignee.isEmpty()) throw new ApiException(400, "Para entregar, informe o responsável do TI.");
             if (delivered == null) delivered = LocalDate.now();
         } else if (!status.equals("RECUSADA")) delivered = null;
         if (delivered != null && delivered.isBefore(received)) throw new ApiException(400, "A entrega não pode ser anterior ao recebimento.");

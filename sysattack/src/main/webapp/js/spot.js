@@ -564,8 +564,8 @@ const Spot = (() => {
       <div class="field full"><label for="rt">Pedido (título)</label><input id="rt" name="title" maxlength="200" value="${esc(x.title)}" required></div>
       <div class="field full"><label for="rx">O que foi pedido</label><textarea id="rx" name="description" maxlength="2000">${esc(x.description)}</textarea></div>
       <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
-      <div class="field"><label for="ra">Responsável do TI</label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
-      <div class="field full"><label for="ro">O que o TI fez para resolver</label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
+      <div class="field"><label for="ra">Responsável do TI <span class="opt" id="ra-req" hidden>(obrigatório ao entregar)</span></label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
+      <div class="field full" id="ro-f"><label for="ro">O que o TI fez para resolver <span class="opt">(obrigatório)</span></label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
       <div class="field full"><label for="rfl">Anexos do pedido <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
         ${fileList('rf-files', (st.rfiles || []).filter(f => f.request_id === id), 'rf')}
         <input id="rfl" name="files" type="file" multiple accept="${FILE_ACCEPT}">
@@ -582,6 +582,11 @@ const Spot = (() => {
       <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>`,
       async d => {
         const f = document.querySelector('#dlg form');
+        if (d.status === 'ENTREGUE') { // entrega só com tudo documentado
+          if (!String(d.solution || '').trim()) throw new Error('Informe o que o TI fez para resolver.');
+          if (!String(d.assignee || '').trim()) throw new Error('Informe o responsável do TI.');
+          if (!d.feature_id && !String(d.feature_name || '').trim()) throw new Error('Informe o nome da feature entregue.');
+        }
         const files = [...f.elements.files.files], ffiles = d.status === 'ENTREGUE' ? [...f.elements.ffiles.files] : [];
         const h0 = await uploadHeaders(files.concat(ffiles));
         const { files: _a, ffiles: _b, ...body } = d;
@@ -608,8 +613,8 @@ const Spot = (() => {
       document.getElementById('ff-list').innerHTML = ex ? fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === ex.id), 'ff') : '';
       bindFileDel('ff-files', 'ff', 'spot/ffiles/');
     };
-    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; fn.required = on && !fs.value; if (on) fsync(); };
-    fs.addEventListener('change', () => { fsync(); fn.required = !fs.value; }); stt.addEventListener('change', bsync); bsync();
+    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; document.getElementById('ro-f').style.display = on ? '' : 'none'; document.getElementById('ra-req').hidden = !on; if (on) fsync(); };
+    fs.addEventListener('change', fsync); stt.addEventListener('change', bsync); bsync();
   }
 
   function featureForm(id) {
