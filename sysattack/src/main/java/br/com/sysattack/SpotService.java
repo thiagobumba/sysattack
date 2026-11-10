@@ -61,7 +61,7 @@ final class SpotService {
         } catch (NumberFormatException e) {
             // /spot/{hours|demands|actions|reports}/{id}
         }
-        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : k.equals("requests") ? "spot_requests" : null;
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : k.equals("requests") ? "spot_requests" : k.equals("rfiles") ? "spot_request_files" : null;
         if (table == null || s.size() < 3) return null;
         Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
@@ -94,7 +94,10 @@ final class SpotService {
                 case "hours": return itemRoute(m, s, req, "spot_hours", user);
                 case "demands": return itemRoute(m, s, req, "spot_demands", user);
                 case "actions": return itemRoute(m, s, req, "spot_actions", user);
-                case "requests": return itemRoute(m, s, req, "spot_requests", user);
+                case "requests":
+                    if (s.size() == 4 && s.get(3).equals("files")) return requestFiles(m, s, req, user);
+                    return itemRoute(m, s, req, "spot_requests", user);
+                case "rfiles": return requestFileRoute(m, s, resp);
                 case "files": return fileRoute(m, s, resp);
                 case "invoices":
                     if (s.size() == 4 && s.get(3).equals("file")) return invoiceFile(m, s, req, resp, user);
@@ -124,6 +127,9 @@ final class SpotService {
                         if (m.equals("GET")) return Db.query("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total, (SELECT COUNT(*) FROM spot_hours h WHERE h.demand_id = d.id) entries"
                                 + " FROM spot_demands d WHERE d.spot_id = ? ORDER BY CASE WHEN d.status IN ('CONCLUIDA','CANCELADA') THEN 1 ELSE 0 END, d.id", id);
                         if (m.equals("POST")) return saveDemand(null, id, ApiServlet.body(req));
+                        break;
+                    case "request-files":
+                        if (m.equals("GET")) return Db.query("SELECT id, request_id, spot_id, file_name, size, uploaded_by, uploaded_at FROM spot_request_files WHERE spot_id = ? ORDER BY id", id);
                         break;
                     case "requests":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_requests WHERE spot_id = ? ORDER BY CASE WHEN status IN ('ENTREGUE','RECUSADA') THEN 1 ELSE 0 END, received_at DESC, id DESC", id);
@@ -394,6 +400,65 @@ final class SpotService {
         }
         if (out.size() > 20) throw new ApiException(400, "No máximo 20 destinatários.");
         return String.join(", ", out);
+    }
+
+    /** POST /spot/requests/{rid}/files: anexa um arquivo (print, e-mail, chamado) a um pedido; corpo = bytes do arquivo. */
+    private static Object requestFiles(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+        if (!m.equals("POST")) throw new ApiException(405, "Operação não suportada.");
+        long rid = Long.parseLong(s.get(2));
+        Map<String, Object> row = Db.one("SELECT spot_id FROM spot_requests WHERE id = ?", rid);
+        if (row == null) throw new ApiException(404, "Pedido não encontrado.");
+        if (req.getContentLengthLong() > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+        String fileName = ApiServlet.header(req, "X-File-Name").replace('\\', '/');
+        fileName = fileName.substring(fileName.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "");
+        if (fileName.length() > 200) fileName = fileName.substring(fileName.length() - 200);
+        if (fileName.isBlank()) throw new ApiException(400, "Selecione um arquivo.");
+        String ext = ApiServlet.extOf(fileName);
+        if (!ApiServlet.MIME.containsKey(ext)) throw new ApiException(400, "Tipo de arquivo não permitido. Aceitos: " + String.join(", ", new java.util.TreeSet<>(ApiServlet.MIME.keySet())) + ".");
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try (java.io.InputStream in = req.getInputStream()) {
+            byte[] chunk = new byte[16384];
+            int n;
+            while ((n = in.read(chunk)) > 0) {
+                if (buf.size() + n > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
+                buf.write(chunk, 0, n);
+            }
+        }
+        if (buf.size() == 0) throw new ApiException(400, "O arquivo está vazio.");
+        long id = Db.insert("INSERT INTO spot_request_files(request_id,spot_id,file_name,size,content,uploaded_by) VALUES(?,?,?,?,?,?)",
+                rid, row.get("spot_id"), fileName, (long) buf.size(), buf.toByteArray(), user.get("name"));
+        return Db.one("SELECT id, request_id, spot_id, file_name, size, uploaded_by, uploaded_at FROM spot_request_files WHERE id = ?", id);
+    }
+
+    /** /spot/rfiles/{id} (DELETE) e /spot/rfiles/{id}/download (GET). */
+    private static Object requestFileRoute(String m, List<String> s, HttpServletResponse resp) throws Exception {
+        if (s.size() < 3) throw new ApiException(405, "Operação não suportada.");
+        long id = Long.parseLong(s.get(2));
+        Map<String, Object> meta = Db.one("SELECT id, file_name FROM spot_request_files WHERE id = ?", id);
+        if (meta == null) throw new ApiException(404, "Arquivo não encontrado.");
+        if (s.size() == 3 && m.equals("DELETE")) {
+            Db.update("DELETE FROM spot_request_files WHERE id = ?", id);
+            return Map.of("ok", true);
+        }
+        if (s.size() == 4 && s.get(3).equals("download") && m.equals("GET")) {
+            String fileName = (String) meta.get("file_name"), ext = ApiServlet.extOf(fileName);
+            resp.setContentType(ApiServlet.MIME.getOrDefault(ext, "application/octet-stream"));
+            resp.setHeader("X-Content-Type-Options", "nosniff");
+            resp.setHeader("Content-Security-Policy", "sandbox");
+            resp.setHeader("Content-Disposition", (ApiServlet.INLINE.contains(ext) ? "inline" : "attachment") + "; filename*=UTF-8\'\'"
+                    + java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"));
+            try (java.sql.Connection c = Db.get(); java.sql.PreparedStatement ps = c.prepareStatement("SELECT content FROM spot_request_files WHERE id = ?")) {
+                ps.setLong(1, id);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new ApiException(404, "Arquivo não encontrado.");
+                    try (java.io.InputStream in = rs.getBinaryStream(1)) {
+                        in.transferTo(resp.getOutputStream());
+                    }
+                }
+            }
+            return ApiServlet.FILE_SENT;
+        }
+        throw new ApiException(405, "Operação não suportada.");
     }
 
     /** Projetos evolutivos: total de pedidos, entregues, em andamento e na triagem. */

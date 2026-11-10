@@ -70,7 +70,8 @@ public class ApiServlet extends HttpServlet {
             Map.entry("ppt", "application/vnd.ms-powerpoint"),
             Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
             Map.entry("zip", "application/zip"), Map.entry("dwg", "application/octet-stream"),
-            Map.entry("dxf", "application/octet-stream"));
+            Map.entry("dxf", "application/octet-stream"),
+            Map.entry("eml", "message/rfc822"), Map.entry("msg", "application/vnd.ms-outlook"));
     static final Set<String> INLINE = Set.of("pdf", "png", "jpg", "jpeg", "gif", "webp", "txt");
 
     private static final String NO_CHILDREN = "NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)";

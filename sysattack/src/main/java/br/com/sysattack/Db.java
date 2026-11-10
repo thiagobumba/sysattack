@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 51;
+    private static final int SCHEMA_VERSION = 52;
 
     private Db() {}
 
@@ -229,6 +229,16 @@ public final class Db {
                     + "module VARCHAR(80) NOT NULL DEFAULT '',"
                     + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_spot_requests ON spot_requests(spot_id, received_at)");
+            s.execute("CREATE TABLE IF NOT EXISTS spot_request_files ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "request_id BIGINT NOT NULL REFERENCES spot_requests(id) ON DELETE CASCADE,"
+                    + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
+                    + "file_name VARCHAR(200) NOT NULL,"
+                    + "size BIGINT NOT NULL,"
+                    + "content BLOB NOT NULL,"
+                    + "uploaded_by VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_spot_request_files ON spot_request_files(spot_id, request_id)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_hours ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

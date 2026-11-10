@@ -48,7 +48,7 @@ const Spot = (() => {
   function spotOf(url) {
     const m = /^spot\/(\d+)/.exec(url);
     if (m) return Number(m[1]);
-    return /^spot\/(hours|demands|actions|reports|files|invoices|requests)\//.test(url) ? st.id : null;
+    return /^spot\/(hours|demands|actions|reports|files|invoices|requests|rfiles)\//.test(url) ? st.id : null;
   }
   async function api(method, url, body) {
     if (method !== 'GET' && !/\/send$/.test(url)) {
@@ -288,7 +288,9 @@ const Spot = (() => {
   async function renderEvoTab(host) {
     const p = st.data, id = st.id;
     st.requests = await api('GET', `spot/${id}/requests`);
+    st.rfiles = await api('GET', `spot/${id}/request-files`);
     const rows = st.requests;
+    const clips = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
     if (st.tab === 'resumo') {
       const open = rows.filter(r => r.status !== 'ENTREGUE' && r.status !== 'RECUSADA');
       const dias = r => Math.max(0, Math.round((new Date(todayIso()) - new Date(String(r.received_at).slice(0, 10))) / 86400000));
@@ -304,7 +306,7 @@ const Spot = (() => {
       host.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('ABERTAS', 'Em aberto')}${chip('ENTREGUE', 'Entregues')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>` + (shown.length
         ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Recebido</th><th>Solicitante</th><th>Pedido</th><th>Responsável do TI</th><th>Situação</th><th>Feature</th><th></th></tr></thead><tbody>
         ${shown.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td>${fmt(String(r.received_at).slice(0, 10))}</td><td>${esc(r.requester || '—')}</td>
-          <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}</td>
+          <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}${clips(r)}</td>
           <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
           <td>${r.feature ? esc(r.feature) + (r.module ? `<span class="small">${esc(r.module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
@@ -314,7 +316,7 @@ const Spot = (() => {
       const dt = g => String(g.list[0].delivered_at || '').slice(0, 10);
       const arr = [...groups.values()].sort((a, b) => dt(b).localeCompare(dt(a)));
       host.innerHTML = arr.length ? arr.map(g => `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><b style="font-size:15px">${esc(g.name)}</b>${g.module ? `<span class="badge b-grey">${esc(g.module)}</span>` : ''}<span class="small" style="margin-left:auto">${g.list.length} pedido(s) · entregue em ${fmt(dt(g))}</span></div>
-        ${g.list.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}</div>`).join('')}</div>`).join('')
+        ${g.list.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}<div>${clips(r)}</div></div>`).join('')}</div>`).join('')
         : empty('Nenhuma feature entregue ainda', 'Quando um pedido for marcado como Entregue, a feature aparece aqui com os pedidos que a originaram.');
     }
   }
@@ -528,8 +530,40 @@ const Spot = (() => {
       <div class="field"><label for="rf">Feature entregue <span class="opt">(obrigatória ao entregar)</span></label><input id="rf" name="feature" maxlength="200" value="${esc(x.feature)}" list="rf-list" placeholder="Ex.: Regra de desconto máximo"><datalist id="rf-list">${[...new Set((st.requests || []).map(r => r.feature).filter(Boolean))].map(f => `<option value="${esc(f)}">`).join('')}</datalist></div>
       <div class="field"><label for="rm">Módulo / objeto</label><input id="rm" name="module" maxlength="80" value="${esc(x.module)}" placeholder="${st.data.kind === 'EVOL_PT' ? 'Ex.: Faturamento · MATA410' : 'Ex.: Oportunidade'}"></div>
       <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>
+      <div class="field full"><label for="rfl">Anexos <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
+        <ul id="rf-files" class="small" style="list-style:none;margin:0 0 8px;padding:0">${(st.rfiles || []).filter(f => f.request_id === id).map(f => `<li data-rfid="${f.id}" style="display:flex;gap:10px;align-items:center;padding:3px 0"><a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener">📎 ${esc(f.file_name)}</a><span>${Math.max(1, Math.round(f.size / 1024))} KB</span><button type="button" class="btn btn-sm" data-rf-del="${f.id}">Remover</button></li>`).join('')}</ul>
+        <input id="rfl" name="files" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.eml,.msg,.doc,.docx,.xls,.xlsx,.csv,.zip">
+        <small class="fhint">PDF, imagens, texto, e-mail salvo (.eml, .msg), Word, Excel ou ZIP; até 25 MB cada. Dica: cole o corpo do e-mail num .txt ou salve um print.</small></div>
       <p class="hint full">Ao marcar “Entregue”, informe a feature. Pedidos parecidos podem usar o mesmo nome de feature: eles aparecem agrupados na aba Features entregues.</p>`,
-      async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...d, delivered_at: d.delivered_at || null }); A().toast('Demanda salva.'); });
+      async d => {
+        const files = [...document.querySelector('#dlg form').elements.files.files];
+        const big = files.find(f => f.size > 25 * 1024 * 1024);
+        if (big) throw new Error(`“${big.name}” é maior que 25 MB.`);
+        const headers0 = { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream' };
+        if (files.length && closedIds.has(st.id)) { // projeto encerrado: justificativa obrigatória
+          const why = await askJustification('Alterar projeto encerrado');
+          if (!why) throw new Error('Alteração cancelada.');
+          headers0['X-Justification'] = encodeURIComponent(why);
+        }
+        const { files: _f, ...body } = d;
+        const saved = await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...body, delivered_at: d.delivered_at || null });
+        const failed = [];
+        for (const file of files) {
+          try {
+            const r = await fetch(`api/spot/requests/${saved.id}/files`, { method: 'POST', credentials: 'same-origin', body: file, headers: { ...headers0, 'X-File-Name': encodeURIComponent(file.name) } });
+            if (r.status === 401) { location.replace('login.html'); return; }
+            if (!r.ok) { const j = await r.json().catch(() => null); failed.push(`${file.name}: ${(j && j.error) || 'falha no envio'}`); }
+          } catch (e) { failed.push(`${file.name}: falha no envio`); }
+        }
+        A().toast(failed.length ? 'Demanda salva, mas nem todos os anexos foram enviados.' : files.length ? 'Demanda e anexos salvos.' : 'Demanda salva.');
+        if (failed.length) alert('Anexos não enviados:\n' + failed.join('\n') + '\n\nAbra a demanda e anexe de novo.');
+      });
+    const rl = document.getElementById('rf-files');
+    if (rl) rl.addEventListener('click', async e => {
+      const b = e.target.closest('[data-rf-del]');
+      if (!b || !confirm('Remover este anexo?')) return;
+      try { await api('DELETE', 'spot/rfiles/' + b.dataset.rfDel); b.closest('li').remove(); } catch (ex) { alert(ex.message); }
+    });
     // por e-mail não há chamado TIFlux: esconde o campo e limpa o número
     const f = document.querySelector('#dlg form'), ch = f.elements.channel, tk = f.elements.ticket_no;
     const chSync = () => { const mail = ch.value === 'EMAIL'; document.getElementById('rn-f').style.display = mail ? 'none' : ''; if (mail) tk.value = ''; };
