@@ -265,72 +265,128 @@ const Spot = (() => {
     st.data = p;
     if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
+    if (isEvo(p)) await loadEvo();
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (isEvo(p) ? P_KIND[p.kind] : p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + (isEvo(p) ? '' : ' · ' + s.period_label)].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${isEvo(p) ? '' : p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
+      ${isEvo(p) ? evoHead(p) : `      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${isEvo(p) ? '' : p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
         ${isEvo(p) ? evoCards(p.evo) : p.closed_scope ? scopeCards(p.scope) + scopeHealthNote(p.scope.health) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${isEvo(p) ? `<span class="badge b-dark">${esc(P_KIND[p.kind])}</span>` : p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
-        ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
+        ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>`}
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${isEvo(p) ? tab('resumo', 'Resumo') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('acoes', 'Ações e pendências') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + tab('acoes', 'Ações e pendências') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
+        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('acoes', 'Ações e pendências') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + tab('acoes', 'Ações e pendências') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
 
-  function evoCards(e) {
-    const c = (l, v, cls = '') => `<div class="mini"><span>${l}</span><b class="${cls}">${v}</b></div>`;
-    return `<div class="mini-kpis">${c('Pedidos recebidos', e.total)}${c('Entregues', e.delivered)}${c('Em andamento', e.doing)}${c('Na triagem', e.triage, e.triage ? 'late-txt' : '')}${c('Features no projeto', e.features)}</div>`;
+  // ------------------------------------------------------------------ projeto evolutivo: jornada de atendimento e features
+  const dayN = (a, b) => Math.max(0, Math.round((new Date(String(b).slice(0, 10)) - new Date(String(a).slice(0, 10))) / 86400000));
+  const isOpenReq = r => r.status !== 'ENTREGUE' && r.status !== 'RECUSADA';
+  const ageTxt = n => n === 0 ? 'hoje' : n === 1 ? '1 dia' : n + ' dias';
+  const hasDoc = f => !!f.documentation || (st.ffiles || []).some(x => x.feature_id === f.id);
+
+  async function loadEvo() {
+    const id = st.id;
+    [st.requests, st.rfiles, st.features, st.ffiles] = await Promise.all([api('GET', `spot/${id}/requests`), api('GET', `spot/${id}/request-files`), api('GET', `spot/${id}/features`), api('GET', `spot/${id}/feature-files`)]);
   }
 
+  /** Topo do projeto evolutivo: a jornada em quatro etapas e os números que o dono precisa ver primeiro. */
+  function evoHead(p) {
+    const rq = st.requests || [], e = p.evo;
+    const by = k => rq.filter(r => r.status === k).length;
+    const done = rq.filter(r => r.status === 'ENTREGUE' && r.delivered_at);
+    const avg = done.length ? Math.round(done.reduce((t, r) => t + dayN(r.received_at, r.delivered_at), 0) / done.length) : null;
+    const open = rq.filter(isOpenReq), oldest = open.length ? Math.max(...open.map(r => dayN(r.received_at, todayIso()))) : null;
+    const nodoc = (st.features || []).filter(f => !hasDoc(f)).length;
+    const step = (k, label, n, cls) => `<button type="button" class="jr-step ${cls}" data-action="sp-jr" data-f="${k}" aria-label="${label}: ${n}. Ver demandas"><b>${n}</b><span>${label}</span></button>`;
+    const ins = (l, v, cls, act) => `<${act ? 'button type="button" data-action="' + act + '"' : 'div'} class="jr-ins ${cls || ''}"><span>${l}</span><b>${v}</b></${act ? 'button' : 'div'}>`;
+    return `<section class="panel evo-head"><div class="panel-head"><h2 class="panel-title">Jornada de atendimento</h2><div class="bar-actions">
+      <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
+      ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
+      <ol class="jr" aria-label="Etapas do atendimento">
+        <li>${step('TRIAGEM', 'Triagem', by('TRIAGEM'), 'g')}</li><li>${step('EM_DESENVOLVIMENTO', 'Em desenvolvimento', by('EM_DESENVOLVIMENTO'), 'o')}</li>
+        <li>${step('EM_HOMOLOGACAO', 'Em homologação', by('EM_HOMOLOGACAO'), 'd')}</li><li>${step('ENTREGUE', 'Entregue', by('ENTREGUE'), 'v')}</li></ol>
+      <p class="jr-note">${e.total} pedido(s) recebido(s)${e.refused ? ` · <button type="button" class="linkish" data-action="sp-jr" data-f="RECUSADA">${e.refused} recusado(s)</button>` : ''}</p>
+      <div class="jr-insights">${ins('Features geradas', e.features, '', 'sp-jr-feat')}${ins('Tempo médio de atendimento', avg === null ? '—' : ageTxt(avg), '')}${ins('Mais antigo em aberto', oldest === null ? '—' : ageTxt(oldest), oldest > 15 ? 'neg' : '')}${ins('Features sem documentação', nodoc, nodoc ? 'warn' : '', nodoc ? 'sp-jr-feat' : '')}</div>
+      <details class="jr-det"><summary>Detalhes do projeto</summary>
+        <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Tipo</dt><dd><span class="badge b-dark">${esc(P_KIND[p.kind])}</span></dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
+        <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
+        ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</details></section>`;
+  }
+
+  const stageBadge = r => badge(R_STATUS, r.status);
+  const clipsFor = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
+
   async function renderEvoTab(host) {
-    const p = st.data, id = st.id;
-    st.requests = await api('GET', `spot/${id}/requests`);
-    st.rfiles = await api('GET', `spot/${id}/request-files`);
-    st.features = await api('GET', `spot/${id}/features`);
-    st.ffiles = await api('GET', `spot/${id}/feature-files`);
-    const rows = st.requests;
-    const clips = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
+    const p = st.data, rows = st.requests || [];
+    const cut = (t, n = 140) => esc(t.length > n ? t.slice(0, n) + '…' : t);
     if (st.tab === 'resumo') {
-      const open = rows.filter(r => r.status !== 'ENTREGUE' && r.status !== 'RECUSADA');
-      const dias = r => Math.max(0, Math.round((new Date(todayIso()) - new Date(String(r.received_at).slice(0, 10))) / 86400000));
-      host.innerHTML = `<h3 style="margin:0 0 10px;font-size:15px">Pedidos em aberto</h3>` + (open.length
-        ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Pedido</th><th>Solicitante</th><th>Responsável</th><th>Situação</th><th class="num">Dias em aberto</th></tr></thead><tbody>
-        ${open.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td class="strong">${esc(r.title)}</td><td>${esc(r.requester || '—')}</td><td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}</td><td class="num ${dias(r) > 15 ? 'late-txt' : ''}">${dias(r)}</td></tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhum pedido em aberto', rows.length ? 'Todos os pedidos foram entregues ou recusados.' : 'Cadastre os pedidos na aba Demandas.'));
+      const open = rows.filter(isOpenReq).sort((a, b) => String(a.received_at).localeCompare(String(b.received_at)));
+      const feats = (st.features || []).slice(0, 6);
+      const ev = [];
+      rows.forEach(r => { ev.push({ d: String(r.received_at).slice(0, 10), k: 'in', r }); if (r.status === 'ENTREGUE' && r.delivered_at) ev.push({ d: String(r.delivered_at).slice(0, 10), k: 'out', r }); });
+      ev.sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'out' ? -1 : 1));
+      host.innerHTML = `<div class="evo-cols">
+        <div><h3 class="evo-h">Precisa de atenção <span class="small" style="display:inline">(${open.length} em aberto, mais antigos primeiro)</span></h3>
+        ${open.length ? `<ul class="ev-list">${open.slice(0, 8).map(r => { const n = dayN(r.received_at, todayIso()); return `<li class="ev-row"><div class="ev-main"><b>${esc(r.title)}</b><span class="small">${r.ticket_no ? ticketCell(p, r) + ' · ' : ''}${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''} · ${r.assignee ? esc(r.assignee) : '<span class="late-txt">sem responsável</span>'}</span></div><div class="ev-side">${stageBadge(r)}<span class="ev-age ${n > 15 ? 'late-txt' : ''}">${ageTxt(n)}</span></div></li>`; }).join('')}</ul>${open.length > 8 ? `<p class="hint"><button type="button" class="linkish" data-action="sp-jr" data-f="ABERTAS">Ver todos os ${open.length} em aberto</button></p>` : ''}`
+        : empty('Nada em aberto', rows.length ? 'Todos os pedidos foram entregues ou recusados.' : 'Cadastre os pedidos na aba Demandas.')}</div>
+        <div><h3 class="evo-h">Últimas features entregues</h3>
+        ${feats.length ? `<div class="ft-grid">${feats.map(f => `<button type="button" class="ft-mini" data-action="sp-open-feat" data-id="${f.id}"><span class="badge b-dark">${fmtNo(f.number)}</span><b>${esc(f.name)}</b><span class="small">${f.module ? esc(f.module) + ' · ' : ''}${f.delivered_at ? fmt(String(f.delivered_at).slice(0, 10)) : ''}</span>${hasDoc(f) ? '' : '<span class="badge b-orange">sem documentação</span>'}</button>`).join('')}</div>` : empty('Nenhuma feature ainda', 'Ao entregar uma demanda, a feature aparece aqui.')}</div></div>
+        <h3 class="evo-h" style="margin-top:26px">Linha do tempo <span class="small" style="display:inline">(últimas movimentações)</span></h3>
+        ${ev.length ? `<ol class="tl-feed">${ev.slice(0, 14).map(x => `<li class="${x.k}"><time>${fmt(x.d)}</time><div>${x.k === 'out' ? `<b>Entregue${x.r.feature_no ? ' · ' + fmtNo(x.r.feature_no) + ' ' + esc(x.r.feature_name) : ''}</b><span class="small">${esc(x.r.title)}${x.r.assignee ? ' · ' + esc(x.r.assignee) : ''}${x.r.validated_by ? ' · validado por ' + esc(x.r.validated_by) : ''}</span>` : `<b>Pedido recebido</b><span class="small">${x.r.ticket_no ? ticketCell(p, x.r) + ' ' : ''}${esc(x.r.title)}${x.r.requester ? ' · ' + esc(x.r.requester) : ''} (${esc(R_CHANNEL[x.r.channel])})</span>`}</div></li>`).join('')}</ol>` : empty('Sem movimentações', 'Os pedidos recebidos e as entregas aparecem aqui em ordem de data.')}`;
     } else if (st.tab === 'demandas') {
-      const f = st.reqFilter || 'ABERTAS';
-      const shown = rows.filter(r => f === 'TODAS' || (f === 'ABERTAS' ? r.status !== 'ENTREGUE' && r.status !== 'RECUSADA' : f === 'TIFLUX' || f === 'EMAIL' ? r.channel === f : r.status === f));
+      const f = st.reqFilter || 'ABERTAS', q0 = st.reqQ || '';
       const chip = (k, l) => `<button class="btn btn-sm${f === k ? ' btn-primary' : ''}" data-action="sp-req-filter" data-f="${k}">${l}</button>`;
-      const cut = t => esc(t.length > 140 ? t.slice(0, 140) + '…' : t);
-      host.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('ABERTAS', 'Em aberto')}${chip('ENTREGUE', 'Entregues')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>` + (shown.length
-        ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Recebido</th><th>Solicitante</th><th>Pedido</th><th>Responsável do TI</th><th>Situação</th><th>Feature</th><th></th></tr></thead><tbody>
-        ${shown.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td>${fmt(String(r.received_at).slice(0, 10))}</td><td>${esc(r.requester || '—')}</td>
-          <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}${clips(r)}</td>
-          <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.validated_by ? `<span class="small"><b>Validado por:</b> ${esc(r.validated_by)}</span>` : ''}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
-          <td>${r.feature_id ? `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}` + (r.feature_module ? `<span class="small">${esc(r.feature_module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
+      host.innerHTML = `<div class="ev-tools"><div class="ev-chips">${chip('ABERTAS', 'Em aberto')}${chip('ENTREGUE', 'Entregues')}${chip('RECUSADA', 'Recusadas')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>
+        <input type="search" id="rq-q" class="ev-search" placeholder="Buscar por pedido, solicitante, chamado ou feature" aria-label="Buscar demandas" value="${esc(q0)}"></div><div id="rq-list"></div>`;
+      const draw = () => {
+        const q = (st.reqQ || '').trim().toLowerCase();
+        const shown = rows.filter(r => (f === 'TODAS' || (f === 'ABERTAS' ? isOpenReq(r) : f === 'TIFLUX' || f === 'EMAIL' ? r.channel === f : r.status === f))
+          && (!q || [r.title, r.requester, r.ticket_no, r.feature_name, r.assignee, r.description].some(v => String(v || '').toLowerCase().includes(q))));
+        const acts = r => locked() ? '' : `<span class="rq-acts"><button class="icon-btn" title="Editar" aria-label="Editar demanda" data-action="sp-edit-req" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir demanda" data-action="sp-del-req" data-id="${r.id}">${ic('trash')}</button></span>`;
+        const fact = (l, v) => v ? `<div><dt>${l}</dt><dd>${v}</dd></div>` : '';
+        document.getElementById('rq-list').innerHTML = shown.length
+          ? `<div class="rq-list">${shown.map(r => `<article class="rq-card st-${r.status}">
+              <header><div class="rq-id">${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></div><h4>${esc(r.title)}</h4><div class="rq-st">${stageBadge(r)}${acts(r)}</div></header>
+              <dl class="rq-facts">${fact('Recebido', fmt(String(r.received_at).slice(0, 10)))}${fact('Solicitante', esc(r.requester || '—'))}${fact('Responsável do TI', esc(r.assignee || '—'))}${r.delivered_at ? fact('Entregue em', fmt(String(r.delivered_at).slice(0, 10))) : ''}${r.validated_by ? fact('Validado por', esc(r.validated_by)) : ''}${r.feature_id ? fact('Feature', `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}${r.feature_module ? ` <span class="small" style="display:inline">· ${esc(r.feature_module)}</span>` : ''}`) : ''}</dl>
+              ${r.description || r.solution || clipsFor(r) ? `<div class="rq-txt">${r.description ? `<p><b>Pedido:</b> ${cut(r.description, 220)}</p>` : ''}${r.solution ? `<p><b>O que o TI fez:</b> ${cut(r.solution, 220)}</p>` : ''}${clipsFor(r)}</div>` : ''}</article>`).join('')}</div><p class="hint" style="margin-top:8px">${shown.length} de ${rows.length} pedido(s)</p>`
+          : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro ou a busca para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.');
+      };
+      draw();
+      document.getElementById('rq-q').addEventListener('input', e => { st.reqQ = e.target.value; draw(); });
     } else if (st.tab === 'features') {
-      const fclips = f => { const fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return fl.length ? fl.map(x => `<a href="api/spot/ffiles/${x.id}/download" target="_blank" rel="noopener" title="${esc(x.file_name)}">📎 ${esc(x.file_name.length > 34 ? x.file_name.slice(0, 32) + '…' : x.file_name)}</a>`).join(' &nbsp; ') : ''; };
-      // filtro por tipo de objeto (módulo): um botão por valor já usado, sem diferenciar maiúsculas
+      // filtros: tipo de objeto (módulo) e busca em texto
       const mk = f => String(f.module || '').trim().toLowerCase();
       const mods = new Map();
       (st.features || []).forEach(f => { const k = mk(f); const e = mods.get(k) || { label: String(f.module || '').trim() || 'Sem objeto', n: 0 }; e.n++; mods.set(k, e); });
       if (st.featFilter !== undefined && st.featFilter !== '*' && !mods.has(st.featFilter)) st.featFilter = '*';
       const ff = st.featFilter === undefined ? '*' : st.featFilter;
-      const list = (st.features || []).filter(f => ff === '*' || mk(f) === ff);
-      const chips = (st.features || []).length > 1 && mods.size > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center"><span class="small">Tipo de objeto:</span><button class="btn btn-sm${ff === '*' ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="*">Todos (${st.features.length})</button>${[...mods.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, 'pt-BR')).map(([k, e]) => `<button class="btn btn-sm${ff === k ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="${esc(k)}">${esc(e.label)} (${e.n})</button>`).join('')}</div>` : '';
-      host.innerHTML = chips + (list.length ? list.map(f => {
-        const reqs = rows.filter(r => r.feature_id === f.id), nodoc = !f.documentation && !(st.ffiles || []).some(x => x.feature_id === f.id);
-        return `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="badge b-dark">${fmtNo(f.number)}</span><b style="font-size:15px">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${nodoc ? '<span class="badge b-orange">sem documentação</span>' : ''}
-          <span class="small" style="margin-left:auto">${f.request_count} pedido(s)${f.delivered_at ? ' · entregue em ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button>`}</div>
-          ${f.documentation ? `<div class="small" style="margin-top:10px;white-space:pre-wrap"><b>O que foi feito:</b> ${esc(f.documentation)}</div>` : ''}${fclips(f) ? `<div class="small" style="margin-top:8px">${fclips(f)}</div>` : ''}
-          ${reqs.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}<div>${clips(r)}</div></div>`).join('')}</div>`;
-      }).join('')
-        : empty((st.features || []).length ? 'Nenhuma feature neste filtro' : 'Nenhuma feature entregue ainda', (st.features || []).length ? 'Escolha outro tipo de objeto ou “Todos”.' : 'Ao marcar uma demanda como Entregue, a feature ganha um número (FT-001…) e aparece aqui com a documentação e os pedidos que a originaram.'));
+      const chips = (st.features || []).length > 1 && mods.size > 1 ? `<div class="ev-chips"><span class="small" style="display:inline">Tipo de objeto:</span><button class="btn btn-sm${ff === '*' ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="*">Todos (${st.features.length})</button>${[...mods.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, 'pt-BR')).map(([k, e]) => `<button class="btn btn-sm${ff === k ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="${esc(k)}">${esc(e.label)} (${e.n})</button>`).join('')}</div>` : '';
+      host.innerHTML = (st.features || []).length ? `<div class="ev-tools">${chips}<input type="search" id="ft-q" class="ev-search" placeholder="Buscar feature, documentação ou pedido" aria-label="Buscar features" value="${esc(st.featQ || '')}"><span class="ev-open"><button type="button" class="btn btn-sm" data-act-all="1">Expandir todas</button> <button type="button" class="btn btn-sm" data-act-all="0">Recolher todas</button></span></div><div id="ft-list"></div>`
+        : empty('Nenhuma feature entregue ainda', 'Ao marcar uma demanda como Entregue, a feature ganha um número (FT-001…) e aparece aqui com a documentação e os pedidos que a originaram.');
+      if (!(st.features || []).length) return;
+      st.ftOpen = st.ftOpen || new Set();
+      const fclips = f => { const fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return fl.length ? fl.map(x => `<a href="api/spot/ffiles/${x.id}/download" target="_blank" rel="noopener" title="${esc(x.file_name)}">📎 ${esc(x.file_name.length > 34 ? x.file_name.slice(0, 32) + '…' : x.file_name)}</a>`).join(' &nbsp; ') : ''; };
+      const draw = () => {
+        const q = (st.featQ || '').trim().toLowerCase();
+        const list = (st.features || []).filter(f => (ff === '*' || mk(f) === ff) && (!q || [fmtNo(f.number), f.name, f.module, f.documentation, ...rows.filter(r => r.feature_id === f.id).flatMap(r => [r.title, r.requester, r.ticket_no, r.solution])].some(v => String(v || '').toLowerCase().includes(q))));
+        document.getElementById('ft-list').innerHTML = list.length ? list.map(f => {
+          const reqs = rows.filter(r => r.feature_id === f.id), nf = (st.ffiles || []).filter(x => x.feature_id === f.id).length;
+          return `<details class="ft-card" data-fid="${f.id}"${st.ftOpen.has(f.id) || q ? ' open' : ''}><summary><span class="badge b-dark">${fmtNo(f.number)}</span><b class="ft-name">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${hasDoc(f) ? (nf ? `<span class="small ft-meta">📎 ${nf}</span>` : '') : '<span class="badge b-orange">sem documentação</span>'}
+            <span class="small ft-meta ft-when">${f.request_count} pedido(s)${f.delivered_at ? ' · ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span></summary>
+            <div class="ft-body">${locked() ? '' : `<div class="ft-act"><button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button></div>`}
+            ${f.documentation ? `<div class="ft-doc"><b>O que foi feito</b><p>${esc(f.documentation)}</p></div>` : '<p class="hint">Ainda sem descrição do que foi feito.</p>'}${fclips(f) ? `<div class="small ft-files">${fclips(f)}</div>` : ''}
+            ${reqs.length ? `<h4 class="ft-sub">Pedidos que originaram</h4>${reqs.map(r => `<div class="ft-req">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}${clipsFor(r)}</div>`).join('')}` : ''}</div></details>`;
+        }).join('') : empty('Nenhuma feature neste filtro', 'Escolha outro tipo de objeto, “Todos”, ou limpe a busca.');
+        document.querySelectorAll('#ft-list details').forEach(d => d.addEventListener('toggle', () => { const i = Number(d.dataset.fid); if (d.open) st.ftOpen.add(i); else st.ftOpen.delete(i); }));
+      };
+      draw();
+      document.getElementById('ft-q').addEventListener('input', e => { st.featQ = e.target.value; draw(); });
+      host.querySelectorAll('[data-act-all]').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#ft-list details').forEach(d => { d.open = b.dataset.actAll === '1'; }); }));
     }
   }
 
@@ -340,7 +396,7 @@ const Spot = (() => {
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
     act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), financeiro: b('sp-new-invoice', '+ Lançar nota'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), tradicional: b('sp-new-manual', '+ Novo relatório'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
-    if (evoMode() && st.tab !== 'acoes') { act.innerHTML = locked() || st.tab !== 'demandas' ? '' : b('sp-new-req', '+ Nova demanda'); return renderEvoTab(host); }
+    if (evoMode() && st.tab !== 'acoes') { act.innerHTML = locked() || (st.tab !== 'demandas' && st.tab !== 'resumo') ? '' : b('sp-new-req', '+ Nova demanda'); return renderEvoTab(host); }
     if (st.tab === 'resumo') {
       const s = st.data.summary;
       if (closedScope()) {
@@ -1076,6 +1132,9 @@ const Spot = (() => {
       case 'sp-del-req': await del('spot/requests/' + id, 'Excluir este pedido?'); break;
       case 'sp-feat-filter': st.featFilter = el.dataset.m; await renderTab(); break;
       case 'sp-edit-feature': featureForm(id); break;
+      case 'sp-jr': st.tab = 'demandas'; st.reqFilter = el.dataset.f; st.reqQ = ''; await A().route(); document.getElementById('sp-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+      case 'sp-jr-feat': st.tab = 'features'; st.featFilter = '*'; st.featQ = ''; await A().route(); document.getElementById('sp-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+      case 'sp-open-feat': st.tab = 'features'; st.featFilter = '*'; st.featQ = ''; (st.ftOpen = st.ftOpen || new Set()).add(id); await A().route(); document.getElementById('sp-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
       case 'sp-req-filter': st.reqFilter = el.dataset.f; await renderTab(); break;
       case 'sp-new-action': actionForm(); break;
       case 'sp-edit-action': actionForm(id); break;
