@@ -170,7 +170,7 @@ final class SpotService {
             p.put("kpi", snap.get("kpi"));
             p.put("health", snap.get("health"));
             p.put("period_label", snap.get("period_label"));
-            p.put("scope", scopeSummary(((Number) p.get("id")).longValue()));
+            p.put("scope", scopeSummary(p, LocalDate.now()));
             p.put("finance", financeSummary(p));
         }
         return rows;
@@ -183,13 +183,14 @@ final class SpotService {
             try { r = LocalDate.parse(ref); } catch (DateTimeParseException e) { throw new ApiException(400, "Data de referência inválida."); }
         }
         p.put("summary", SpotCalc.snapshot(p, r));
-        p.put("scope", scopeSummary(id));
+        p.put("scope", scopeSummary(p, r));
         p.put("finance", financeSummary(p));
         return p;
     }
 
     /** Escopo fechado: quantas demandas existem (sem as canceladas), quantas foram entregues e a divisão por situação. */
-    private static Map<String, Object> scopeSummary(long id) throws SQLException {
+    private static Map<String, Object> scopeSummary(Map<String, Object> p, LocalDate today) throws SQLException {
+        long id = ((Number) p.get("id")).longValue();
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Object> by = new LinkedHashMap<>();
         // regra do escopo fechado: a demanda só conta como ENTREGUE quando tem ao menos um apontamento vinculado a ela
@@ -209,6 +210,7 @@ final class SpotService {
         out.put("done_no_entry", doneNoEntry);
         out.put("pct", total == 0 ? 0 : Math.round(delivered * 100.0 / total));
         out.put("by_status", by);
+        if (Boolean.TRUE.equals(p.get("closed_scope"))) out.put("health", SpotCalc.scopeHealth(p, today, total, delivered));
         out.put("files", ((Number) Db.one("SELECT COUNT(*) c FROM spot_files WHERE spot_id = ?", id).get("c")).intValue());
         return out;
     }

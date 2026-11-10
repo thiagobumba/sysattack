@@ -832,4 +832,5 @@ tr[hidden] { display: none; }
 .rt-panel .mini-kpis { margin-top: 14px; }
 .rt-wrap { margin-top: 14px; } .rt-chart { width: 100%; height: auto; display: block; background: #fff; }
 @media (max-width: 800px) { .rt-dims { grid-template-columns: 1fr; } }
+.tbl td .health + .pbar { margin-top: 6px; }
 .tbl td .health + .small { max-width: 230px; white-space: normal; }

@@ -214,5 +214,6 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Acessibilidade:** foco visível nos campos, papéis ARIA nas abas, balões acessíveis por teclado.
 - **Confirmações** em toda exclusão.
 - **Impressão/PDF** nos relatórios, no Gantt e nos relatórios dos Projetos Spot.
+- **Semáforo do escopo fechado:** demandas entregues (com apontamento) ÷ demandas do escopo (sem canceladas) comparado ao prazo decorrido da vigência em dias úteis. Verificações: Entrega x prazo (atenção > 10 pontos de diferença, atrasado > 25) e Prazo final (vencido = atrasado; últimos 5 dias úteis com < 90% entregue = atenção). Lista (coluna Entregas) e Resumo.
 - **Logo da Momesso** no cabeçalho dos três modelos de relatório Spot (horas, escopo fechado e importado): embutida na página (navegador/PDF) e como imagem inline no e-mail (`ReportLogo`, recurso `report-logo.png`).
 - **Versão** exibida no rodapé do menu e na tela de entrada, a partir de `version.json` (`1.1.0 – Alpha`).

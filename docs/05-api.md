@@ -68,7 +68,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 
 | Método e rota | Descrição |
 |---|---|
-| `GET/POST /spot` | Listar e criar projetos Spot (cada item traz `health`, o semáforo de horas: `level`, `label`, `dims`, `reasons`, `projected`…; nulo no escopo fechado) |
+| `GET/POST /spot` | Listar e criar projetos Spot (cada item traz `health`, o semáforo de horas: `level`, `label`, `dims`, `reasons`, `projected`…; nulo no escopo fechado, que traz o seu em `scope.health`: entregas × prazo) |
 | `GET/PUT/DELETE /spot/{id}` | Detalhe (`?ref=` data de referência), alterar, excluir |
 | `GET/POST /spot/{id}/hours` · `…/hours/{hid}` | Apontamentos (`?month=`, `?from=&to=`) |
 | `GET/POST /spot/{id}/demands` · `…/demands/{did}` | Demandas |

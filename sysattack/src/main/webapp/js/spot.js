@@ -79,9 +79,18 @@ const Spot = (() => {
     <button class="icon-btn del" title="Excluir" aria-label="Excluir" data-action="sp-del-${kind}" data-id="${id}">${ic('trash')}</button></td>`;
 
   // ---- semáforo de horas (ritmo semanal x franquia)
-  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', SEM_DADOS: 'h-grey', CONCLUIDO: 'h-done', CONCLUIDO_ESTOURO: 'h-red' };
+  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', SEM_DADOS: 'h-grey', CONCLUIDO: 'h-done', CONCLUIDO_ESTOURO: 'h-red', CONCLUIDO_PEND: 'h-amber' };
   const LVL_WORD = { VERDE: 'saudável', AMARELO: 'atenção', VERMELHO: 'crítico', NA: 'poucos dados' };
   const healthTip = hl => {
+    if (hl.kind === 'ESCOPO') {
+      if (hl.level === 'CONCLUIDO' || hl.level === 'CONCLUIDO_PEND') return ['Projeto de escopo fechado: a saúde mostra o resultado das entregas.', ...(hl.reasons || [])];
+      if (hl.level === 'NAO_INICIADO') return ['A vigência do projeto ainda não começou.'];
+      return ['Compara as demandas entregues (com apontamento) com o prazo decorrido da vigência (dias úteis). A cor é a PIOR entre duas verificações:',
+        ...(hl.dims || []).map(d => `• ${d.label} (${LVL_WORD[d.level] || d.level}): ${d.detail}`),
+        '# Como cada verificação é avaliada',
+        '• Entrega x prazo: % de prazo decorrido menos % de demandas entregues. Atenção acima de 10 pontos, atrasado acima de 25.',
+        '• Prazo final: atrasado se a data final passou com demandas sem entrega; atenção nos últimos 5 dias úteis com menos de 90% entregue.'];
+    }
     if (hl.level === 'CONCLUIDO' || hl.level === 'CONCLUIDO_ESTOURO') return ['Projeto encerrado: a saúde mostra o resultado final.', ...(hl.reasons || [])];
     if (hl.level === 'NAO_INICIADO') return ['O período do contrato ainda não começou.'];
     return ['A franquia é dividida pelas semanas úteis do período (segunda a sexta) e comparada com o consumo. A cor é a PIOR entre três verificações:',
@@ -92,7 +101,7 @@ const Spot = (() => {
       '• Saldo comprometido: (consumido + reservado) ÷ franquia. Atenção a partir de 90%, crítico a partir de 100%.',
       'Com menos de 1 semana útil decorrida, ritmo e projeção ficam como "poucos dados".'];
   };
-  const healthChip = hl => hl ? `<span class="health ${H_CLASS[hl.level] || 'h-grey'}"${Tip.attr('Saúde das horas: ' + hl.label, healthTip(hl))}><i></i>${esc(hl.label)}</span>` : '<span class="small">—</span>';
+  const healthChip = hl => hl ? `<span class="health ${H_CLASS[hl.level] || 'h-grey'}"${Tip.attr((hl.kind === 'ESCOPO' ? 'Saúde da entrega: ' : 'Saúde das horas: ') + hl.label, healthTip(hl))}><i></i>${esc(hl.label)}</span>` : '<span class="small">—</span>';
   const healthSub = (hl, k) => !hl ? '' : (hl.level === 'CONCLUIDO' || hl.level === 'CONCLUIDO_ESTOURO' || hl.level === 'NAO_INICIADO') ? esc((hl.reasons || [])[0] || '')
     : hl.few_data ? 'Menos de 1 semana útil: poucos dados' : `${h(k.consumed)} de ${h(hl.expected)} esperadas até hoje · projeção ${h(hl.projected)} (${hl.projected_pct}%)`;
 
@@ -168,6 +177,12 @@ const Spot = (() => {
   }
 
   /** Escopo fechado: a demanda só é "entregue" quando tem apontamento vinculado a ela. */
+  function scopeHealthNote(hl) {
+    if (!hl) return '';
+    const cls = H_CLASS[hl.level] || 'h-grey', dims = hl.dims || [];
+    return `<div class="rt-panel"><div class="rt-alert ${cls}"><i></i><div><b>${esc(hl.label)}.</b> ${(hl.reasons || []).map(esc).join(' ')}</div></div>
+      ${dims.length ? `<div class="hdims rt-dims" style="grid-template-columns:repeat(2,minmax(0,1fr))">${dims.map(d => `<div class="hdim ${H_CLASS[d.level] || 'h-grey'}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}</div>`;
+  }
   function scopeCards(sc) {
     return `<div class="mini-kpis">
       <div class="mini"><span>Demandas do escopo</span><b>${sc.total}</b></div>
@@ -219,7 +234,7 @@ const Spot = (() => {
     const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Financeiro</th><th class="num">Arquivos</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
-          <td>${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
+          <td>${healthChip(p.scope.health)}${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
           <td class="num strong">${brl(p.project_value)}<span class="small">${brl(p.finance.invoiced)} faturado (${p.finance.pct_invoiced}%)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
@@ -239,10 +254,10 @@ const Spot = (() => {
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${p.closed_scope ? '' : healthChip(s.health)}</h2><div class="bar-actions">
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
+        ${p.closed_scope ? scopeCards(p.scope) + scopeHealthNote(p.scope.health) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>

@@ -217,6 +217,52 @@ final class SpotCalc {
         return d;
     }
 
+    /**
+     * Semáforo do escopo fechado: demandas entregues (com apontamento) x demandas do escopo, comparado com o prazo
+     * decorrido da vigência (dias úteis). Duas verificações, vale a pior: ritmo de entrega e prazo.
+     * Devolve null sem data final (não há prazo para comparar).
+     */
+    static Map<String, Object> scopeHealth(Map<String, Object> p, LocalDate today, int total, int delivered) {
+        LocalDate start = vigStart(p), end = vigEnd(p);
+        if (end == null) return null;
+        int pending = total - delivered;
+        boolean closed = "ENCERRADO".equals(p.get("status"));
+        if (total <= 0) return healthNeutral("SEM_DADOS", "Sem demandas", "Cadastre as demandas do escopo para acompanhar a entrega.");
+        if (pending <= 0) return scopeNeutral(healthNeutral("CONCLUIDO", "Entregue", "Todas as " + total + " demandas do escopo foram entregues."), total, delivered, 100, 100);
+        if (closed) return scopeNeutral(healthNeutral("CONCLUIDO_PEND", "Encerrado c/ pendências", "Encerrou com " + pending + " demanda(s) sem entrega (" + delivered + " de " + total + ")."), total, delivered, 0, 0);
+        if (today.isBefore(start)) return healthNeutral("NAO_INICIADO", "Não iniciado", "Começa em " + br(start) + ".");
+
+        int bdTotal = Math.max(1, businessDays(start, end));
+        int elapsed = Math.min(bdTotal, businessDays(start, today.isAfter(end) ? end : today));
+        double timePct = elapsed * 100.0 / bdTotal, delPct = delivered * 100.0 / total, gap = timePct - delPct;
+        List<Map<String, Object>> dims = new ArrayList<>();
+        String l1 = gap <= 10 ? "VERDE" : gap <= 25 ? "AMARELO" : "VERMELHO";
+        dims.add(dim("entrega", "Entrega x prazo", l1, delivered + " de " + total + " demandas entregues (" + Math.round(delPct) + "%) com " + Math.round(timePct) + "% do prazo decorrido."));
+        boolean late = today.isAfter(end);
+        int left = late ? 0 : Math.max(0, businessDays(today.plusDays(1), end));
+        String l2 = late ? "VERMELHO" : (left <= 5 && pending > 0 && delPct < 90) ? "AMARELO" : "VERDE";
+        dims.add(dim("prazo", "Prazo final", l2, late ? "Prazo vencido em " + br(end) + " com " + pending + " demanda(s) sem entrega." : "Faltam " + left + " dia(s) útil(eis) até " + br(end) + " e " + pending + " demanda(s) por entregar."));
+        String[] order = {"VERDE", "AMARELO", "VERMELHO"};
+        int worst = 0;
+        for (Map<String, Object> d : dims) for (int i = 0; i < 3; i++) if (order[i].equals(d.get("level"))) worst = Math.max(worst, i);
+        Map<String, Object> h = new LinkedHashMap<>();
+        h.put("level", order[worst]);
+        h.put("label", worst == 0 ? "No prazo" : worst == 1 ? "Atenção" : "Atrasado");
+        h.put("dims", dims);
+        List<String> reasons = new ArrayList<>();
+        reasons.add(delivered + " de " + total + " demandas entregues (" + Math.round(delPct) + "%); esperado até hoje: ≈ " + Math.round(timePct) + "%.");
+        if (!late && left > 0) reasons.add("Faltam " + pending + " demanda(s) em " + left + " dia(s) útil(eis): cerca de " + String.format(Locale.forLanguageTag("pt-BR"), "%.1f", pending * 5.0 / left) + " por semana para fechar em " + br(end) + ".");
+        h.put("reasons", reasons);
+        return scopeNeutral(h, total, delivered, delPct, timePct);
+    }
+
+    private static Map<String, Object> scopeNeutral(Map<String, Object> h, int total, int delivered, double delPct, double timePct) {
+        h.put("kind", "ESCOPO");
+        h.put("total", total); h.put("delivered", delivered);
+        h.put("delivered_pct", Math.round(delPct)); h.put("time_pct", Math.round(timePct));
+        return h;
+    }
+
     private static String h1(double v) { return String.format(Locale.forLanguageTag("pt-BR"), "%.1f", v); }
     private static String pct(double v) { return Math.round(v * 100) + "%"; }
 
