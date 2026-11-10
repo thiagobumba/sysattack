@@ -277,7 +277,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>`}
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
+        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('relatorio', 'Relatório') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -341,6 +341,61 @@ const Spot = (() => {
   }
 
   const ftEco = (f, rows) => { const est = rows.filter(r => r.feature_id === f.id && r.status === 'ENTREGUE').reduce((s, r) => s + Number(r.estimate_hours || 0), 0), ex = Number(f.effort_hours || 0); return est > 0 || ex > 0 ? `<p class="ft-eco"><b>Estimado × Executado:</b> ${est > 0 ? hh(est) : 'sem estimativa'} × ${ex > 0 ? hh(ex) : 'sem esforço'}${est > 0 && ex > 0 ? ` · <b class="${est >= ex ? 'pos' : 'neg'}">${est >= ex ? 'economia de ' : 'acima em '}${hh(Math.abs(est - ex))}</b>` : ''}</p>` : ''; };
+  /** HTML do relatório do projeto evolutivo (estilos inline: serve para o navegador, o PDF e anexo de e-mail). */
+  function evoReportHtml(p, rows, feats, o) {
+    const INK = '#1a1a1a', MUTED = '#5f5f66', LINE = '#dddde0', ORANGE = '#f45200';
+    const inP = d => d && (!o.from || String(d).slice(0, 10) >= o.from) && (!o.to || String(d).slice(0, 10) <= o.to);
+    const rq = rows.filter(r => !o.from && !o.to ? true : inP(r.received_at) || inP(r.delivered_at));
+    const fs = feats.filter(f => !o.from && !o.to ? true : rows.some(r => r.feature_id === f.id && inP(r.delivered_at)));
+    const cnt = k => rq.filter(r => r.status === k).length;
+    const th = 'text-align:left;padding:6px 8px;border-bottom:2px solid ' + INK + ';font-size:12px', td = 'padding:6px 8px;border-bottom:1px solid ' + LINE + ';font-size:13px;vertical-align:top';
+    const h2 = s => `<h2 style="font-size:17px;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid ${ORANGE}">${s}</h2>`;
+    const stat = (l, v) => `<td style="padding:10px 12px;border:1px solid ${LINE};text-align:center"><div style="font-size:24px;font-weight:700">${v}</div><div style="font-size:11px;color:${MUTED}">${l}</div></td>`;
+    let b = '';
+    if (o.sum) {
+      b += h2('Resumo') + `<table style="border-collapse:collapse;width:100%"><tr>${stat('Pedidos', rq.length)}${stat('Triagem', cnt('TRIAGEM'))}${stat('Em estimativa', cnt('EM_ESTIMATIVA'))}${stat('Estimado', cnt('ESTIMADO'))}${stat('Em desenvolvimento', cnt('EM_DESENVOLVIMENTO'))}${stat('Em homologação', cnt('EM_HOMOLOGACAO'))}${stat('Entregue', cnt('ENTREGUE'))}</tr></table>
+        <p style="font-size:13px;color:${MUTED}">${fs.length} feature(s) entregue(s)${cnt('RECUSADA') ? ` · ${cnt('RECUSADA')} pedido(s) recusado(s)` : ''}.</p>`;
+    }
+    if (o.eco) {
+      const c = p.evo.eco, rate = Number(c.rate) > 0, items = c.features.filter(f => fs.some(x => x.id === f.id));
+      const est = items.reduce((s, f) => s + Number(f.estimated), 0), ex = items.reduce((s, f) => s + Number(f.executed), 0);
+      b += h2('Economia com o time interno');
+      b += items.length ? `<table style="border-collapse:collapse;width:100%"><tr>${stat('Estimado pela Beecloud', hh(est))}${stat('Executado pelo time interno', hh(ex))}${stat('Horas a menos', hh(est - ex))}${stat('Deixamos de gastar', rate ? brl(est * Number(c.rate)) : '—')}</tr></table>
+        <table style="border-collapse:collapse;width:100%;margin-top:10px"><tr><th style="${th}">Feature</th><th style="${th};text-align:right">Estimado</th><th style="${th};text-align:right">Executado</th></tr>${items.map(f => `<tr><td style="${td}">${fmtNo(f.number)} ${esc(f.name)}</td><td style="${td};text-align:right">${hh(f.estimated)}</td><td style="${td};text-align:right">${hh(f.executed)}</td></tr>`).join('')}</table>
+        ${rate ? `<p style="font-size:12px;color:${MUTED}">Valor evitado = horas estimadas pela Beecloud × ${brl(c.rate)}/h.</p>` : ''}`
+        : `<p style="font-size:13px;color:${MUTED}">Sem features com estimativa e esforço informados no período.</p>`;
+    }
+    if (o.feat) {
+      b += h2('Features entregues') + (fs.length ? fs.map(f => { const rs = rows.filter(r => r.feature_id === f.id), fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return `<div style="margin:0 0 14px;padding:10px 12px;border:1px solid ${LINE};border-left:4px solid ${ORANGE};page-break-inside:avoid">
+        <div style="font-size:14px"><b>${fmtNo(f.number)} · ${esc(f.name)}</b>${f.module ? ` <span style="color:${MUTED}">(${esc(f.module)})</span>` : ''}</div>
+        ${Number(f.effort_hours) > 0 ? `<div style="font-size:12px;color:${MUTED}">Esforço do time interno: ${hh(f.effort_hours)}</div>` : ''}
+        <p style="font-size:13px;margin:8px 0">${f.documentation ? esc(f.documentation).replace(/\n/g, '<br>') : '<i>Sem descrição do que foi feito.</i>'}</p>
+        ${fl.length ? `<div style="font-size:12px;color:${MUTED}">Anexos: ${fl.map(x => esc(x.file_name)).join(', ')}</div>` : ''}
+        ${rs.map(r => `<div style="font-size:12px;margin-top:6px"><b>Pedido:</b> ${esc(r.title)}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}${r.delivered_at ? ' · entregue em ' + fmt(String(r.delivered_at).slice(0, 10)) : ''}</div>`).join('')}</div>`; }).join('') : `<p style="font-size:13px;color:${MUTED}">Nenhuma feature entregue no período.</p>`);
+    }
+    if (o.dem) {
+      b += h2('Demandas') + (rq.length ? `<table style="border-collapse:collapse;width:100%"><tr><th style="${th}">Recebido</th><th style="${th}">Chamado</th><th style="${th}">Pedido</th><th style="${th}">Solicitante</th><th style="${th}">Situação</th><th style="${th}">Feature</th></tr>${rq.map(r => `<tr><td style="${td}">${fmt(String(r.received_at).slice(0, 10))}</td><td style="${td}">${esc(r.ticket_no || (r.channel === 'EMAIL' ? 'E-mail' : '—'))}</td><td style="${td}">${esc(r.title)}</td><td style="${td}">${esc(r.requester || '—')}</td><td style="${td}">${esc(R_STATUS[r.status][0])}</td><td style="${td}">${r.feature_id ? fmtNo(r.feature_no) : '—'}</td></tr>`).join('')}</table>` : `<p style="font-size:13px;color:${MUTED}">Nenhum pedido no período.</p>`);
+    }
+    const per = o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período';
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório · ${esc(p.name)}</title><style>@page{margin:14mm}</style></head><body style="margin:0;padding:24px 30px;font-family:'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;color:${INK};background:#fff">
+      <div style="border-bottom:4px solid ${ORANGE};padding-bottom:10px"><div style="font-size:12px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div><h1 style="font-size:24px;margin:2px 0">${esc(p.name)}</h1><div style="font-size:12px;color:${MUTED}">Período: ${per} · Emitido em ${fmt(todayIso())}</div></div>${b}</body></html>`;
+  }
+
+  function renderEvoReport(host, p, rows) {
+    const o = st.rep = st.rep || { from: '', to: '', sum: true, eco: true, feat: true, dem: true };
+    host.innerHTML = `<div class="rp-tools"><div class="fgrid" style="gap:10px 16px;align-items:end;max-width:480px">
+      <div class="field"><label for="rpf">De</label><input id="rpf" type="date" value="${o.from}"></div><div class="field"><label for="rpt">Até</label><input id="rpt" type="date" value="${o.to}"></div>
+      </div><div style="display:flex;gap:8px 22px;flex-wrap:wrap;margin-top:12px" role="group" aria-label="Seções do relatório">${[['sum', 'Resumo'], ['eco', 'Economia'], ['feat', 'Features entregues'], ['dem', 'Demandas']].map(([k, l]) => `<label style="display:inline-flex;gap:6px;align-items:center;background:none;border:0;padding:0;text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" data-rp="${k}"${o[k] ? ' checked' : ''} style="width:auto;margin:0"> ${l}</label>`).join('')}</div>
+      <p class="hint" style="margin:8px 0">Confira o preview abaixo. Sem datas, o relatório traz todo o período.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"><button class="btn btn-sm btn-primary" data-action="sp-rep-html">Gerar HTML</button><button class="btn btn-sm btn-primary" data-action="sp-rep-pdf">Gerar PDF</button></div></div>
+      <iframe class="preview" id="rp-frame" title="Preview do relatório" style="height:70vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>`;
+    const draw = () => { document.getElementById('rp-frame').srcdoc = st.repHtml = evoReportHtml(p, rows, st.features || [], o); };
+    host.querySelector('#rpf').addEventListener('change', e => { o.from = e.target.value; draw(); });
+    host.querySelector('#rpt').addEventListener('change', e => { o.to = e.target.value; draw(); });
+    host.querySelectorAll('[data-rp]').forEach(c => c.addEventListener('change', () => { o[c.dataset.rp] = c.checked; draw(); }));
+    draw();
+  }
+
   const stageBadge = r => badge(R_STATUS, r.status);
   const clipsFor = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
 
@@ -381,6 +436,8 @@ const Spot = (() => {
       };
       draw();
       document.getElementById('rq-q').addEventListener('input', e => { st.reqQ = e.target.value; draw(); });
+    } else if (st.tab === 'relatorio') {
+      renderEvoReport(host, p, rows);
     } else if (st.tab === 'features') {
       // filtros: tipo de objeto (módulo) e busca em texto
       const mk = f => String(f.module || '').trim().toLowerCase();
@@ -1178,6 +1235,8 @@ const Spot = (() => {
       case 'sp-del-report': await del('spot/reports/' + id, 'Excluir este relatório?'); break;
       case 'sp-edit-report': dlg.close(); await editReport(id); break;
       case 'sp-send-report': dlg.close(); await sendReport(id); break;
+      case 'sp-rep-html': { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([st.repHtml], { type: 'text/html;charset=utf-8' })); a.download = 'relatorio-' + String(st.data.name || 'projeto').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + todayIso() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); A().toast('Relatório HTML gerado.'); break; }
+      case 'sp-rep-pdf': { const f = document.getElementById('rp-frame'); if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } break; }
       case 'sp-print-report': { const f = document.getElementById('sp-frame'); if (f && f.contentWindow) f.contentWindow.print(); break; }
     }
   }
