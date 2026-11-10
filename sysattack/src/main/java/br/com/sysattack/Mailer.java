@@ -165,7 +165,24 @@ public final class Mailer {
         if (!bcc.isEmpty()) m.setRecipients(Message.RecipientType.BCC, InternetAddress.parse(String.join(",", bcc)));
         if (replyTo != null && !replyTo.isBlank()) m.setReplyTo(InternetAddress.parse(replyTo));
         m.setSubject(subject.replaceAll("[\\r\\n]+", " "), "UTF-8");
-        m.setContent(html, "text/html; charset=UTF-8");
+        byte[] logo = html.contains("cid:" + ReportLogo.CID) ? ReportLogo.png() : null;
+        if (logo != null) { // logo da Momesso embutida (aparece mesmo com imagens externas bloqueadas)
+            javax.mail.internet.MimeMultipart rel = new javax.mail.internet.MimeMultipart("related");
+            javax.mail.internet.MimeBodyPart body = new javax.mail.internet.MimeBodyPart();
+            body.setContent(html, "text/html; charset=UTF-8");
+            rel.addBodyPart(body);
+            javax.mail.internet.InternetHeaders ih = new javax.mail.internet.InternetHeaders();
+            ih.addHeader("Content-Type", "image/png; name=\"momesso.png\"");
+            ih.addHeader("Content-Transfer-Encoding", "base64");
+            ih.addHeader("Content-ID", "<" + ReportLogo.CID + ">");
+            ih.addHeader("Content-Disposition", "inline; filename=\"momesso.png\"");
+            javax.mail.internet.MimeBodyPart img = new javax.mail.internet.MimeBodyPart(ih,
+                    java.util.Base64.getMimeEncoder(76, new byte[] {'\r', '\n'}).encode(logo)); // já codificada: sem depender de javax.activation
+            rel.addBodyPart(img);
+            m.setContent(rel);
+        } else {
+            m.setContent(html, "text/html; charset=UTF-8");
+        }
         Transport.send(m);
         return true;
     }

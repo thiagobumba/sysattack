@@ -137,7 +137,9 @@ final class ImportedReportHtml {
                 + "</td><td class=\"col\" width=\"50%\" valign=\"top\" style=\"padding-left:8px\">" + right + "</td></tr></table>" + gap(16);
     }
 
-    static String render(JsonObject d) {
+    static String render(JsonObject d) { return render(d, false); }
+
+    static String render(JsonObject d, boolean email) {
         StringBuilder b = new StringBuilder();
         b.append("<!DOCTYPE html><html lang=\"pt-BR\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
                 .append("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->")
@@ -146,6 +148,7 @@ final class ImportedReportHtml {
                 .append("<body bgcolor=\"#f6f6f4\" style=\"margin:0;background-color:#f6f6f4;font-size:14.5px\"><table").append(T0).append(" width=\"100%\" bgcolor=\"#f6f6f4\"><tr><td align=\"center\" style=\"padding:22px 18px 40px\">")
                 .append("<!--[if mso]><table role=\"presentation\" width=\"1000\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td><![endif]-->")
                 .append("<table").append(T0).append(" width=\"100%\" style=\"max-width:1000px\"><tr><td>");
+        b.append(ReportLogo.header(email, "Status Report", ""));
         b.append("<table").append(T0).append(" width=\"100%\"><tr><td width=\"4\" bgcolor=\"").append(YELLOW).append("\" style=\"background-color:").append(YELLOW).append(";font-size:1px\">&nbsp;</td><td style=\"padding:2px 0 2px 16px\">")
                 .append("<table").append(T0).append(" width=\"100%\"><tr><td style=\"font-size:25px;font-weight:bold;line-height:1.25\">").append(h(str(d, "titulo"))).append("</td></tr>")
                 .append("<tr><td style=\"padding-top:4px;color:").append(MUTED).append(";font-size:14px\">").append(h(str(d, "meta"))).append("</td></tr>");

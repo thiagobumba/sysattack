@@ -97,6 +97,10 @@ final class SpotReportHtml {
 
     /** @param emailIntro mensagem de abertura (somente e-mail); null no navegador */
     static String render(String title, String createdBy, String createdAt, JsonObject snap, JsonObject narr, String emailIntro) {
+        return render(title, createdBy, createdAt, snap, narr, emailIntro, false);
+    }
+
+    static String render(String title, String createdBy, String createdAt, JsonObject snap, JsonObject narr, String emailIntro, boolean email) {
         JsonObject proj = snap.getAsJsonObject("project"), kpi = snap.getAsJsonObject("kpi");
         boolean monthly = "MENSAL".equals(str(proj, "hours_model"));
         String period = str(snap, "period_label"), ref = date(str(snap, "ref_date"));
@@ -115,6 +119,7 @@ final class SpotReportHtml {
             b.append("<p style=\"font-size:14px;line-height:1.5;margin:0 0 22px;color:#333333\">").append(h(emailIntro).replace("\n", "<br>")).append("</p>");
         }
 
+        b.append(ReportLogo.header(email, "Status Report", ref));
         b.append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>")
          .append("<td width=\"5\" bgcolor=\"").append(ORANGE).append("\" style=\"background-color:").append(ORANGE).append(";font-size:1px\">&nbsp;</td><td style=\"padding:2px 0 2px 14px\">")
          .append("<table").append(T0).append(" width=\"100%\"><tr><td style=\"font-size:24px;font-weight:bold;color:#333333\">").append(h(title)).append("</td></tr>")

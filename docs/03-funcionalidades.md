@@ -214,4 +214,5 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Acessibilidade:** foco visível nos campos, papéis ARIA nas abas, balões acessíveis por teclado.
 - **Confirmações** em toda exclusão.
 - **Impressão/PDF** nos relatórios, no Gantt e nos relatórios dos Projetos Spot.
+- **Logo da Momesso** no cabeçalho dos três modelos de relatório Spot (horas, escopo fechado e importado): embutida na página (navegador/PDF) e como imagem inline no e-mail (`ReportLogo`, recurso `report-logo.png`).
 - **Versão** exibida no rodapé do menu e na tela de entrada, a partir de `version.json` (`1.1.0 – Alpha`).

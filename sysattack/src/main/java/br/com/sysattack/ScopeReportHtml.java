@@ -137,7 +137,9 @@ final class ScopeReportHtml {
 
     private static final java.util.regex.Pattern AP_LINE = java.util.regex.Pattern.compile("^(\\d{2}/\\d{2}/\\d{4})\\s*·\\s*(.+)$");
 
-    static String render(JsonObject d) {
+    static String render(JsonObject d) { return render(d, false); }
+
+    static String render(JsonObject d, boolean email) {
         StringBuilder b = new StringBuilder();
         String situacao = "";
         for (JsonElement e : arr(d, "info")) if ("Situação".equalsIgnoreCase(str(e.getAsJsonObject(), "t", 100))) situacao = str(e.getAsJsonObject(), "d", 100);
@@ -153,6 +155,7 @@ final class ScopeReportHtml {
                 .append("<!--[if mso]><table role=\"presentation\" width=\"1000\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td><![endif]-->")
                 .append("<table").append(T0).append(" width=\"100%\" style=\"max-width:1000px\"><tr><td>");
 
+        b.append(ReportLogo.header(email, "Relatório do projeto", ""));
         // cabeçalho
         StringBuilder head = new StringBuilder("<table").append(T0).append(" width=\"100%\"><tr><td style=\"font-size:27px;font-weight:bold;line-height:1.2;color:").append(INK).append("\">")
                 .append(h(str(d, "titulo", 200))).append("</td>");

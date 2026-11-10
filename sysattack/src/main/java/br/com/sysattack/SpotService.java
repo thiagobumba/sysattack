@@ -773,12 +773,12 @@ final class SpotService {
     private static String renderReport(Map<String, Object> r, boolean email) {
         if (statusLayout(r)) {
             JsonObject sd = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
-            return isManual(r) ? ScopeReportHtml.render(sd) : ImportedReportHtml.render(sd);
+            return isManual(r) ? ScopeReportHtml.render(sd, email) : ImportedReportHtml.render(sd, email);
         }
         JsonObject snap = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
         JsonObject narr = JsonParser.parseString((String) r.get("narrative")).getAsJsonObject();
         return SpotReportHtml.render((String) r.get("title"), (String) r.get("created_by"), (String) r.get("created_at"), snap, narr,
-                email ? txt(narr, "email_mensagem") : null);
+                email ? txt(narr, "email_mensagem") : null, email);
     }
 
     private static Object send(Map<String, Object> r, JsonObject b, Map<String, Object> user) throws SQLException {
