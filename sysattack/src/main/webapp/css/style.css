@@ -819,3 +819,17 @@ tr[hidden] { display: none; }
 .rp-pick-item { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 14px; background: #fafafa; border: 1px solid #dcdcdc; border-left: 4px solid var(--orange); cursor: pointer; font: inherit; color: inherit; }
 .rp-pick-item:hover, .rp-pick-item:focus-visible { background: #fff; border-color: var(--orange); outline: none; }
 .rp-help { margin: 0 0 14px; padding: 12px 16px; background: #fff; border-left: 4px solid var(--orange); font-size: 13px; line-height: 1.55; color: #444; }
+
+/* Spot: semáforo de horas e painel de ritmo */
+.rt-panel { margin: 18px 0; }
+.rt-alert { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: #f2f2f2; border-left: 4px solid #b5b5b5; line-height: 1.5; font-size: 14px; }
+.rt-alert i { width: 12px; height: 12px; border-radius: 50%; background: #9a9a9a; flex: none; margin-top: 5px; }
+.rt-alert .small { display: block; margin-top: 4px; color: #666; }
+.rt-alert.h-red { background: #fde9e7; border-color: #c8372d; } .rt-alert.h-red i { background: #c8372d; }
+.rt-alert.h-amber { background: #fff4d9; border-color: #f0a500; } .rt-alert.h-amber i { background: #f0a500; }
+.rt-alert.h-green { background: #e9f6ee; border-color: #2fa866; } .rt-alert.h-green i { background: #2fa866; }
+.rt-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 14px; padding-top: 0; border-top: 0; }
+.rt-panel .mini-kpis { margin-top: 14px; }
+.rt-wrap { margin-top: 14px; } .rt-chart { width: 100%; height: auto; display: block; background: #fff; }
+@media (max-width: 800px) { .rt-dims { grid-template-columns: 1fr; } }
+.tbl td .health + .small { max-width: 230px; white-space: normal; }

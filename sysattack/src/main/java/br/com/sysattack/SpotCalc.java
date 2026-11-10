@@ -59,6 +59,7 @@ final class SpotCalc {
         boolean monthly = "MENSAL".equals(p.get("hours_model"));
         LocalDate vEnd = vigEnd(p);
         boolean byVig = vEnd != null;
+        LocalDate asked = ref; // data pedida, antes de ajustar à vigência (serve para saber se o contrato já começou)
         if (byVig) ref = clampRef(p, ref);
         LocalDate start = byVig ? vigStart(p) : monthly ? ref.withDayOfMonth(1) : vigStart(p);
         if (start.isAfter(ref)) start = ref;
@@ -183,6 +184,7 @@ final class SpotCalc {
                 ? ref.getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("pt-BR")) + "/" + ref.getYear()
                 : "desde " + start.getDayOfMonth() + "/" + start.getMonthValue() + "/" + start.getYear());
         out.put("kpi", kpi);
+        out.put("health", health(p, id, asked, ref, start, byVig ? vEnd : monthly ? ref.withDayOfMonth(ref.lengthOfMonth()) : null, contracted, consumed, reserved));
         out.put("billing", billing);
         out.put("by_item", byItem);
         out.put("approved", approved);
@@ -190,5 +192,154 @@ final class SpotCalc {
         out.put("actions", actions);
         out.put("pendencies", pendencies);
         return out;
+    }
+
+    // ------------------------------------------------------------------ semáforo de horas (ritmo semanal x franquia)
+
+    /** Dias úteis (segunda a sexta, sem feriados) entre as datas, contando as duas pontas. */
+    static int businessDays(LocalDate a, LocalDate b) {
+        if (b.isBefore(a)) return 0;
+        int n = 0;
+        for (LocalDate d = a; !d.isAfter(b); d = d.plusDays(1)) {
+            java.time.DayOfWeek w = d.getDayOfWeek();
+            if (w != java.time.DayOfWeek.SATURDAY && w != java.time.DayOfWeek.SUNDAY) n++;
+        }
+        return n;
+    }
+
+    private static LocalDate addBusinessDays(LocalDate from, int n) {
+        LocalDate d = from;
+        while (n > 0) {
+            d = d.plusDays(1);
+            java.time.DayOfWeek w = d.getDayOfWeek();
+            if (w != java.time.DayOfWeek.SATURDAY && w != java.time.DayOfWeek.SUNDAY) n--;
+        }
+        return d;
+    }
+
+    private static String h1(double v) { return String.format(Locale.forLanguageTag("pt-BR"), "%.1f", v); }
+    private static String pct(double v) { return Math.round(v * 100) + "%"; }
+
+    private static Map<String, Object> dim(String key, String label, String level, String detail) {
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("key", key); d.put("label", label); d.put("level", level); d.put("detail", detail);
+        return d;
+    }
+
+    private static Map<String, Object> healthNeutral(String level, String label, String reason) {
+        Map<String, Object> h = new LinkedHashMap<>();
+        h.put("level", level); h.put("label", label);
+        h.put("dims", new ArrayList<>());
+        h.put("reasons", reason == null ? new ArrayList<>() : new ArrayList<>(List.of(reason)));
+        return h;
+    }
+
+    /**
+     * Semáforo das horas: divide a franquia pelas semanas úteis do período e compara com o consumo.
+     * Três verificações (a cor final é a pior): ritmo semanal, projeção no fim e saldo comprometido.
+     * Devolve null quando não há controle de horas (escopo fechado / sem período definido).
+     */
+    private static Map<String, Object> health(Map<String, Object> p, long id, LocalDate asked, LocalDate ref, LocalDate start, LocalDate end,
+            double contracted, double consumed, double reserved) throws SQLException {
+        if (contracted <= 0 || end == null) return null;
+        boolean closed = "ENCERRADO".equals(p.get("status"));
+        if (closed) {
+            Map<String, Object> h = consumed > contracted + 0.005
+                    ? healthNeutral("CONCLUIDO_ESTOURO", "Encerrado c/ estouro", "Encerrou com " + h1(consumed - contracted) + "h acima da franquia.")
+                    : healthNeutral("CONCLUIDO", "Encerrado", "Encerrou dentro da franquia (" + h1(consumed) + "h de " + h1(contracted) + "h).");
+            return h;
+        }
+        if (asked.isBefore(start)) return healthNeutral("NAO_INICIADO", "Não iniciado", "Começa em " + br(start) + ".");
+
+        int total = businessDays(start, end);
+        if (total <= 0) return null;
+        LocalDate upTo = ref.isAfter(end) ? end : ref;
+        int elapsed = Math.min(total, businessDays(start, upTo));
+        double weeksTotal = total / 5.0, weeksElapsed = elapsed / 5.0;
+        double weeklyBudget = contracted / weeksTotal;
+        double expected = contracted * elapsed / total;
+        double weeklyActual = elapsed > 0 ? consumed / weeksElapsed : 0;
+        double projected = elapsed > 0 ? consumed / elapsed * total : consumed;
+        double committed = (consumed + reserved) / contracted;
+        boolean exhausted = consumed >= contracted - 0.005 && consumed > 0 && consumed > contracted;
+        boolean fewData = elapsed < 5 && !exhausted;
+
+        List<Map<String, Object>> dims = new ArrayList<>();
+        int worst = -1; // -1 = sem dados
+        String[] order = {"VERDE", "AMARELO", "VERMELHO"};
+
+        if (fewData) {
+            dims.add(dim("ritmo", "Ritmo semanal", "NA", "Menos de 1 semana útil decorrida: poucos dados."));
+            dims.add(dim("projecao", "Projeção no fim", "NA", "Menos de 1 semana útil decorrida: poucos dados."));
+        } else {
+            double ratio = expected > 0 ? consumed / expected : 0;
+            String l1 = ratio <= 1.05 ? "VERDE" : ratio <= 1.20 ? "AMARELO" : "VERMELHO";
+            dims.add(dim("ritmo", "Ritmo semanal", l1, "Consumindo " + h1(weeklyActual) + "h/sem contra " + h1(weeklyBudget) + "h orçadas (" + pct(ratio) + ")."));
+            double pr = projected / contracted;
+            String l2 = pr <= 0.90 ? "VERDE" : pr <= 1.0 ? "AMARELO" : "VERMELHO";
+            dims.add(dim("projecao", "Projeção no fim", l2, h1(projected) + "h de " + h1(contracted) + "h (" + pct(pr) + ")" + (pr > 1.0 ? ": vai estourar." : pr > 0.90 ? ": no limite." : ": dentro da franquia.")));
+        }
+        String l3 = committed < 0.90 ? "VERDE" : committed < 1.0 ? "AMARELO" : "VERMELHO";
+        dims.add(dim("saldo", "Saldo comprometido", l3, h1(consumed) + "h consumidas" + (reserved > 0 ? " + " + h1(reserved) + "h reservadas" : "") + " de " + h1(contracted) + "h (" + pct(committed) + ")."));
+        for (Map<String, Object> d : dims) {
+            String lv = (String) d.get("level");
+            for (int i = 0; i < order.length; i++) if (order[i].equals(lv)) worst = Math.max(worst, i);
+        }
+
+        Map<String, Object> h = new LinkedHashMap<>();
+        h.put("level", worst < 0 ? "SEM_DADOS" : order[worst]);
+        h.put("label", worst < 0 ? "Poucos dados" : worst == 0 ? "Saudável" : worst == 1 ? "Atenção" : "Crítico");
+        h.put("dims", dims);
+
+        List<String> reasons = new ArrayList<>();
+        double remaining = contracted - consumed;
+        double weeksLeft = Math.max(0, (total - elapsed) / 5.0);
+        if (consumed > contracted + 0.005) {
+            reasons.add("Franquia esgotada: " + h1(consumed - contracted) + "h acima do contratado.");
+        } else if (!fewData && elapsed > 0 && consumed > 0) {
+            double perDay = consumed / elapsed;
+            int daysToZero = (int) Math.ceil(remaining / perDay);
+            LocalDate zero = addBusinessDays(upTo, daysToZero);
+            if (projected > contracted + 0.005 && !zero.isAfter(end)) {
+                int before = businessDays(zero.plusDays(1), end);
+                reasons.add("No ritmo atual o saldo acaba por volta de " + br(zero) + (before > 0 ? " (" + before + " dia(s) útil(eis) antes do fim)" : "") + ", e o período fecha com ≈ " + h1(projected) + "h (" + h1(projected - contracted) + "h acima).");
+                if (weeksLeft > 0) reasons.add("Para terminar no limite, o consumo precisa cair para no máximo " + h1(remaining / weeksLeft) + "h por semana até " + br(end) + ".");
+            } else if (weeksLeft > 0) {
+                reasons.add("Dá para consumir até " + h1(remaining / weeksLeft) + "h por semana até " + br(end) + " sem passar da franquia.");
+            }
+        }
+        h.put("reasons", reasons);
+
+        h.put("weeks_total", r2(weeksTotal));
+        h.put("weeks_elapsed", r2(weeksElapsed));
+        h.put("weekly_budget", r2(weeklyBudget));
+        h.put("weekly_actual", r2(weeklyActual));
+        h.put("expected", r2(expected));
+        h.put("diff", r2(consumed - expected));
+        h.put("projected", r2(projected));
+        h.put("projected_pct", Math.round(projected / contracted * 100));
+        h.put("business_days_total", total);
+        h.put("business_days_elapsed", elapsed);
+        h.put("start", start.toString());
+        h.put("end", end.toString());
+        h.put("few_data", fewData);
+
+        // horas acumuladas por dia útil até a data de referência (para o gráfico)
+        List<Map<String, Object>> rows = Db.query("SELECT work_date, SUM(hours) hrs FROM spot_hours WHERE spot_id = ? AND work_date >= ? AND work_date <= ? GROUP BY work_date ORDER BY work_date", id, start, upTo);
+        Map<String, Double> byDay = new HashMap<>();
+        for (Map<String, Object> r : rows) byDay.put(String.valueOf(r.get("work_date")).substring(0, 10), num(r.get("hrs")));
+        List<Object[]> series = new ArrayList<>();
+        double acc = 0;
+        int idx = 0;
+        for (LocalDate d = start; !d.isAfter(upTo); d = d.plusDays(1)) {
+            double v = byDay.getOrDefault(d.toString(), 0.0);
+            acc += v;
+            java.time.DayOfWeek w = d.getDayOfWeek();
+            boolean bd = w != java.time.DayOfWeek.SATURDAY && w != java.time.DayOfWeek.SUNDAY;
+            if (bd) idx++;
+            if (bd || v > 0) series.add(new Object[] {idx, r2(acc)});
+        }
+        h.put("series", series);
+        return h;
     }
 }

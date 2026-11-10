@@ -78,6 +78,68 @@ const Spot = (() => {
   const iconBtns = (kind, id) => locked() ? '<td></td>' : `<td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar" data-action="sp-edit-${kind}" data-id="${id}">${ic('edit')}</button>
     <button class="icon-btn del" title="Excluir" aria-label="Excluir" data-action="sp-del-${kind}" data-id="${id}">${ic('trash')}</button></td>`;
 
+  // ---- semáforo de horas (ritmo semanal x franquia)
+  const H_CLASS = { VERMELHO: 'h-red', AMARELO: 'h-amber', VERDE: 'h-green', NAO_INICIADO: 'h-grey', SEM_DADOS: 'h-grey', CONCLUIDO: 'h-done', CONCLUIDO_ESTOURO: 'h-red' };
+  const LVL_WORD = { VERDE: 'saudável', AMARELO: 'atenção', VERMELHO: 'crítico', NA: 'poucos dados' };
+  const healthTip = hl => {
+    if (hl.level === 'CONCLUIDO' || hl.level === 'CONCLUIDO_ESTOURO') return ['Projeto encerrado: a saúde mostra o resultado final.', ...(hl.reasons || [])];
+    if (hl.level === 'NAO_INICIADO') return ['O período do contrato ainda não começou.'];
+    return ['A franquia é dividida pelas semanas úteis do período (segunda a sexta) e comparada com o consumo. A cor é a PIOR entre três verificações:',
+      ...(hl.dims || []).map(d => `• ${d.label} (${LVL_WORD[d.level] || d.level}): ${d.detail}`),
+      '# Como cada verificação é avaliada',
+      '• Ritmo semanal: consumido ÷ esperado até hoje. Atenção acima de 105%, crítico acima de 120%.',
+      '• Projeção no fim: ritmo médio mantido até o fim do período. Atenção acima de 90% da franquia, crítico acima de 100% (vai estourar).',
+      '• Saldo comprometido: (consumido + reservado) ÷ franquia. Atenção a partir de 90%, crítico a partir de 100%.',
+      'Com menos de 1 semana útil decorrida, ritmo e projeção ficam como "poucos dados".'];
+  };
+  const healthChip = hl => hl ? `<span class="health ${H_CLASS[hl.level] || 'h-grey'}"${Tip.attr('Saúde das horas: ' + hl.label, healthTip(hl))}><i></i>${esc(hl.label)}</span>` : '<span class="small">—</span>';
+  const healthSub = (hl, k) => !hl ? '' : (hl.level === 'CONCLUIDO' || hl.level === 'CONCLUIDO_ESTOURO' || hl.level === 'NAO_INICIADO') ? esc((hl.reasons || [])[0] || '')
+    : hl.few_data ? 'Menos de 1 semana útil: poucos dados' : `${h(k.consumed)} de ${h(hl.expected)} esperadas até hoje · projeção ${h(hl.projected)} (${hl.projected_pct}%)`;
+
+  function ritmoChart(hl, k) {
+    const total = hl.business_days_total, last = hl.business_days_elapsed, contracted = Number(k.contracted);
+    const top = Math.max(contracted * 1.2, Number(hl.projected) * 1.08, Number(k.consumed) * 1.08, 1);
+    const W = 1040, H = 250, X0 = 56, X1 = W - 16, Y0 = H - 34, Y1 = 14;
+    const X = d => X0 + (X1 - X0) * d / total, Y = v => Y0 - (Y0 - Y1) * v / top;
+    const pts = (hl.series || []);
+    const actual = pts.length ? pts.map(q => `${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join(' ') : '';
+    const step = top > 80 ? 20 : top > 40 ? 10 : 5;
+    let grid = '';
+    for (let v = 0; v <= top; v += step) grid += `<line x1="${X0}" y1="${Y(v).toFixed(1)}" x2="${X1}" y2="${Y(v).toFixed(1)}" stroke="#e4e4e4"/><text x="${X0 - 8}" y="${(Y(v) + 4).toFixed(1)}" fill="#777" text-anchor="end">${v}h</text>`;
+    let xl = '';
+    const weeks = Math.floor(total / 5);
+    for (let w = 0; w <= weeks; w++) xl += `<text x="${X(w * 5).toFixed(1)}" y="${H - 12}" fill="#555" text-anchor="middle">${w === 0 ? 'início' : 'sem ' + w}</text>`;
+    xl += `<text x="${X(total).toFixed(1)}" y="${H - 12}" fill="#555" text-anchor="end">fim</text>`;
+    const over = Number(hl.projected) > contracted;
+    return `<svg class="rt-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Horas acumuladas contra o ritmo orçado e a projeção" font-size="12">${grid}
+      <line x1="${X0}" y1="${Y(contracted).toFixed(1)}" x2="${X1}" y2="${Y(contracted).toFixed(1)}" stroke="#c0392b" stroke-dasharray="6 4" stroke-width="1.5"/>
+      <text x="${X0 + 6}" y="${(Y(contracted) - 6).toFixed(1)}" fill="#c0392b">Franquia ${h(contracted)}</text>
+      <polyline points="${X(0)},${Y(0)} ${X(total).toFixed(1)},${Y(contracted).toFixed(1)}" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-dasharray="3 3"/>
+      ${actual ? `<polyline points="${actual}" fill="none" stroke="#ff5000" stroke-width="3" stroke-linejoin="round"/>` : ''}
+      ${last > 0 ? `<polyline points="${X(last).toFixed(1)},${Y(k.consumed).toFixed(1)} ${X(total).toFixed(1)},${Y(hl.projected).toFixed(1)}" fill="none" stroke="${over ? '#c0392b' : '#ff5000'}" stroke-width="2.5" stroke-dasharray="7 5"/>
+        <circle cx="${X(last).toFixed(1)}" cy="${Y(k.consumed).toFixed(1)}" r="5" fill="#ff5000"/>
+        <text x="${(X(last) - 10).toFixed(1)}" y="${(Y(k.consumed) - 10).toFixed(1)}" fill="#ff5000" font-weight="700" text-anchor="end">hoje: ${h(k.consumed)}</text>
+        <text x="${X1}" y="${(Y(hl.projected) + (hl.projected > contracted ? -8 : 16)).toFixed(1)}" fill="${over ? '#c0392b' : '#555'}" font-weight="700" text-anchor="end">projeção: ${h(hl.projected)}</text>` : ''}${xl}</svg>`;
+  }
+
+  function ritmoPanel(hl, k) {
+    if (!hl) return '';
+    const cls = H_CLASS[hl.level] || 'h-grey';
+    const reasons = (hl.reasons || []).map(r => esc(r)).join(' ');
+    const lead = hl.level === 'VERMELHO' ? 'Crítico: no ritmo atual a franquia estoura.' : hl.level === 'AMARELO' ? 'Atenção: o consumo está perto do limite da franquia.'
+      : hl.level === 'VERDE' ? 'Saudável: o consumo está dentro do ritmo da franquia.' : hl.label + '.';
+    const dims = hl.dims || [];
+    const stats = dims.length ? `<div class="mini-kpis">
+      <div class="mini"><span>Orçado por semana</span><b>${h(hl.weekly_budget)}</b></div>
+      <div class="mini"><span>Consumido por semana (média)</span><b>${h(hl.weekly_actual)}</b></div>
+      <div class="mini"><span>Esperado até hoje</span><b>${h(hl.expected)}</b></div>
+      <div class="mini ${Number(hl.diff) > 0 ? 'neg' : ''}"><span>Consumido ${Number(hl.diff) > 0 ? 'acima' : 'abaixo'} do esperado</span><b>${Number(hl.diff) > 0 ? '+' : ''}${h(hl.diff)}</b></div></div>` : '';
+    return `<div class="rt-panel"><div class="rt-alert ${cls}"><i></i><div><b>${esc(lead)}</b> ${reasons}
+      ${dims.length ? `<span class="small">Franquia de ${h(k.contracted)} em ${hl.business_days_total} dias úteis (${String(hl.weeks_total).replace('.', ',')} semanas) = ${h(hl.weekly_budget)} por semana. Já passaram ${String(hl.weeks_elapsed).replace('.', ',')} semanas úteis.</span>` : ''}</div></div>
+      ${dims.length ? `<div class="hdims rt-dims">${dims.map(d => `<div class="hdim ${d.level === 'NA' ? 'h-grey' : H_CLASS[d.level]}"><i></i><div><b>${esc(d.label)}</b><span>${esc(d.detail)}</span></div></div>`).join('')}</div>` : ''}
+      ${stats}${dims.length && !hl.few_data ? `<div class="rt-wrap">${ritmoChart(hl, k)}<p class="hint">Linha laranja = horas acumuladas; tracejada cinza = ritmo orçado; tracejada colorida = projeção se o ritmo atual continuar. Semanas contadas em dias úteis (segunda a sexta, sem descontar feriados).</p></div>` : ''}</div>`;
+  }
+
   function kpiCards(k, label) {
     const neg = Number(k.balance) < 0;
     return `<div class="mini-kpis">
@@ -147,8 +209,9 @@ const Spot = (() => {
     const acts = p => `<td class="acts">${p.recurring && !p.closed_scope ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td>`;
     const name = p => `<td class="strong"><span class="nm-wrap">${Logo.avatar('S', p, 'sm')}<span class="nm-txt">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></span></span></td>`;
-    const tableHours = `<table class="tbl"><thead><tr><th>Projeto</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableHours = `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
+          <td>${healthChip(p.health)}<span class="small">${healthSub(p.health, p.kpi)}</span></td>
           <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
@@ -176,10 +239,10 @@ const Spot = (() => {
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período</h2><div class="bar-actions">
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${p.closed_scope ? '' : healthChip(s.health)}</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + billingCards(s.billing, s.kpi)}
+        ${p.closed_scope ? scopeCards(p.scope) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>

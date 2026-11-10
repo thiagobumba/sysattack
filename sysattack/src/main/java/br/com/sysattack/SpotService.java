@@ -168,6 +168,7 @@ final class SpotService {
         for (Map<String, Object> p : rows) {
             Map<String, Object> snap = SpotCalc.snapshot(p, LocalDate.now());
             p.put("kpi", snap.get("kpi"));
+            p.put("health", snap.get("health"));
             p.put("period_label", snap.get("period_label"));
             p.put("scope", scopeSummary(((Number) p.get("id")).longValue()));
             p.put("finance", financeSummary(p));
