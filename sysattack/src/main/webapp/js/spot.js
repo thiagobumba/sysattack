@@ -327,6 +327,7 @@ const Spot = (() => {
     return `<section class="panel evo-head"><div class="panel-head"><h2 class="panel-title">Jornada de atendimento</h2><div class="bar-actions">
       <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
       ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
+      ${p.billing_note ? `<p class="hint" style="margin:0 0 14px"><b>Observação:</b> ${esc(p.billing_note)}</p>` : ''}
       <ol class="jr" aria-label="Etapas do atendimento">
         <li>${step('TRIAGEM', 'Triagem', by('TRIAGEM'), 'g')}</li><li>${step('EM_ESTIMATIVA', 'Em estimativa', by('EM_ESTIMATIVA'), 'o')}</li><li>${step('ESTIMADO', 'Estimado', by('ESTIMADO'), 'd')}</li><li>${step('EM_DESENVOLVIMENTO', 'Em desenvolvimento', by('EM_DESENVOLVIMENTO'), 'o')}</li>
         <li>${step('EM_HOMOLOGACAO', 'Em homologação', by('EM_HOMOLOGACAO'), 'd')}</li><li>${step('ENTREGUE', 'Entregue', by('ENTREGUE'), 'v')}</li></ol>
@@ -347,20 +348,29 @@ const Spot = (() => {
     const c = p.evo.eco, rate = Number(c.rate) || 0, est = Number(c.estimated), exe = Number(c.executed);
     if (!c.features.length) return `<p class="hint">Ainda sem dados de economia.</p>${empty('Sem economia calculada', 'Informe a Estimativa Beecloud (h) nas demandas e o Esforço (h) do time interno na feature entregue. Em Editar projeto, informe o valor da hora do time externo.')}${c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa.</p>` : ''}`;
     const money = rate > 0, unit = v => money ? brl(v * rate) : hh(v);
-    // eixo = do mês de início ao mês final do projeto (sem data final, até o mês atual); o acumulado só avança até o mês atual
-    const by = Object.fromEntries(c.months.map(m => [m.month, Number(m.estimated)]));
-    const now = todayIso().slice(0, 7), first = String(p.start_date || '').slice(0, 7) || Object.keys(by).sort()[0] || now;
-    const lastK = String(p.end_date || '').slice(0, 7) || now, endK = lastK < first ? now : lastK;
+    // eixo = do início ao fim do projeto (sem data final, até hoje). Período de até 4 meses: por dia; maior: por mês. O acumulado só avança até hoje.
+    const today = todayIso(), s0 = String(p.start_date || '').slice(0, 10) || (c.dates[0] ? c.dates[0].date : today);
+    let e0 = String(p.end_date || '').slice(0, 10) || today; if (e0 < s0) e0 = today;
+    const dayMs = 86400000, span = Math.round((new Date(e0) - new Date(s0)) / dayMs), daily = span <= 124;
     const series = [];
-    { let [y, m] = first.split('-').map(Number), acc = 0;
-      for (let i = 0; i < 60; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k > endK && !(k <= now && by[k])) break; if (k <= now) acc += by[k] || 0; series.push({ k, v: k <= now ? acc : null, label: MES[m - 1] + (m === 1 || !series.length ? ' ' + String(y).slice(2) : '') }); if (++m > 12) { m = 1; y++; } } }
+    if (daily) {
+      const byD = {}; c.dates.forEach(d => { byD[d.date] = (byD[d.date] || 0) + Number(d.estimated); });
+      let acc = Object.entries(byD).filter(([d]) => d < s0).reduce((s, [, v]) => s + v, 0);
+      const step = Math.max(1, Math.ceil(span / 10));
+      for (let i = 0; i <= span; i++) { const d = new Date(new Date(s0).getTime() + i * dayMs).toISOString().slice(0, 10); if (d <= today) acc += byD[d] || 0; if (i % step === 0 || i === span) series.push({ k: d, v: d <= today ? acc : null, label: d.slice(8) + '/' + d.slice(5, 7) }); else if (d <= today && byD[d]) series.push({ k: d, v: acc, label: '' }); }
+      series.sort((a, b) => a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
+    } else {
+      const by = Object.fromEntries(c.months.map(m => [m.month, Number(m.estimated)])), now = today.slice(0, 7), first = s0.slice(0, 7), endK = e0.slice(0, 7);
+      let [y, m] = first.split('-').map(Number), acc = 0;
+      for (let i = 0; i < 60; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k > endK && !(k <= now && by[k])) break; if (k <= now) acc += by[k] || 0; series.push({ k, v: k <= now ? acc : null, label: MES[m - 1] + (m === 1 || !series.length ? ' ' + String(y).slice(2) : '') }); if (++m > 12) { m = 1; y++; } }
+    }
     const pts = series.filter(s => s.v !== null);
     const W = 520, H = 190, L = 24, R = 24, T = 14, B = 26, mx = Math.max(...pts.map(s => s.v), 1);
-    const X = i => L + (series.length < 2 ? (W - L - R) / 2 : i * (W - L - R) / (series.length - 1)), Y = v => T + (H - T - B) * (1 - v / mx);
-    const chart = series.length ? `<svg viewBox="0 0 ${W} ${H}" class="eco-svg" role="img" aria-label="${money ? 'Reais' : 'Horas'} que deixamos de gastar por mês, acumulado, de ${series[0].k} a ${series[series.length - 1].k}">
+    const tpos = daily ? (new Date(s0) && (s => (new Date(s.k) - new Date(s0)) / dayMs / Math.max(span, 1))) : null; const X = i => L + (series.length < 2 ? (W - L - R) / 2 : (daily ? tpos(series[i]) : i / (series.length - 1)) * (W - L - R)), Y = v => T + (H - T - B) * (1 - v / mx);
+    const chart = series.length ? `<svg viewBox="0 0 ${W} ${H}" class="eco-svg" role="img" aria-label="${money ? 'Reais' : 'Horas'} que deixamos de gastar por mês, acumulado, de ${s0} a ${e0}">
       ${[0, .5, 1].map(f => `<line x1="${L}" x2="${W - R}" y1="${Y(mx * f)}" y2="${Y(mx * f)}" stroke="#e5e5e5"/>`).join('')}
       <polyline fill="none" stroke="#1a7f37" stroke-width="3" points="${series.map((s, i) => s.v === null ? '' : `${X(i)},${Y(s.v)}`).filter(Boolean).join(' ')}"/>
-      ${series.map((s, i) => `${s.v === null ? '' : `<circle cx="${X(i)}" cy="${Y(s.v)}" r="4" fill="#1a7f37"><title>${s.label}: ${unit(s.v)}</title></circle>`}<text x="${X(i)}" y="${H - 8}" font-size="11" fill="#666" text-anchor="middle">${s.label}</text>`).join('')}</svg>` : '';
+      ${series.map((s, i) => `${s.v === null || !s.label ? '' : `<circle cx="${X(i)}" cy="${Y(s.v)}" r="4" fill="#1a7f37"><title>${s.label}: ${unit(s.v)}</title></circle>`}${s.label ? `<text x="${X(i)}" y="${H - 8}" font-size="11" fill="#666" text-anchor="middle">${s.label}</text>` : ''}`).join('')}</svg>` : '';
     const items = [...c.features].sort((a, b) => b.estimated - a.estimated);
     const mxf = Math.max(...items.map(f => Number(f.estimated)), 1);
     const eff = est > 0 ? Math.round(exe / est * 100) : 0, saved = est - exe;
@@ -368,7 +378,7 @@ const Spot = (() => {
       <div class="eco-top"><div><span class="eco-k">${money ? 'Deixamos de gastar' : 'Horas estimadas pelo time externo'}</span><b class="eco-big">${money ? brl(c.avoided) : hh(est)}</b>
         <p class="eco-p">Com o time interno entregamos <b>${c.demands} demanda(s) em ${hh(exe)}</b>. O time externo (Beecloud) estimou <b>${hh(est)}</b>${money ? ` a <b>${brl(rate)}/h</b>` : ''}. Foram <b class="${saved >= 0 ? 'pos' : 'neg'}">${hh(Math.abs(saved))} ${saved >= 0 ? 'a menos' : 'a mais'}</b> (${Math.abs(100 - eff)}%).</p>
         ${money ? '' : '<p class="hint">Informe o valor da hora do time externo em Editar projeto para ver o valor em reais.</p>'}</div>
-        <div><span class="eco-k">${money ? 'R$ que deixamos de gastar, acumulado por mês' : 'Horas estimadas, acumuladas por mês'}</span>${chart}</div></div>
+        <div><span class="eco-k">${money ? 'R$ que deixamos de gastar, acumulado' + (daily ? ' (por dia)' : ' (por mês)') : 'Horas estimadas, acumuladas' + (daily ? ' (por dia)' : ' (por mês)')}</span>${chart}</div></div>
       <div class="eco-cards">
         <div class="eco-c"><span>Estimado Beecloud</span><b>${hh(est)}</b></div>
         <div class="eco-c"><span>Executado interno</span><b>${hh(exe)}</b></div>
@@ -397,7 +407,7 @@ const Spot = (() => {
     const td = (s, al) => `<td valign="top" style="padding:8px 10px;border-bottom:1px solid ${LINE};font-size:13px;line-height:1.4;text-align:${al || 'left'}">${s}</td>`;
     let b = `<table${T0} width="100%"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td style="padding:2px 0 2px 16px"><div style="font-size:13px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div>
       <div style="font-size:26px;line-height:1.2;font-weight:bold;color:${INK};padding:2px 0">${esc(p.name)}</div>
-      <div style="font-size:13px;color:${MUTED}">Período: ${o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período'} · Emitido em ${fmt(todayIso())}</div></td></tr></table>`;
+      <div style="font-size:13px;color:${MUTED}">Período: ${o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período'} · Emitido em ${fmt(todayIso())}</div>${p.billing_note ? `<div style="font-size:13px;color:${MUTED};padding-top:4px"><b>Observação:</b> ${esc(p.billing_note)}</div>` : ''}</td></tr></table>`;
     if (o.sum) {
       b += sec('Resumo') + cells([['Pedidos', rq.length], ['Triagem', cnt('TRIAGEM')], ['Em estimativa', cnt('EM_ESTIMATIVA')], ['Estimado', cnt('ESTIMADO')]]) + gap(8)
         + cells([['Em desenvolvimento', cnt('EM_DESENVOLVIMENTO')], ['Em homologação', cnt('EM_HOMOLOGACAO')], ['Entregue', cnt('ENTREGUE')]].concat(cnt('RECUSADA') ? [['Recusada', cnt('RECUSADA')]] : []))

@@ -545,6 +545,7 @@ final class SpotService {
         BigDecimal est = BigDecimal.ZERO, exec = BigDecimal.ZERO;
         List<Map<String, Object>> items = new ArrayList<>();
         java.util.TreeMap<String, BigDecimal[]> months = new java.util.TreeMap<>(); // mês de entrega -> {estimado, executado}
+        List<Map<String, Object>> dl = new ArrayList<>(); // data de entrega de cada feature (para projetos curtos)
         long nDem = 0;
         for (Map<String, Object> f : Db.query("SELECT f.id, f.number, f.name, f.effort_hours,"
                 + " (SELECT MAX(r.delivered_at) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE') dt,"
@@ -556,6 +557,7 @@ final class SpotService {
             est = est.add(e); exec = exec.add(x);
             nDem += ((Number) f.get("nd")).longValue();
             String mo = f.get("dt") == null ? "" : String.valueOf(f.get("dt")).substring(0, 7);
+            if (!mo.isEmpty()) { Map<String, Object> dd = new java.util.LinkedHashMap<>(); dd.put("date", String.valueOf(f.get("dt")).substring(0, 10)); dd.put("estimated", e); dd.put("executed", x); dl.add(dd); }
             if (!mo.isEmpty()) { BigDecimal[] a = months.computeIfAbsent(mo, k -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO}); a[0] = a[0].add(e); a[1] = a[1].add(x); }
             Map<String, Object> it = new java.util.LinkedHashMap<>();
             it.put("id", f.get("id")); it.put("number", f.get("number")); it.put("name", f.get("name")); it.put("estimated", e); it.put("executed", x); it.put("month", mo);
@@ -574,7 +576,7 @@ final class SpotService {
             mm.put("month", en.getKey()); mm.put("estimated", en.getValue()[0]); mm.put("executed", en.getValue()[1]);
             ml.add(mm);
         }
-        out.put("months", ml);
+        out.put("months", ml); out.put("dates", dl);
         return out;
     }
 
