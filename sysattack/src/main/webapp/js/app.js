@@ -400,11 +400,37 @@
     apply();
   }
 
+  // Cronograma: primeiro escolhe-se o projeto (a tela inicial explica como ler o cronograma)
+  let schedProject = '';
+  function scheduleIntro(projects, tasks) {
+    const cnt = Object.fromEntries(projects.map(p => [p.id, tasks.filter(t => t.project_id === p.id && !t.child_count).length]));
+    const list = projects.slice().sort((a, b) => (a.status === 'CONCLUIDO') - (b.status === 'CONCLUIDO') || a.name.localeCompare(b.name));
+    return `<section class="panel rp-intro"><div class="panel-head"><h2 class="panel-title">Como funciona o cronograma</h2></div>
+      <p>O cronograma mostra, <b>um projeto de cada vez</b>, as tarefas e os marcos em uma linha do tempo (gráfico de Gantt): cada tarefa é uma <b>barra</b> que vai da data de início à data final planejadas, e o trecho <b>escuro</b> da barra é o quanto já foi executado.</p>
+      <ul class="sch-legend">
+        <li><i class="sl-bar"></i><span><b>Barra</b>: período planejado da tarefa. Parte escura = progresso informado.</span></li>
+        <li><i class="sl-late"></i><span><b>Vermelho</b>: tarefa atrasada (a data final passou e ainda não terminou).</span></li>
+        <li><i class="sl-ms"></i><span><b>Losango</b>: marco, uma data de entrega ou decisão, sem duração.</span></li>
+        <li><i class="sl-today"></i><span><b>Linha laranja</b>: hoje. Tudo que está à esquerda dela já deveria estar pronto.</span></li>
+        <li><i class="sl-sum"></i><span><b>Faixa de resumo</b>: tarefa pai, que reúne as filhas e se calcula a partir delas. Use Recolher tudo para ver só as fases.</span></li>
+      </ul>
+      <p><b>Como usar:</b> escolha o projeto abaixo (ou no campo <b>Projeto</b>, que fica no topo da tela depois da escolha). Clique em uma barra para abrir e editar a tarefa, use o zoom para aproximar ou afastar e o botão de impressora para salvar em PDF.</p>
+      ${list.length ? `<div class="rp-pick">${list.map(p => `<button type="button" class="rp-pick-item" data-action="sch-pick" data-id="${p.id}"><b>${esc(p.name)}</b><span class="small">${esc((P_STATUS[p.status] || [p.status])[0])}${p.owner ? ' · ' + esc(p.owner) : ''} · ${cnt[p.id]} tarefa(s)${p.start_date ? ' · ' + fmt(p.start_date) + (p.end_date ? ' a ' + fmt(p.end_date) : '') : ''}</span></button>`).join('')}</div>`
+        : '<div class="empty"><strong>Nenhum projeto ainda</strong>Crie um projeto na tela Projetos para montar o cronograma.</div>'}</section>`;
+  }
+
   async function viewSchedule() {
     const [tasks, projects] = await Promise.all([api('GET', 'tasks'), api('GET', 'projects')]);
     view.tasks = tasks; view.projects = projects;
-    main.innerHTML = pageHead(['SysAttack', 'Cronograma'], 'Cronograma', 'Todos os projetos na linha do tempo. Clique em uma barra para abrir.') + '<section class="panel" id="g-host"></section>';
-    Gantt.render(document.getElementById('g-host'), ganttRows(projects, tasks), { key: 'all', title: 'Todos os projetos', subtitle: `${projects.length} projeto(s)`, onRow: onGanttRow });
+    const p = projects.find(x => String(x.id) === schedProject);
+    if (!p) schedProject = '';
+    const head = pageHead(['SysAttack', 'Cronograma'], 'Cronograma', p ? 'Linha do tempo do projeto. Clique em uma barra para abrir.' : 'Escolha um projeto para ver a linha do tempo.');
+    if (!p) { main.innerHTML = head + scheduleIntro(projects, tasks); return; }
+    main.innerHTML = head + `<section class="panel sch-bar"><label for="sch-p" class="hint">Projeto</label>
+      <select id="sch-p">${projects.map(x => `<option value="${x.id}"${x.id === p.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn btn-sm" data-action="sch-back">Como funciona / trocar projeto</button></section><section class="panel" id="g-host"></section>`;
+    document.getElementById('sch-p').addEventListener('change', e => { schedProject = e.target.value; viewSchedule(); });
+    Gantt.render(document.getElementById('g-host'), ganttRows([p], tasks), { key: 'project-' + p.id, title: p.name, subtitle: p.owner || '', onRow: onGanttRow });
   }
 
   // ------------------------------------------------------------------ financeiro
@@ -847,6 +873,8 @@
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
       if (el.dataset.action.startsWith('ish-')) { await Ish.action(el); return; }
+      if (el.dataset.action === 'sch-pick') { schedProject = el.dataset.id; await viewSchedule(); return; }
+      if (el.dataset.action === 'sch-back') { schedProject = ''; await viewSchedule(); return; }
       if (el.dataset.action.startsWith('kb-')) { Kan.onClick(e); return; }
       if (el.dataset.action.startsWith('prio-')) { await Prio.action(el); return; }
       switch (el.dataset.action) {

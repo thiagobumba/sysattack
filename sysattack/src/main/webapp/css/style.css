@@ -884,3 +884,16 @@ tr[hidden] { display: none; }
   .rrow .rdiff { text-align: left; }
   .rline { grid-template-columns: 62px minmax(0, 1fr) auto; }
 }
+
+/* Cronograma: escolha do projeto + legenda */
+.sch-legend { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; max-width: 860px; }
+.sch-legend li { display: flex; gap: 12px; align-items: center; line-height: 1.45; font-size: 14px; }
+.sch-legend i { flex: none; width: 34px; height: 14px; display: block; position: relative; }
+.sl-bar { background: linear-gradient(90deg, var(--ink) 55%, #d9d9d9 55%); }
+.sl-late { background: linear-gradient(90deg, var(--red) 40%, #f4b8b3 40%); }
+.sl-ms { width: 14px !important; height: 14px !important; background: var(--ink); transform: rotate(45deg) scale(.85); margin: 0 10px; }
+.sl-today { width: 34px; height: 14px; background: linear-gradient(90deg, transparent 15px, var(--orange) 15px, var(--orange) 17px, transparent 17px); }
+.sl-sum { height: 8px !important; background: #8d8d8d; margin: 3px 0; }
+.sch-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 20px; }
+.sch-bar select { min-height: 40px; border: 1px solid #cfcfcf; padding: 0 10px; background: #fff; font: inherit; min-width: 240px; max-width: 100%; }
+@media (max-width: 640px) { .sch-bar { flex-direction: column; align-items: stretch; } .sch-bar select { min-width: 0; } .sch-bar .btn { width: 100%; } }
