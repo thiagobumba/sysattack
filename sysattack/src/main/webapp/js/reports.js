@@ -59,8 +59,10 @@ const Rep = (() => {
     const ticks = [];
     const c = new Date(min * 86400000); c.setUTCDate(1); c.setUTCMonth(c.getUTCMonth() + 1);
     for (; c.getTime() / 86400000 < max; c.setUTCMonth(c.getUTCMonth() + 1)) {
-      ticks.push({ pos: x(c.getTime() / 86400000), label: c.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) });
+      const mo = c.toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.', '');
+      ticks.push({ pos: x(c.getTime() / 86400000), label: mo + (c.getUTCMonth() === 0 || !ticks.length ? '/' + String(c.getUTCFullYear()).slice(2) : '') });
     }
+    const months = Math.max(1, Math.round(span / 30.4)), minW = Math.max(520, months * 58); // largura mínima: cada mês ganha espaço para o rótulo
     const grid = ticks.map(t => `<i class="tl-tick" style="left:${t.pos}%"></i>`).join('');
     const body = rows.map(r => {
       const l = x(dayNum(r.s)), w = Math.max(0.6, x(dayNum(r.e) + 1) - l);
@@ -68,8 +70,8 @@ const Rep = (() => {
         : `<div class="tl-bar ${r.project ? 'proj' : ''} ${r.late ? 'late' : ''}" style="left:${l}%;width:${w}%" title="${esc(r.label)}: ${fmt(r.s)} a ${fmt(r.e)}"><span style="width:${Math.round(r.progress)}%"></span></div>`;
       return `<div class="tl-row"><div class="tl-name"><b>${esc(r.label)}</b>${r.sub ? `<small>${esc(r.sub)}</small>` : ''}</div><div class="tl-track">${grid}${mark}<i class="tl-today" style="left:${x(today)}%"></i></div></div>`;
     }).join('');
-    const head = `<div class="tl-row tl-head"><div class="tl-name"></div><div class="tl-track">${ticks.map(t => `<span class="tl-label" style="left:${t.pos}%">${esc(t.label)}</span>`).join('')}</div></div>`;
-    return `<div class="tl">${head}${body}</div><p class="hint" style="margin-top:10px">Barra escura = progresso. Linha laranja = hoje (${fmt(d.today)}). Losango = marco. Vermelho = atrasado.</p>`;
+    const head = `<div class="tl-row tl-head"><div class="tl-name"></div><div class="tl-track">${ticks.filter(t => t.pos < 95).map(t => `<span class="tl-label" style="left:${t.pos}%">${esc(t.label)}</span>`).join('')}</div></div>`;
+    return `<div class="tl" style="--tl-min:${minW}px">${head}${body}</div><p class="hint" style="margin-top:10px">Barra escura = progresso. Linha laranja = hoje (${fmt(d.today)}). Losango = marco. Vermelho = atrasado.</p>`;
   }
 
   function repLate(d, projects) {
@@ -199,8 +201,8 @@ const Rep = (() => {
     st.fresh = false;
     const d = st.data, projects = visibleProjects(d);
     const tab = (k, l) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="rp-tab" data-tab="${k}">${l}</button>`;
-    const filter = `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label for="rp-p" class="hint">Projeto</label>
-      <select id="rp-p" style="min-height:36px;border:1px solid #cfcfcf;padding:0 10px;background:#fff"><option value=""${st.project ? '' : ' selected'} disabled>Selecione um projeto…</option>${d.projects.map(p => `<option value="${p.id}"${String(p.id) === st.project ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    const filter = `<div class="rp-filter"><label for="rp-p" class="hint">Projeto</label>
+      <select id="rp-p"><option value=""${st.project ? '' : ' selected'} disabled>Selecione um projeto…</option>${d.projects.map(p => `<option value="${p.id}"${String(p.id) === st.project ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
       <button class="btn btn-sm" data-action="rp-print"${st.project ? '' : ' disabled'}>Imprimir / salvar PDF</button></div>`;
     if (st.project && !projects.length) st.project = ''; // projeto excluído desde a última visita
     const body = !projects.length ? intro(d)
@@ -214,7 +216,7 @@ const Rep = (() => {
         + panel('Projeção de custo no término', 'Quanto cada projeto deve custar no fim, mantido o ritmo atual (valor agregado).', repEac(projects))
         + panel('Custo Projeto Total', 'Notas fiscais de serviço e faturas por projeto, em R$.', repCost(d, projects));
     A().main.innerHTML = A().pageHead(['SysAttack', 'Relatórios & Dashs'], 'Relatórios & Dashs', 'Indicadores dos projetos (os projetos spot não entram aqui).') +
-      `<section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">${tab('projetos', 'Projetos')}${tab('orcamentaria', 'Orçamentária')}</div>${filter}</div></section>` + body;
+      `<section class="panel rp-top"><div class="panel-head rp-head"><div class="tabs" style="margin:0;border:0">${tab('projetos', 'Projetos')}${tab('orcamentaria', 'Orçamentária')}</div>${filter}</div></section>` + body;
     document.getElementById('rp-p').addEventListener('change', e => { st.project = e.target.value; view(); });
   }
 
