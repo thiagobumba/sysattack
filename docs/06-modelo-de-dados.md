@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **50**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **51**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -18,6 +18,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `spot_projects` | `id`, `name`, `client`, `provider`, `description`, `hours_model`, `contracted_hours`, `start_date`, `status`, `participants`, `recipients`, `billing_note`, `created_at`, `end_date`, `recurring`, `closed_scope`, `project_value`, `partner_hour_rate`, `partner_overage_rate` |
 | `spot_files` | `id`, `spot_id`, `title`, `description`, `file_name`, `size`, `content`, `uploaded_by`, `uploaded_at` |
 | `spot_invoices` | `id`, `spot_id`, `number`, `issue_date`, `due_date`, `amount`, `status`, `description`, `file_name`, `file_size`, `file_content`, `created_by`, `created_at`, `updated_at` |
+| `spot_requests` | `id`, `spot_id`, `channel`, `ticket_no`, `requester`, `received_at`, `title`, `description`, `status`, `assignee`, `solution`, `delivered_at`, `feature`, `module`, `updated_at` (pedidos dos projetos Spot evolutivos; `spot_projects` ganhou `kind` PADRAO/EVOL_SF/EVOL_PT e `ticket_url`) |
 | `spot_demands` | `id`, `spot_id`, `name`, `status`, `next_step`, `approved_hours`, `notes`, `updated_at` |
 | `spot_hours` | `id`, `spot_id`, `work_date`, `front`, `activity`, `demand_id`, `hours`, `created_by`, `created_at` |
 | `spot_actions` | `id`, `spot_id`, `kind`, `description`, `responsible`, `status`, `note`, `updated_at` |
@@ -41,7 +42,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 |---|---|---|
 | Acesso | `users`, `recovery_codes`, `user_tokens` | Senha como PBKDF2; tokens de convite só como hash; segredo do 2FA criptografado |
 | Projetos | `projects`, `tasks`, `finance_entries`, `documents`, `project_changes`, `ishikawa`, `ishikawa_causes` | `tasks` guarda tarefas, filhas (`parent_id`), marcos (`is_milestone`), predecessora (`depends_on`), importância (`is_important`) e dia da conclusão (`completed_at`) |
-| Spot | `spot_projects`, `spot_files`, `spot_invoices`, `spot_demands`, `spot_hours`, `spot_actions`, `spot_audit`, `spot_reports` | Arquivos e notas fiscais ficam **dentro do banco** |
+| Spot | `spot_projects`, `spot_files`, `spot_invoices`, `spot_demands`, `spot_requests`, `spot_hours`, `spot_actions`, `spot_audit`, `spot_reports` | Arquivos e notas fiscais ficam **dentro do banco** |
 | E-mail | `email_settings`, `email_rules`, `email_log`, `email_test_log` | Senha do SMTP criptografada com a `ai.key` |
 | IA | `ai_settings` | Chaves das IAs (Claude, OpenAI, Azure) criptografadas (AES-256-GCM) |
 | Sistema | `app_meta`, `audit_log` | `app_meta` guarda versão do esquema, identificador do banco e a marca `seeded` |
@@ -57,6 +58,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `project_changes.status` | PENDENTE, APROVADA, REJEITADA |
 | `ishikawa_causes.category` | METODO, MATERIAL, MAO_DE_OBRA, MAQUINA, MEIO_AMBIENTE, MEDICAO |
 | `spot_projects.status` | ATIVO, PAUSADO, ENCERRADO |
+| `spot_requests.status` | TRIAGEM, EM_DESENVOLVIMENTO, EM_HOMOLOGACAO, ENTREGUE, RECUSADA |
 | `spot_demands.status` | EM_ANALISE, APROVADO, EM_ANDAMENTO, EM_HOMOLOGACAO, EM_ESPERA, CONCLUIDA, CANCELADA |
 | `spot_actions.kind` / `status` | ACAO, PENDENCIA / PENDENTE, A_CONFIRMAR, PARCIAL, CONCLUIDO |
 | `spot_invoices.status` | EMITIDA, PAGA, CANCELADA |

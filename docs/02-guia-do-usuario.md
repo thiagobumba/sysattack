@@ -129,7 +129,9 @@ Para todos os usuários (Projetos Spot não entram). Os relatórios são **de um
 
 ## Projetos Spot
 
-Menu **Projetos Spot**. A lista tem guias **Contrato** (recorrentes), **Escopo fechado** e **Avulsos** (quando existirem).
+Menu **Projetos Spot**. A lista tem guias **Contrato** (recorrentes), **Escopo fechado**, **Evolutivas** e **Avulsos** (quando existirem).
+
+**Evolutivas Salesforce / Evolutivas Protheus:** escolha o **Tipo do projeto** no cadastro. O projeto reúne os pedidos que os usuários fazem por e-mail ou chamado TIFlux (não controla horas). Na aba **Demandas** registre cada pedido: canal, nº do chamado (vira link se você informar o **link base** com `{n}`), solicitante, o que foi pedido, situação (Triagem → Em desenvolvimento → Em homologação → Entregue, ou Recusada), responsável e **o que o TI fez**. Para marcar **Entregue** é preciso informar a **feature**; pedidos parecidos usam o mesmo nome e aparecem agrupados na aba **Features entregues**. O **Resumo** lista os pedidos em aberto com os dias de espera.
 
 - **Projeto:** nome, cliente, fornecedor/equipe, modelo (franquia mensal ou pacote), horas fixadas, início, data final (vigência), participantes do comitê, destinatários e observação de faturamento. **Escopo fechado** não controla horas; exige o valor do projeto em R$.
 - **Semáforo de horas:** na lista (coluna Saúde) e no Resumo (painel Ritmo de horas) a franquia é dividida pelas semanas úteis do período e comparada com o que já foi consumido: verde = no ritmo, amarelo = perto do limite, vermelho = vai estourar. O painel mostra até quando o saldo dura e quanto ainda cabe por semana. Na primeira semana útil aparece "poucos dados".

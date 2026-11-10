@@ -28,6 +28,9 @@ final class SpotService {
     private static final Set<String> HOURS_MODEL = Set.of("MENSAL", "PACOTE");
     private static final Set<String> SPOT_STATUS = Set.of("ATIVO", "PAUSADO", "ENCERRADO");
     private static final Set<String> DEMAND_STATUS = Set.of("EM_ANALISE", "APROVADO", "EM_ANDAMENTO", "EM_HOMOLOGACAO", "EM_ESPERA", "CONCLUIDA", "CANCELADA");
+    private static final Set<String> REQ_STATUS = Set.of("TRIAGEM", "EM_DESENVOLVIMENTO", "EM_HOMOLOGACAO", "ENTREGUE", "RECUSADA");
+    private static final Set<String> REQ_CHANNEL = Set.of("TIFLUX", "EMAIL");
+    private static final Set<String> SPOT_KIND = Set.of("PADRAO", "EVOL_SF", "EVOL_PT");
     private static final Set<String> ACTION_STATUS = Set.of("PENDENTE", "A_CONFIRMAR", "PARCIAL", "CONCLUIDO");
     private static final Set<String> INVOICE_STATUS = Set.of("EMITIDA", "PAGA", "CANCELADA");
     private static final String INVOICE_COLS = "id, spot_id, number, issue_date, due_date, amount, status, description, file_name, file_size, created_by, created_at";
@@ -58,7 +61,7 @@ final class SpotService {
         } catch (NumberFormatException e) {
             // /spot/{hours|demands|actions|reports}/{id}
         }
-        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : null;
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : k.equals("requests") ? "spot_requests" : null;
         if (table == null || s.size() < 3) return null;
         Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
@@ -91,6 +94,7 @@ final class SpotService {
                 case "hours": return itemRoute(m, s, req, "spot_hours", user);
                 case "demands": return itemRoute(m, s, req, "spot_demands", user);
                 case "actions": return itemRoute(m, s, req, "spot_actions", user);
+                case "requests": return itemRoute(m, s, req, "spot_requests", user);
                 case "files": return fileRoute(m, s, resp);
                 case "invoices":
                     if (s.size() == 4 && s.get(3).equals("file")) return invoiceFile(m, s, req, resp, user);
@@ -120,6 +124,10 @@ final class SpotService {
                         if (m.equals("GET")) return Db.query("SELECT d.*, (SELECT COALESCE(SUM(h.hours), 0) FROM spot_hours h WHERE h.demand_id = d.id) hours_total, (SELECT COUNT(*) FROM spot_hours h WHERE h.demand_id = d.id) entries"
                                 + " FROM spot_demands d WHERE d.spot_id = ? ORDER BY CASE WHEN d.status IN ('CONCLUIDA','CANCELADA') THEN 1 ELSE 0 END, d.id", id);
                         if (m.equals("POST")) return saveDemand(null, id, ApiServlet.body(req));
+                        break;
+                    case "requests":
+                        if (m.equals("GET")) return Db.query("SELECT * FROM spot_requests WHERE spot_id = ? ORDER BY CASE WHEN status IN ('ENTREGUE','RECUSADA') THEN 1 ELSE 0 END, received_at DESC, id DESC", id);
+                        if (m.equals("POST")) return saveRequest(null, id, ApiServlet.body(req));
                         break;
                     case "actions":
                         if (m.equals("GET")) return Db.query("SELECT * FROM spot_actions WHERE spot_id = ? ORDER BY kind, CASE WHEN status = 'CONCLUIDO' THEN 1 ELSE 0 END, id", id);
@@ -172,6 +180,7 @@ final class SpotService {
             p.put("period_label", snap.get("period_label"));
             p.put("scope", scopeSummary(p, LocalDate.now()));
             p.put("finance", financeSummary(p));
+            p.put("evo", evoSummary(((Number) p.get("id")).longValue()));
         }
         return rows;
     }
@@ -185,6 +194,7 @@ final class SpotService {
         p.put("summary", SpotCalc.snapshot(p, r));
         p.put("scope", scopeSummary(p, r));
         p.put("finance", financeSummary(p));
+        p.put("evo", evoSummary(id));
         return p;
     }
 
@@ -386,23 +396,72 @@ final class SpotService {
         return String.join(", ", out);
     }
 
+    /** Projetos evolutivos: total de pedidos, entregues, em andamento e na triagem. */
+    private static Map<String, Object> evoSummary(long spotId) throws SQLException {
+        Map<String, Object> r = new java.util.LinkedHashMap<>();
+        Map<String, Object> row = Db.one("SELECT COUNT(*) total,"
+                + " SUM(CASE WHEN status = 'ENTREGUE' THEN 1 ELSE 0 END) delivered,"
+                + " SUM(CASE WHEN status IN ('EM_DESENVOLVIMENTO','EM_HOMOLOGACAO') THEN 1 ELSE 0 END) doing,"
+                + " SUM(CASE WHEN status = 'TRIAGEM' THEN 1 ELSE 0 END) triage,"
+                + " SUM(CASE WHEN status = 'RECUSADA' THEN 1 ELSE 0 END) refused,"
+                + " COUNT(DISTINCT CASE WHEN status = 'ENTREGUE' AND feature <> '' THEN LOWER(feature) END) features"
+                + " FROM spot_requests WHERE spot_id = ?", spotId);
+        for (String k : new String[]{"total", "delivered", "doing", "triage", "refused", "features"}) r.put(k, row.get(k) == null ? 0L : ((Number) row.get(k)).longValue());
+        return r;
+    }
+
+    private static Object saveRequest(Long id, long spotId, JsonObject b) throws SQLException {
+        String title = ApiServlet.str(b, "title", "Pedido", 200, true);
+        String channel = ApiServlet.str(b, "channel", "Canal", 10, true);
+        String ticket = ApiServlet.str(b, "ticket_no", "Nº do chamado", 40, false);
+        String requester = ApiServlet.str(b, "requester", "Solicitante", 160, false);
+        LocalDate received = ApiServlet.date(b, "received_at", "Recebido em");
+        String desc = ApiServlet.str(b, "description", "Descrição do pedido", 2000, false);
+        String status = ApiServlet.str(b, "status", "Situação", 20, true);
+        String assignee = ApiServlet.str(b, "assignee", "Responsável do TI", 120, false);
+        String solution = ApiServlet.str(b, "solution", "Solução do TI", 2000, false);
+        LocalDate delivered = ApiServlet.optDate(b, "delivered_at", "Entregue em");
+        String feature = ApiServlet.str(b, "feature", "Feature", 200, false);
+        String module = ApiServlet.str(b, "module", "Módulo / objeto", 80, false);
+        if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
+        if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
+        if (status.equals("ENTREGUE")) {
+            if (feature.isEmpty()) throw new ApiException(400, "Para marcar como entregue, informe a feature entregue.");
+            if (delivered == null) delivered = LocalDate.now();
+        } else if (!status.equals("RECUSADA")) delivered = null;
+        if (delivered != null && delivered.isBefore(received)) throw new ApiException(400, "A entrega não pode ser anterior ao recebimento.");
+        if (id == null) {
+            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module);
+        } else {
+            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, id);
+        }
+        return Db.one("SELECT * FROM spot_requests WHERE id = ?", id);
+    }
+
     private static Object saveProject(Long id, JsonObject b) throws SQLException {
         String name = ApiServlet.str(b, "name", "Nome", 160, true);
         String client = ApiServlet.str(b, "client", "Cliente", 160, false);
         String provider = ApiServlet.str(b, "provider", "Fornecedor / equipe", 160, false);
         String desc = ApiServlet.str(b, "description", "Descrição", 2000, false);
-        boolean closedScope = ApiServlet.bool(b, "closed_scope");
+        String kind = b.has("kind") && !b.get("kind").isJsonNull() ? b.get("kind").getAsString() : "PADRAO";
+        if (!SPOT_KIND.contains(kind)) throw new ApiException(400, "Tipo de projeto inválido.");
+        boolean evo = !kind.equals("PADRAO"); // evolutivo não controla horas nem valor de escopo: só pedidos, soluções e features
+        String ticketUrl = ApiServlet.str(b, "ticket_url", "Link base do chamado", 300, false);
+        if (!ticketUrl.isEmpty() && !ticketUrl.matches("(?i)^https?://\\S+$")) throw new ApiException(400, "O link do chamado precisa começar com http:// ou https://.");
+        boolean closedScope = !evo && ApiServlet.bool(b, "closed_scope");
         BigDecimal value = closedScope ? ApiServlet.money(b, "project_value", "Valor do projeto (R$)", true) : BigDecimal.ZERO.setScale(2);
         if (closedScope && value.signum() <= 0) throw new ApiException(400, "Informe o valor do projeto (R$) do escopo fechado.");
         // escopo fechado: não controla horas (modelo e horas fixadas não se aplicam)
-        String model = closedScope ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
-        BigDecimal hours = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
+        String model = closedScope || evo ? "PACOTE" : ApiServlet.str(b, "hours_model", "Modelo de horas", 10, true);
+        BigDecimal hours = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "contracted_hours", "Horas fixadas", true);
         // valor da hora do parceiro (normal e excedente): opcionais, só para projetos que controlam horas
-        BigDecimal rate = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_hour_rate", "Hora desenvolvimento parceiro (R$)", false);
-        BigDecimal overRate = closedScope ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_overage_rate", "Hora excedente desenvolvimento parceiro (R$)", false);
+        BigDecimal rate = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_hour_rate", "Hora desenvolvimento parceiro (R$)", false);
+        BigDecimal overRate = closedScope || evo ? BigDecimal.ZERO.setScale(2) : ApiServlet.money(b, "partner_overage_rate", "Hora excedente desenvolvimento parceiro (R$)", false);
         LocalDate start = ApiServlet.date(b, "start_date", "Início");
         LocalDate end = ApiServlet.optDate(b, "end_date", "Data final");
-        boolean recurring = !closedScope && ApiServlet.bool(b, "recurring"); // escopo fechado e contrato são tipos excludentes
+        boolean recurring = !closedScope && !evo && ApiServlet.bool(b, "recurring"); // escopo fechado e contrato são tipos excludentes
         String status = ApiServlet.str(b, "status", "Situação", 12, true);
         String participants = ApiServlet.str(b, "participants", "Participantes", 1000, false);
         String recipients = normalizeRecipients(ApiServlet.str(b, "recipients", "Destinatários", 1000, false));
@@ -412,11 +471,11 @@ final class SpotService {
         if (!SPOT_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (hours.compareTo(new BigDecimal("999999")) > 0) throw new ApiException(400, "Horas fixadas inválidas.");
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value,partner_hour_rate,partner_overage_rate)"
-                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate);
+            id = Db.insert("INSERT INTO spot_projects(name,client,provider,description,hours_model,contracted_hours,start_date,end_date,recurring,status,participants,recipients,billing_note,closed_scope,project_value,partner_hour_rate,partner_overage_rate,kind,ticket_url)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl);
         } else {
             Db.update("UPDATE spot_projects SET name=?, client=?, provider=?, description=?, hours_model=?, contracted_hours=?, start_date=?, end_date=?, recurring=?, status=?,"
-                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=?, partner_hour_rate=?, partner_overage_rate=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, id);
+                    + " participants=?, recipients=?, billing_note=?, closed_scope=?, project_value=?, partner_hour_rate=?, partner_overage_rate=?, kind=?, ticket_url=? WHERE id=?", name, client, provider, desc, model, hours, start, end, recurring, status, participants, recipients, billing, closedScope, value, rate, overRate, kind, ticketUrl, id);
         }
         return project(id);
     }
@@ -437,6 +496,7 @@ final class SpotService {
             switch (table) {
                 case "spot_hours": return saveHour(id, spotId, b, user);
                 case "spot_demands": return saveDemand(id, spotId, b);
+                case "spot_requests": return saveRequest(id, spotId, b);
                 case "spot_invoices": return saveInvoice(id, spotId, b, user);
                 default: return saveAction(id, spotId, b);
             }

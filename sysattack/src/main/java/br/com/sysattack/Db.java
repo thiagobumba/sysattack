@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 50;
+    private static final int SCHEMA_VERSION = 51;
 
     private Db() {}
 
@@ -209,6 +209,26 @@ public final class Db {
                     + "approved_hours DECIMAL(8,2) NOT NULL DEFAULT 0,"
                     + "notes VARCHAR(1000) NOT NULL DEFAULT '',"
                     + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            // ---- Projetos Spot evolutivos (Salesforce / Protheus): pedidos por e-mail ou chamado TIFlux ----
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'PADRAO' NOT NULL");
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS ticket_url VARCHAR(300) DEFAULT '' NOT NULL");
+            s.execute("CREATE TABLE IF NOT EXISTS spot_requests ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                    + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"
+                    + "channel VARCHAR(10) NOT NULL DEFAULT 'TIFLUX',"
+                    + "ticket_no VARCHAR(40) NOT NULL DEFAULT '',"
+                    + "requester VARCHAR(160) NOT NULL DEFAULT '',"
+                    + "received_at DATE NOT NULL,"
+                    + "title VARCHAR(200) NOT NULL,"
+                    + "description VARCHAR(2000) NOT NULL DEFAULT '',"
+                    + "status VARCHAR(20) NOT NULL DEFAULT 'TRIAGEM',"
+                    + "assignee VARCHAR(120) NOT NULL DEFAULT '',"
+                    + "solution VARCHAR(2000) NOT NULL DEFAULT '',"
+                    + "delivered_at DATE,"
+                    + "feature VARCHAR(200) NOT NULL DEFAULT '',"
+                    + "module VARCHAR(80) NOT NULL DEFAULT '',"
+                    + "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_spot_requests ON spot_requests(spot_id, received_at)");
             s.execute("CREATE TABLE IF NOT EXISTS spot_hours ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "spot_id BIGINT NOT NULL REFERENCES spot_projects(id) ON DELETE CASCADE,"

@@ -72,6 +72,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 | `GET/PUT/DELETE /spot/{id}` | Detalhe (`?ref=` data de referência), alterar, excluir |
 | `GET/POST /spot/{id}/hours` · `…/hours/{hid}` | Apontamentos (`?month=`, `?from=&to=`) |
 | `GET/POST /spot/{id}/demands` · `…/demands/{did}` | Demandas |
+| `GET/POST /spot/{id}/requests` · `…/requests/{rid}` | Pedidos dos projetos evolutivos (`kind` `EVOL_SF`/`EVOL_PT`): canal `TIFLUX`/`EMAIL`, nº do chamado, solicitante, situação (`TRIAGEM`, `EM_DESENVOLVIMENTO`, `EM_HOMOLOGACAO`, `ENTREGUE`, `RECUSADA`), solução do TI e feature (obrigatória ao entregar). `GET /spot` e `GET /spot/{id}` trazem `kind`, `ticket_url` e o resumo `evo` |
 | `GET/POST /spot/{id}/actions` · `…/actions/{aid}` | Ações e pendências |
 | `GET/POST /spot/{id}/invoices` · `…/invoices/{iid}` · `…/invoices/{iid}/file` | Notas do escopo fechado |
 | `GET/PUT/POST/DELETE /spot/{id}/logo` | Imagem do projeto Spot (mesmas regras de `/projects/{id}/logo`; em projeto encerrado exige administrador e `X-Justification`) |

@@ -48,7 +48,7 @@ const Spot = (() => {
   function spotOf(url) {
     const m = /^spot\/(\d+)/.exec(url);
     if (m) return Number(m[1]);
-    return /^spot\/(hours|demands|actions|reports|files|invoices)\//.test(url) ? st.id : null;
+    return /^spot\/(hours|demands|actions|reports|files|invoices|requests)\//.test(url) ? st.id : null;
   }
   async function api(method, url, body) {
     if (method !== 'GET' && !/\/send$/.test(url)) {
@@ -67,6 +67,14 @@ const Spot = (() => {
   const A_STATUS = { PENDENTE: ['Pendente', 'b-red'], A_CONFIRMAR: ['A confirmar', 'b-orange'], PARCIAL: ['Parcial', 'b-orange'], CONCLUIDO: ['Concluído', 'b-green'] };
   const S_STATUS = { ATIVO: ['Ativo', 'b-green'], PAUSADO: ['Pausado', 'b-orange'], ENCERRADO: ['Encerrado', 'b-grey'] };
   const MODEL = { MENSAL: 'Franquia mensal', PACOTE: 'Pacote de horas' };
+  const R_STATUS = { TRIAGEM: ['Triagem', 'b-grey'], EM_DESENVOLVIMENTO: ['Em desenvolvimento', 'b-orange'], EM_HOMOLOGACAO: ['Em homologação', 'b-dark'], ENTREGUE: ['Entregue', 'b-green'], RECUSADA: ['Recusada', 'b-red'] };
+  const R_CHANNEL = { TIFLUX: 'TIFlux', EMAIL: 'E-mail' };
+  const P_KIND = { PADRAO: 'Spot padrão', EVOL_SF: 'Evolutivas Salesforce', EVOL_PT: 'Evolutivas Protheus' };
+  const isEvo = p => !!p && !!p.kind && p.kind !== 'PADRAO';
+  const evoMode = () => isEvo(st.data);
+  /** Link do chamado: troca {n} no endereço-base pelo número; sem {n}, o número vai ao final. */
+  const ticketHref = (p, no) => !p || !p.ticket_url || !no ? '' : (/\{n\}/.test(p.ticket_url) ? p.ticket_url.replace(/\{n\}/g, encodeURIComponent(no)) : p.ticket_url.replace(/\/?$/, '/') + encodeURIComponent(no));
+  const ticketCell = (p, r) => { const hr = ticketHref(p, r.ticket_no); return r.ticket_no ? (hr ? `<a href="${esc(hr)}" target="_blank" rel="noopener" class="strong">#${esc(r.ticket_no)}</a>` : `<b>#${esc(r.ticket_no)}</b>`) : '<span class="small">sem nº</span>'; };
   const KIND = { ACAO: 'Ação do último comitê', PENDENCIA: 'Pendência' };
 
   let st = { id: null, tab: 'resumo', from: null, to: null, data: null, hours: [], demands: [], actions: [], reports: [] };
@@ -209,8 +217,8 @@ const Spot = (() => {
   const endedNote = p => overdue(p) ? '<span class="small late-txt">Vigência encerrada: encerre o projeto ou ajuste a data.</span>' : '';
 
   // ------------------------------------------------------------------ lista (guias por tipo de projeto)
-  const KINDS = { CONTRATO: 'Contrato', ESCOPO: 'Escopo fechado', AVULSO: 'Avulsos' };
-  const kindOf = p => p.closed_scope ? 'ESCOPO' : p.recurring ? 'CONTRATO' : 'AVULSO';
+  const KINDS = { CONTRATO: 'Contrato', ESCOPO: 'Escopo fechado', EVOL: 'Evolutivas', AVULSO: 'Avulsos' };
+  const kindOf = p => isEvo(p) ? 'EVOL' : p.closed_scope ? 'ESCOPO' : p.recurring ? 'CONTRATO' : 'AVULSO';
   let listTab = 'CONTRATO';
   const pct = p => `<div class="pbar"><div class="pbar-track"><div class="pbar-fill${p >= 100 ? ' done' : ''}" style="width:${p}%"></div></div><span>${p}%</span></div>`;
 
@@ -218,8 +226,8 @@ const Spot = (() => {
     const list = await api('GET', 'spot');
     list.forEach(p => { if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id); });
     const count = k => list.filter(p => kindOf(p) === k).length;
-    if (!count(listTab) && listTab !== 'CONTRATO' && listTab !== 'ESCOPO') listTab = 'CONTRATO';
-    const kinds = ['CONTRATO', 'ESCOPO'].concat(count('AVULSO') || listTab === 'AVULSO' ? ['AVULSO'] : []);
+    if (!count(listTab) && listTab !== 'CONTRATO' && listTab !== 'ESCOPO' && listTab !== 'EVOL') listTab = 'CONTRATO';
+    const kinds = ['CONTRATO', 'ESCOPO', 'EVOL'].concat(count('AVULSO') || listTab === 'AVULSO' ? ['AVULSO'] : []);
     const rows = list.filter(p => kindOf(p) === listTab);
     const acts = p => `<td class="acts">${p.recurring && !p.closed_scope ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td>`;
@@ -237,12 +245,16 @@ const Spot = (() => {
           <td>${healthChip(p.scope.health)}${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
           <td class="num strong">${brl(p.project_value)}<span class="small">${brl(p.finance.invoiced)} faturado (${p.finance.pct_invoiced}%)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
+    const tableEvo = `<table class="tbl"><thead><tr><th>Projeto</th><th>Tipo</th><th class="num">Pedidos</th><th class="num">Entregues</th><th class="num">Em andamento</th><th class="num">Na triagem</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}<td>${esc(P_KIND[p.kind] || '')}</td>
+          <td class="num strong">${p.evo.total}</td><td class="num">${p.evo.delivered}<span class="small">${p.evo.features} feature(s)</span></td><td class="num">${p.evo.doing}</td>
+          <td class="num ${p.evo.triage ? 'late-txt' : ''}">${p.evo.triage}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
     A().main.innerHTML = A().pageHead(['SysAttack', 'Projetos Spot'], 'Projetos Spot', 'Projetos ágeis por horas (contrato) ou de escopo fechado: consumo, demandas, entregas e relatórios de acompanhamento.') + `
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
         ${kinds.map(k => `<button class="tab ${listTab === k ? 'active' : ''}" data-action="sp-list-tab" data-kind="${k}">${KINDS[k]} (${count(k)})</button>`).join('')}</div>
         <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
-        <div class="table-wrap">${rows.length ? (listTab === 'ESCOPO' ? tableScope : tableHours)
-        : empty('Nenhum projeto nesta guia', listTab === 'ESCOPO' ? 'Cadastre um projeto marcando “Escopo fechado”: não controla horas, só escopo, demandas e entregas.' : 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
+        <div class="table-wrap">${rows.length ? (listTab === 'ESCOPO' ? tableScope : listTab === 'EVOL' ? tableEvo : tableHours)
+        : empty('Nenhum projeto nesta guia', listTab === 'ESCOPO' ? 'Cadastre um projeto marcando “Escopo fechado”: não controla horas, só escopo, demandas e entregas.' : listTab === 'EVOL' ? 'Cadastre um projeto do tipo “Evolutivas Salesforce” ou “Evolutivas Protheus” para reunir os pedidos que chegam por e-mail ou chamado TIFlux e as features entregues.' : 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
   }
 
   // ------------------------------------------------------------------ detalhe
@@ -253,19 +265,58 @@ const Spot = (() => {
     if (p.status === 'ENCERRADO') closedIds.add(p.id); else closedIds.delete(p.id);
     const s = p.summary;
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
-    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + ' · ' + s.period_label].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
+    A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (isEvo(p) ? P_KIND[p.kind] : p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + (isEvo(p) ? '' : ' · ' + s.period_label)].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${isEvo(p) ? '' : p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
         ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-        ${p.closed_scope ? scopeCards(p.scope) + scopeHealthNote(p.scope.health) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
+        ${isEvo(p) ? evoCards(p.evo) : p.closed_scope ? scopeCards(p.scope) + scopeHealthNote(p.scope.health) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
-        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
+        <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${isEvo(p) ? `<span class="badge b-dark">${esc(P_KIND[p.kind])}</span>` : p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${p.closed_scope ? tab('tradicional', 'Relatório tradicional') : ''}${tab('relatorios', 'Relatórios com IA')}</div>
+        ${isEvo(p) ? tab('resumo', 'Resumo') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('acoes', 'Ações e pendências') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + tab('acoes', 'Ações e pendências') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
+  }
+
+  function evoCards(e) {
+    const c = (l, v, cls = '') => `<div class="mini"><span>${l}</span><b class="${cls}">${v}</b></div>`;
+    return `<div class="mini-kpis">${c('Pedidos recebidos', e.total)}${c('Entregues', e.delivered)}${c('Em andamento', e.doing)}${c('Na triagem', e.triage, e.triage ? 'late-txt' : '')}${c('Features no projeto', e.features)}</div>`;
+  }
+
+  async function renderEvoTab(host) {
+    const p = st.data, id = st.id;
+    st.requests = await api('GET', `spot/${id}/requests`);
+    const rows = st.requests;
+    if (st.tab === 'resumo') {
+      const open = rows.filter(r => r.status !== 'ENTREGUE' && r.status !== 'RECUSADA');
+      const dias = r => Math.max(0, Math.round((new Date(todayIso()) - new Date(String(r.received_at).slice(0, 10))) / 86400000));
+      host.innerHTML = `<h3 style="margin:0 0 10px;font-size:15px">Pedidos em aberto</h3>` + (open.length
+        ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Pedido</th><th>Solicitante</th><th>Responsável</th><th>Situação</th><th class="num">Dias em aberto</th></tr></thead><tbody>
+        ${open.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td class="strong">${esc(r.title)}</td><td>${esc(r.requester || '—')}</td><td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}</td><td class="num ${dias(r) > 15 ? 'late-txt' : ''}">${dias(r)}</td></tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhum pedido em aberto', rows.length ? 'Todos os pedidos foram entregues ou recusados.' : 'Cadastre os pedidos na aba Demandas.'));
+    } else if (st.tab === 'demandas') {
+      const f = st.reqFilter || 'ABERTAS';
+      const shown = rows.filter(r => f === 'TODAS' || (f === 'ABERTAS' ? r.status !== 'ENTREGUE' && r.status !== 'RECUSADA' : f === 'TIFLUX' || f === 'EMAIL' ? r.channel === f : r.status === f));
+      const chip = (k, l) => `<button class="btn btn-sm${f === k ? ' btn-primary' : ''}" data-action="sp-req-filter" data-f="${k}">${l}</button>`;
+      const cut = t => esc(t.length > 140 ? t.slice(0, 140) + '…' : t);
+      host.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('ABERTAS', 'Em aberto')}${chip('ENTREGUE', 'Entregues')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>` + (shown.length
+        ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Recebido</th><th>Solicitante</th><th>Pedido</th><th>Responsável do TI</th><th>Situação</th><th>Feature</th><th></th></tr></thead><tbody>
+        ${shown.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td>${fmt(String(r.received_at).slice(0, 10))}</td><td>${esc(r.requester || '—')}</td>
+          <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}</td>
+          <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
+          <td>${r.feature ? esc(r.feature) + (r.module ? `<span class="small">${esc(r.module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
+    } else if (st.tab === 'features') {
+      const groups = new Map();
+      rows.filter(r => r.status === 'ENTREGUE' && r.feature).forEach(r => { const k = r.feature.trim().toLowerCase(); (groups.get(k) || groups.set(k, { name: r.feature, module: r.module, list: [] }).get(k)).list.push(r); });
+      const dt = g => String(g.list[0].delivered_at || '').slice(0, 10);
+      const arr = [...groups.values()].sort((a, b) => dt(b).localeCompare(dt(a)));
+      host.innerHTML = arr.length ? arr.map(g => `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><b style="font-size:15px">${esc(g.name)}</b>${g.module ? `<span class="badge b-grey">${esc(g.module)}</span>` : ''}<span class="small" style="margin-left:auto">${g.list.length} pedido(s) · entregue em ${fmt(dt(g))}</span></div>
+        ${g.list.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}</div>`).join('')}</div>`).join('')
+        : empty('Nenhuma feature entregue ainda', 'Quando um pedido for marcado como Entregue, a feature aparece aqui com os pedidos que a originaram.');
+    }
   }
 
   async function renderTab() {
@@ -274,6 +325,7 @@ const Spot = (() => {
     const b = (a, l, primary = true) => `<button class="btn ${primary ? 'btn-primary ' : ''}btn-sm" data-action="${a}">${l}</button>`;
     act.innerHTML = locked() ? '' : { resumo: '', horas: closedScope() ? b('sp-new-hour', '+ Novo apontamento') : b('sp-import', 'Importar relatório (HTML)', false) + b('sp-new-hour', '+ Lançar horas'), escopo: b('sp-new-file', '+ Anexar arquivo do escopo'), financeiro: b('sp-new-invoice', '+ Lançar nota'), demandas: b('sp-import-demand', 'Importar relatório (HTML)', false) + b('sp-new-demand', '+ Nova demanda'), acoes: b('sp-import-action', 'Importar relatório (HTML)', false) + b('sp-new-action', '+ Nova ação / pendência'), tradicional: b('sp-new-manual', '+ Novo relatório'), relatorios: b('sp-import-report', 'Importar relatório (HTML)', false) + b('sp-new-report', '✦ Gerar relatório') }[st.tab];
     const id = st.id;
+    if (evoMode() && st.tab !== 'acoes') { act.innerHTML = locked() || st.tab !== 'demandas' ? '' : b('sp-new-req', '+ Nova demanda'); return renderEvoTab(host); }
     if (st.tab === 'resumo') {
       const s = st.data.summary;
       if (closedScope()) {
@@ -381,32 +433,44 @@ const Spot = (() => {
 
   function projectForm(id, copyFrom) {
     return (async () => {
-      const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: listTab === 'CONTRATO', closed_scope: listTab === 'ESCOPO', status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
+      const p = id ? await api('GET', 'spot/' + id) : copyFrom ? await copyTemplate(copyFrom) : { name: '', client: '', provider: '', description: '', hours_model: 'MENSAL', contracted_hours: '', start_date: todayIso(), end_date: '', recurring: listTab === 'CONTRATO', closed_scope: listTab === 'ESCOPO', kind: listTab === 'EVOL' ? 'EVOL_SF' : 'PADRAO', ticket_url: '', status: 'ATIVO', participants: '', recipients: '', billing_note: '' };
       A().openDialog(id ? 'Editar projeto spot' : copyFrom ? 'Copiar projeto spot' : 'Novo projeto spot', `
         ${Logo.field('S', copyFrom ? {} : p)}
+        <div class="field full"><label for="sk">Tipo do projeto</label><select id="sk" name="kind">${opts(P_KIND, p.kind || 'PADRAO')}</select><small class="fhint" id="sk-h"></small></div>
+        <div class="field full" id="tk-f"><label for="tk">Link base do chamado TIFlux <span class="opt">(opcional)</span></label><input id="tk" name="ticket_url" maxlength="300" value="${esc(p.ticket_url || '')}" placeholder="https://seu-tiflux/tickets/{n}"><small class="fhint">Use {n} onde vai o número do chamado. Sem {n}, o número é colocado no fim do endereço.</small></div>
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
-        <div class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
-        <div class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
-        <div class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor. <b>Informe o valor sem impostos.</b></small></div>
-        <div class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> <b>Informe o valor sem impostos.</b></small></div>
-        <div class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
+        <div data-std class="field"><label for="sm">Modelo de horas</label><select id="sm" name="hours_model">${opts(MODEL, p.hours_model)}</select></div>
+        <div data-std class="field"><label for="sh">Horas fixadas</label><input id="sh" name="contracted_hours" type="number" min="0" step="0.5" value="${p.contracted_hours}" required></div>
+        <div data-std class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor. <b>Informe o valor sem impostos.</b></small></div>
+        <div data-std class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> <b>Informe o valor sem impostos.</b></small></div>
+        <div data-std class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
-        <div class="field full"><label class="check"><input type="checkbox" name="closed_scope" ${p.closed_scope ? 'checked' : ''}> <b>Escopo fechado</b> — não controla horas; controla só o escopo, o que foi feito e entregue (demandas e apontamentos) e guarda o arquivo do escopo.</label></div>
-        <div class="field full"><label class="check"><input type="checkbox" name="recurring" ${p.recurring ? 'checked' : ''}> <b>Contrato recorrente</b> — repete a cada período (ex.: franquia mensal). O cadastro continua o mesmo; muda só o que é registrado nas demandas.</label></div>
+        <div data-std class="field full"><label class="check"><input type="checkbox" name="closed_scope" ${p.closed_scope ? 'checked' : ''}> <b>Escopo fechado</b> — não controla horas; controla só o escopo, o que foi feito e entregue (demandas e apontamentos) e guarda o arquivo do escopo.</label></div>
+        <div data-std class="field full"><label class="check"><input type="checkbox" name="recurring" ${p.recurring ? 'checked' : ''}> <b>Contrato recorrente</b> — repete a cada período (ex.: franquia mensal). O cadastro continua o mesmo; muda só o que é registrado nas demandas.</label></div>
         <div class="field full"><label for="spa">Participantes do comitê</label><input id="spa" name="participants" maxlength="1000" value="${esc(p.participants)}" placeholder="Nomes separados por vírgula"></div>
         <div class="field full"><label for="sr">Destinatários dos relatórios (e-mails)</label><input id="sr" name="recipients" maxlength="1000" value="${esc(p.recipients)}" placeholder="gestor1@empresa.com, gestor2@empresa.com"></div>
         <div class="field full"><label for="sb">Observação de faturamento</label><input id="sb" name="billing_note" maxlength="1000" value="${esc(p.billing_note)}" placeholder="Ex.: excedentes de agosto serão faturados à parte"></div>
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
-        <p class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const cs = !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); const lf = document.querySelector('#dlg form'); if (Logo.has(lf)) await Logo.apply('S', s.id, lf, await logoSender(s.id)); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        <p data-std class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
+        async d => { const evo = d.kind !== 'PADRAO'; const cs = !evo && !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, kind: d.kind || 'PADRAO', ticket_url: evo ? (d.ticket_url || '') : '', closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); const lf = document.querySelector('#dlg form'); if (Logo.has(lf)) await Logo.apply('S', s.id, lf, await logoSender(s.id)); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
       // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
       const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
       Logo.bind(f);
+      const kd = f.elements.kind;
+      const evoSync = () => {
+        const evo = kd.value !== 'PADRAO';
+        document.getElementById('tk-f').style.display = evo ? '' : 'none';
+        document.getElementById('sk-h').textContent = evo ? 'Reúne os pedidos que chegam por e-mail ou chamado TIFlux, o que o TI fez e a feature entregue. Não controla horas.' : '';
+        f.querySelectorAll('[data-std]').forEach(e => { e.style.display = evo ? 'none' : ''; });
+        if (evo) { cs.checked = false; rc.checked = false; }
+        for (const n of ['hours_model', 'contracted_hours', 'partner_hour_rate', 'partner_overage_rate', 'project_value']) { f.elements[n].disabled = evo || f.elements[n].disabled; }
+        if (!evo) sync();
+      };
       const sync = () => {
         for (const n of ['hours_model', 'contracted_hours']) { f.elements[n].disabled = cs.checked; f.elements[n].required = !cs.checked && n === 'contracted_hours'; }
         if (cs.checked) rc.checked = false;
@@ -423,6 +487,8 @@ const Spot = (() => {
       };
       cs.addEventListener('change', sync);
       sync();
+      kd.addEventListener('change', evoSync);
+      evoSync();
     })();
   }
 
@@ -447,6 +513,25 @@ const Spot = (() => {
       <div class="field full"><label for="dp">Próximo passo</label><input id="dp" name="next_step" maxlength="500" value="${esc(x.next_step)}"></div>
       <div class="field full"><label for="do">Observações</label><textarea id="do" name="notes" maxlength="1000">${esc(x.notes)}</textarea></div>`,
       async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/demands/' + id : `spot/${st.id}/demands`, d); A().toast('Demanda salva.'); });
+  }
+
+  function requestForm(id) {
+    const x = id ? st.requests.find(r => r.id === id) : { channel: 'TIFLUX', ticket_no: '', requester: '', received_at: todayIso(), title: '', description: '', status: 'TRIAGEM', assignee: '', solution: '', delivered_at: '', feature: '', module: '' };
+    A().openDialog(id ? 'Editar demanda' : 'Nova demanda', `
+      <div class="field"><label for="rc">Canal</label><select id="rc" name="channel">${opts(R_CHANNEL, x.channel)}</select></div>
+      <div class="field"><label for="rn">Nº do chamado <span class="opt">(opcional)</span></label><input id="rn" name="ticket_no" maxlength="40" value="${esc(x.ticket_no)}"></div>
+      <div class="field"><label for="rr">Solicitante</label><input id="rr" name="requester" maxlength="160" value="${esc(x.requester)}" placeholder="Nome · área"></div>
+      <div class="field"><label for="rd">Recebido em</label><input id="rd" name="received_at" type="date" value="${String(x.received_at).slice(0, 10)}" required></div>
+      <div class="field full"><label for="rt">Pedido (título)</label><input id="rt" name="title" maxlength="200" value="${esc(x.title)}" required></div>
+      <div class="field full"><label for="rx">O que foi pedido</label><textarea id="rx" name="description" maxlength="2000">${esc(x.description)}</textarea></div>
+      <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
+      <div class="field"><label for="ra">Responsável do TI</label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
+      <div class="field full"><label for="ro">O que o TI fez para resolver</label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
+      <div class="field"><label for="rf">Feature entregue <span class="opt">(obrigatória ao entregar)</span></label><input id="rf" name="feature" maxlength="200" value="${esc(x.feature)}" list="rf-list" placeholder="Ex.: Regra de desconto máximo"><datalist id="rf-list">${[...new Set((st.requests || []).map(r => r.feature).filter(Boolean))].map(f => `<option value="${esc(f)}">`).join('')}</datalist></div>
+      <div class="field"><label for="rm">Módulo / objeto</label><input id="rm" name="module" maxlength="80" value="${esc(x.module)}" placeholder="${st.data.kind === 'EVOL_PT' ? 'Ex.: Faturamento · MATA410' : 'Ex.: Oportunidade'}"></div>
+      <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>
+      <p class="hint full">Ao marcar “Entregue”, informe a feature. Pedidos parecidos podem usar o mesmo nome de feature: eles aparecem agrupados na aba Features entregues.</p>`,
+      async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...d, delivered_at: d.delivered_at || null }); A().toast('Demanda salva.'); });
   }
 
   function actionForm(id) {
@@ -875,6 +960,10 @@ const Spot = (() => {
       case 'sp-new-demand': demandForm(); break;
       case 'sp-edit-demand': demandForm(id); break;
       case 'sp-del-demand': await del('spot/demands/' + id, 'Excluir esta demanda? As horas lançadas nela permanecem, sem demanda.'); break;
+      case 'sp-new-req': requestForm(); break;
+      case 'sp-edit-req': requestForm(id); break;
+      case 'sp-del-req': await del('spot/requests/' + id, 'Excluir este pedido?'); break;
+      case 'sp-req-filter': st.reqFilter = el.dataset.f; await renderTab(); break;
       case 'sp-new-action': actionForm(); break;
       case 'sp-edit-action': actionForm(id); break;
       case 'sp-del-action': await del('spot/actions/' + id, 'Excluir este item?'); break;
