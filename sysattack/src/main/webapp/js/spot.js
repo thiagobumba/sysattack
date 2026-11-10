@@ -48,7 +48,7 @@ const Spot = (() => {
   function spotOf(url) {
     const m = /^spot\/(\d+)/.exec(url);
     if (m) return Number(m[1]);
-    return /^spot\/(hours|demands|actions|reports|files|invoices|requests|rfiles)\//.test(url) ? st.id : null;
+    return /^spot\/(hours|demands|actions|reports|files|invoices|requests|rfiles|features|ffiles)\//.test(url) ? st.id : null;
   }
   async function api(method, url, body) {
     if (method !== 'GET' && !/\/send$/.test(url)) {
@@ -75,6 +75,7 @@ const Spot = (() => {
   /** Link do chamado: troca {n} no endereço-base pelo número; sem {n}, o número vai ao final. */
   const ticketHref = (p, no) => !p || !p.ticket_url || !no ? '' : (/\{n\}/.test(p.ticket_url) ? p.ticket_url.replace(/\{n\}/g, encodeURIComponent(no)) : p.ticket_url.replace(/\/?$/, '/') + encodeURIComponent(no));
   const ticketCell = (p, r) => { const hr = ticketHref(p, r.ticket_no); return r.ticket_no ? (hr ? `<a href="${esc(hr)}" target="_blank" rel="noopener" class="strong">#${esc(r.ticket_no)}</a>` : `<b>#${esc(r.ticket_no)}</b>`) : '<span class="small">sem nº</span>'; };
+  const fmtNo = n => 'FT-' + String(n).padStart(3, '0');
   const KIND = { ACAO: 'Ação do último comitê', PENDENCIA: 'Pendência' };
 
   let st = { id: null, tab: 'resumo', from: null, to: null, data: null, hours: [], demands: [], actions: [], reports: [] };
@@ -289,6 +290,8 @@ const Spot = (() => {
     const p = st.data, id = st.id;
     st.requests = await api('GET', `spot/${id}/requests`);
     st.rfiles = await api('GET', `spot/${id}/request-files`);
+    st.features = await api('GET', `spot/${id}/features`);
+    st.ffiles = await api('GET', `spot/${id}/feature-files`);
     const rows = st.requests;
     const clips = r => { const fl = (st.rfiles || []).filter(f => f.request_id === r.id); return fl.length ? `<span class="small">${fl.map(f => `<a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener" title="${esc(f.file_name)}">📎 ${esc(f.file_name.length > 26 ? f.file_name.slice(0, 24) + '…' : f.file_name)}</a>`).join('<br>')}</span>` : ''; };
     if (st.tab === 'resumo') {
@@ -308,16 +311,18 @@ const Spot = (() => {
         ${shown.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td>${fmt(String(r.received_at).slice(0, 10))}</td><td>${esc(r.requester || '—')}</td>
           <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}${clips(r)}</td>
           <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
-          <td>${r.feature ? esc(r.feature) + (r.module ? `<span class="small">${esc(r.module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
+          <td>${r.feature_id ? `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}` + (r.feature_module ? `<span class="small">${esc(r.feature_module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
     } else if (st.tab === 'features') {
-      const groups = new Map();
-      rows.filter(r => r.status === 'ENTREGUE' && r.feature).forEach(r => { const k = r.feature.trim().toLowerCase(); (groups.get(k) || groups.set(k, { name: r.feature, module: r.module, list: [] }).get(k)).list.push(r); });
-      const dt = g => String(g.list[0].delivered_at || '').slice(0, 10);
-      const arr = [...groups.values()].sort((a, b) => dt(b).localeCompare(dt(a)));
-      host.innerHTML = arr.length ? arr.map(g => `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><b style="font-size:15px">${esc(g.name)}</b>${g.module ? `<span class="badge b-grey">${esc(g.module)}</span>` : ''}<span class="small" style="margin-left:auto">${g.list.length} pedido(s) · entregue em ${fmt(dt(g))}</span></div>
-        ${g.list.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}<div>${clips(r)}</div></div>`).join('')}</div>`).join('')
-        : empty('Nenhuma feature entregue ainda', 'Quando um pedido for marcado como Entregue, a feature aparece aqui com os pedidos que a originaram.');
+      const fclips = f => { const fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return fl.length ? fl.map(x => `<a href="api/spot/ffiles/${x.id}/download" target="_blank" rel="noopener" title="${esc(x.file_name)}">📎 ${esc(x.file_name.length > 34 ? x.file_name.slice(0, 32) + '…' : x.file_name)}</a>`).join(' &nbsp; ') : ''; };
+      host.innerHTML = (st.features || []).length ? st.features.map(f => {
+        const reqs = rows.filter(r => r.feature_id === f.id), nodoc = !f.documentation && !(st.ffiles || []).some(x => x.feature_id === f.id);
+        return `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="badge b-dark">${fmtNo(f.number)}</span><b style="font-size:15px">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${nodoc ? '<span class="badge b-orange">sem documentação</span>' : ''}
+          <span class="small" style="margin-left:auto">${f.request_count} pedido(s)${f.delivered_at ? ' · entregue em ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button>`}</div>
+          ${f.documentation ? `<div class="small" style="margin-top:10px;white-space:pre-wrap"><b>O que foi feito:</b> ${esc(f.documentation)}</div>` : ''}${fclips(f) ? `<div class="small" style="margin-top:8px">${fclips(f)}</div>` : ''}
+          ${reqs.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}<div>${clips(r)}</div></div>`).join('')}</div>`;
+      }).join('')
+        : empty('Nenhuma feature entregue ainda', 'Ao marcar uma demanda como Entregue, a feature ganha um número (FT-001…) e aparece aqui com a documentação e os pedidos que a originaram.');
     }
   }
 
@@ -515,8 +520,42 @@ const Spot = (() => {
       async d => { await api(id ? 'PUT' : 'POST', id ? 'spot/demands/' + id : `spot/${st.id}/demands`, d); A().toast('Demanda salva.'); });
   }
 
+  async function uploadHeaders(files) {
+    const h0 = { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream' };
+    if (files.length && closedIds.has(st.id)) { // projeto encerrado: justificativa obrigatória
+      const why = await askJustification('Alterar projeto encerrado');
+      if (!why) throw new Error('Alteração cancelada.');
+      h0['X-Justification'] = encodeURIComponent(why);
+    }
+    const big = files.find(f => f.size > 25 * 1024 * 1024);
+    if (big) throw new Error(`“${big.name}” é maior que 25 MB.`);
+    return h0;
+  }
+  async function uploadAll(path, files, h0) {
+    const failed = [];
+    for (const file of files) {
+      try {
+        const r = await fetch(path, { method: 'POST', credentials: 'same-origin', body: file, headers: { ...h0, 'X-File-Name': encodeURIComponent(file.name) } });
+        if (r.status === 401) { location.replace('login.html'); return failed; }
+        if (!r.ok) { const j = await r.json().catch(() => null); failed.push(`${file.name}: ${(j && j.error) || 'falha no envio'}`); }
+      } catch (e) { failed.push(`${file.name}: falha no envio`); }
+    }
+    return failed;
+  }
+  const FILE_ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.eml,.msg,.doc,.docx,.xls,.xlsx,.csv,.zip';
+  const fileList = (id, items, attr) => `<ul id="${id}" class="small" style="list-style:none;margin:0 0 8px;padding:0">${items.map(f => `<li style="display:flex;gap:10px;align-items:center;padding:3px 0"><a href="api/spot/${attr === 'rf' ? 'rfiles' : 'ffiles'}/${f.id}/download" target="_blank" rel="noopener">📎 ${esc(f.file_name)}</a><span>${Math.max(1, Math.round(f.size / 1024))} KB</span><button type="button" class="btn btn-sm" data-${attr}-del="${f.id}">Remover</button></li>`).join('')}</ul>`;
+  function bindFileDel(id, attr, path) {
+    const ul = document.getElementById(id);
+    if (ul) ul.addEventListener('click', async e => {
+      const b = e.target.closest(`[data-${attr}-del]`);
+      if (!b || !confirm('Remover este anexo?')) return;
+      try { await api('DELETE', path + b.getAttribute(`data-${attr}-del`)); b.closest('li').remove(); } catch (ex) { alert(ex.message); }
+    });
+  }
+
   function requestForm(id) {
-    const x = id ? st.requests.find(r => r.id === id) : { channel: 'TIFLUX', ticket_no: '', requester: '', received_at: todayIso(), title: '', description: '', status: 'TRIAGEM', assignee: '', solution: '', delivered_at: '', feature: '', module: '' };
+    const x = id ? st.requests.find(r => r.id === id) : { channel: 'TIFLUX', ticket_no: '', requester: '', received_at: todayIso(), title: '', description: '', status: 'TRIAGEM', assignee: '', solution: '', delivered_at: '', feature_id: null };
+    const feats = st.features || [], nextNo = feats.reduce((m, f) => Math.max(m, f.number), 0) + 1;
     A().openDialog(id ? 'Editar demanda' : 'Nova demanda', `
       <div class="field"><label for="rc">Canal</label><select id="rc" name="channel">${opts(R_CHANNEL, x.channel)}</select></div>
       <div class="field" id="rn-f"><label for="rn">Nº do chamado TIFlux <span class="opt">(opcional)</span></label><input id="rn" name="ticket_no" maxlength="40" value="${esc(x.ticket_no)}"></div>
@@ -527,47 +566,69 @@ const Spot = (() => {
       <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
       <div class="field"><label for="ra">Responsável do TI</label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
       <div class="field full"><label for="ro">O que o TI fez para resolver</label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
-      <div class="field"><label for="rf">Feature entregue <span class="opt">(obrigatória ao entregar)</span></label><input id="rf" name="feature" maxlength="200" value="${esc(x.feature)}" list="rf-list" placeholder="Ex.: Regra de desconto máximo"><datalist id="rf-list">${[...new Set((st.requests || []).map(r => r.feature).filter(Boolean))].map(f => `<option value="${esc(f)}">`).join('')}</datalist></div>
-      <div class="field"><label for="rm">Módulo / objeto</label><input id="rm" name="module" maxlength="80" value="${esc(x.module)}" placeholder="${st.data.kind === 'EVOL_PT' ? 'Ex.: Faturamento · MATA410' : 'Ex.: Oportunidade'}"></div>
-      <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>
-      <div class="field full"><label for="rfl">Anexos <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
-        <ul id="rf-files" class="small" style="list-style:none;margin:0 0 8px;padding:0">${(st.rfiles || []).filter(f => f.request_id === id).map(f => `<li data-rfid="${f.id}" style="display:flex;gap:10px;align-items:center;padding:3px 0"><a href="api/spot/rfiles/${f.id}/download" target="_blank" rel="noopener">📎 ${esc(f.file_name)}</a><span>${Math.max(1, Math.round(f.size / 1024))} KB</span><button type="button" class="btn btn-sm" data-rf-del="${f.id}">Remover</button></li>`).join('')}</ul>
-        <input id="rfl" name="files" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.eml,.msg,.doc,.docx,.xls,.xlsx,.csv,.zip">
-        <small class="fhint">PDF, imagens, texto, e-mail salvo (.eml, .msg), Word, Excel ou ZIP; até 25 MB cada. Dica: cole o corpo do e-mail num .txt ou salve um print.</small></div>
-      <p class="hint full">Ao marcar “Entregue”, informe a feature. Pedidos parecidos podem usar o mesmo nome de feature: eles aparecem agrupados na aba Features entregues.</p>`,
+      <div class="field full"><label for="rfl">Anexos do pedido <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
+        ${fileList('rf-files', (st.rfiles || []).filter(f => f.request_id === id), 'rf')}
+        <input id="rfl" name="files" type="file" multiple accept="${FILE_ACCEPT}">
+        <small class="fhint">PDF, imagens, texto, e-mail salvo (.eml, .msg), Word, Excel ou ZIP; até 25 MB cada.</small></div>
+      <div class="field full" id="ft-box" style="border:2px solid var(--orange);background:#fff7f1;padding:14px;display:grid;gap:10px">
+        <b style="color:var(--orange);font-size:15px">✔ Feature entregue</b>
+        <div><label for="ffs">Feature</label><select id="ffs" name="feature_id"><option value="">+ Nova feature (gerar número)</option>${feats.map(f => `<option value="${f.id}"${f.id === x.feature_id ? ' selected' : ''}>${fmtNo(f.number)} · ${esc(f.name)}</option>`).join('')}</select>
+          <small class="fhint">Pedidos parecidos podem entrar na mesma feature.</small></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><label for="ffn">Nome da feature</label><input id="ffn" name="feature_name" maxlength="200" placeholder="Ex.: Regra de desconto máximo"></div>
+          <div><label for="ffm">Módulo / objeto</label><input id="ffm" name="feature_module" maxlength="80" placeholder="${st.data.kind === 'EVOL_PT' ? 'Ex.: Faturamento · MATA410' : 'Ex.: Oportunidade'}"></div></div>
+        <div><label for="ffd">O que foi feito (documentação)</label><textarea id="ffd" name="feature_doc" maxlength="4000" placeholder="Descreva a solução entregue, configurações, regras e como testar."></textarea></div>
+        <div><label for="ffl">Anexos da documentação</label><div id="ff-list"></div><input id="ffl" name="ffiles" type="file" multiple accept="${FILE_ACCEPT}"></div>
+        <div id="ff-no" style="font-weight:700"></div></div>
+      <div class="field"><label for="re">Entregue em</label><input id="re" name="delivered_at" type="date" value="${x.delivered_at ? String(x.delivered_at).slice(0, 10) : ''}"></div>`,
       async d => {
-        const files = [...document.querySelector('#dlg form').elements.files.files];
-        const big = files.find(f => f.size > 25 * 1024 * 1024);
-        if (big) throw new Error(`“${big.name}” é maior que 25 MB.`);
-        const headers0 = { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream' };
-        if (files.length && closedIds.has(st.id)) { // projeto encerrado: justificativa obrigatória
-          const why = await askJustification('Alterar projeto encerrado');
-          if (!why) throw new Error('Alteração cancelada.');
-          headers0['X-Justification'] = encodeURIComponent(why);
-        }
-        const { files: _f, ...body } = d;
-        const saved = await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...body, delivered_at: d.delivered_at || null });
-        const failed = [];
-        for (const file of files) {
-          try {
-            const r = await fetch(`api/spot/requests/${saved.id}/files`, { method: 'POST', credentials: 'same-origin', body: file, headers: { ...headers0, 'X-File-Name': encodeURIComponent(file.name) } });
-            if (r.status === 401) { location.replace('login.html'); return; }
-            if (!r.ok) { const j = await r.json().catch(() => null); failed.push(`${file.name}: ${(j && j.error) || 'falha no envio'}`); }
-          } catch (e) { failed.push(`${file.name}: falha no envio`); }
-        }
-        A().toast(failed.length ? 'Demanda salva, mas nem todos os anexos foram enviados.' : files.length ? 'Demanda e anexos salvos.' : 'Demanda salva.');
+        const f = document.querySelector('#dlg form');
+        const files = [...f.elements.files.files], ffiles = d.status === 'ENTREGUE' ? [...f.elements.ffiles.files] : [];
+        const h0 = await uploadHeaders(files.concat(ffiles));
+        const { files: _a, ffiles: _b, ...body } = d;
+        const delivered = d.status === 'ENTREGUE';
+        const wasNew = delivered && !d.feature_id;
+        const saved = await api(id ? 'PUT' : 'POST', id ? 'spot/requests/' + id : `spot/${st.id}/requests`, { ...body, feature_id: d.feature_id ? Number(d.feature_id) : null, delivered_at: d.delivered_at || null });
+        let failed = await uploadAll(`api/spot/requests/${saved.id}/files`, files, h0);
+        if (delivered && saved.feature_id && ffiles.length) failed = failed.concat(await uploadAll(`api/spot/features/${saved.feature_id}/files`, ffiles, h0));
+        A().toast(delivered && saved.feature_no ? (wasNew ? `Entregue: feature ${fmtNo(saved.feature_no)} gerada.` : `Entregue na feature ${fmtNo(saved.feature_no)}.`) : failed.length ? 'Demanda salva, mas nem todos os anexos foram enviados.' : 'Demanda salva.');
         if (failed.length) alert('Anexos não enviados:\n' + failed.join('\n') + '\n\nAbra a demanda e anexe de novo.');
       });
-    const rl = document.getElementById('rf-files');
-    if (rl) rl.addEventListener('click', async e => {
-      const b = e.target.closest('[data-rf-del]');
-      if (!b || !confirm('Remover este anexo?')) return;
-      try { await api('DELETE', 'spot/rfiles/' + b.dataset.rfDel); b.closest('li').remove(); } catch (ex) { alert(ex.message); }
-    });
-    // por e-mail não há chamado TIFlux: esconde o campo e limpa o número
+    bindFileDel('rf-files', 'rf', 'spot/rfiles/');
     const f = document.querySelector('#dlg form'), ch = f.elements.channel, tk = f.elements.ticket_no;
     const chSync = () => { const mail = ch.value === 'EMAIL'; document.getElementById('rn-f').style.display = mail ? 'none' : ''; if (mail) tk.value = ''; };
     ch.addEventListener('change', chSync); chSync();
+    // caixinha da feature: aparece ao marcar Entregue; escolher uma feature existente preenche e trava o nome
+    const box = document.getElementById('ft-box'), stt = f.elements.status, fs = f.elements.feature_id, fn = f.elements.feature_name, fm = f.elements.feature_module, fd = f.elements.feature_doc;
+    let prevEx = false;
+    const fsync = () => {
+      const ex = feats.find(z => String(z.id) === fs.value);
+      fn.disabled = !!ex;
+      if (ex) { fn.value = ex.name; fm.value = ex.module || ''; fd.value = ex.documentation || ''; prevEx = true; } else if (prevEx) { fn.value = ''; fm.value = ''; fd.value = ''; prevEx = false; }
+      document.getElementById('ff-no').textContent = ex ? `Feature ${fmtNo(ex.number)}` : `Ao salvar será gerado o número ${fmtNo(nextNo)}`;
+      document.getElementById('ff-list').innerHTML = ex ? fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === ex.id), 'ff') : '';
+      bindFileDel('ff-files', 'ff', 'spot/ffiles/');
+    };
+    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; fn.required = on && !fs.value; if (on) fsync(); };
+    fs.addEventListener('change', () => { fsync(); fn.required = !fs.value; }); stt.addEventListener('change', bsync); bsync();
+  }
+
+  function featureForm(id) {
+    const f = st.features.find(z => z.id === id);
+    A().openDialog(`Documentar ${fmtNo(f.number)}`, `
+      <div class="field"><label for="fn1">Nome da feature</label><input id="fn1" name="name" maxlength="200" value="${esc(f.name)}" required></div>
+      <div class="field"><label for="fm1">Módulo / objeto</label><input id="fm1" name="module" maxlength="80" value="${esc(f.module || '')}"></div>
+      <div class="field full"><label for="fd1">O que foi feito (documentação)</label><textarea id="fd1" name="documentation" maxlength="4000">${esc(f.documentation || '')}</textarea></div>
+      <div class="field full"><label for="fl1">Anexos da documentação</label>${fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === id), 'ff')}<input id="fl1" name="ffiles" type="file" multiple accept="${FILE_ACCEPT}"><small class="fhint">PDF, imagens, texto, Word, Excel ou ZIP; até 25 MB cada.</small></div>`,
+      async d => {
+        const files = [...document.querySelector('#dlg form').elements.ffiles.files];
+        const h0 = await uploadHeaders(files);
+        const { ffiles: _x, ...body } = d;
+        await api('PUT', 'spot/features/' + id, body);
+        const failed = await uploadAll(`api/spot/features/${id}/files`, files, h0);
+        A().toast(failed.length ? 'Feature salva, mas nem todos os anexos foram enviados.' : 'Feature salva.');
+        if (failed.length) alert('Anexos não enviados:\n' + failed.join('\n'));
+      });
+    bindFileDel('ff-files', 'ff', 'spot/ffiles/');
   }
 
   function actionForm(id) {
@@ -999,6 +1060,7 @@ const Spot = (() => {
       case 'sp-new-req': requestForm(); break;
       case 'sp-edit-req': requestForm(id); break;
       case 'sp-del-req': await del('spot/requests/' + id, 'Excluir este pedido?'); break;
+      case 'sp-edit-feature': featureForm(id); break;
       case 'sp-req-filter': st.reqFilter = el.dataset.f; await renderTab(); break;
       case 'sp-new-action': actionForm(); break;
       case 'sp-edit-action': actionForm(id); break;

@@ -28,6 +28,7 @@ final class SpotService {
     private static final Set<String> HOURS_MODEL = Set.of("MENSAL", "PACOTE");
     private static final Set<String> SPOT_STATUS = Set.of("ATIVO", "PAUSADO", "ENCERRADO");
     private static final Set<String> DEMAND_STATUS = Set.of("EM_ANALISE", "APROVADO", "EM_ANDAMENTO", "EM_HOMOLOGACAO", "EM_ESPERA", "CONCLUIDA", "CANCELADA");
+    private static final String REQ_SQL = "SELECT r.*, f.number feature_no, f.name feature_name, f.module feature_module FROM spot_requests r LEFT JOIN spot_features f ON f.id = r.feature_id";
     private static final Set<String> REQ_STATUS = Set.of("TRIAGEM", "EM_DESENVOLVIMENTO", "EM_HOMOLOGACAO", "ENTREGUE", "RECUSADA");
     private static final Set<String> REQ_CHANNEL = Set.of("TIFLUX", "EMAIL");
     private static final Set<String> SPOT_KIND = Set.of("PADRAO", "EVOL_SF", "EVOL_PT");
@@ -61,7 +62,7 @@ final class SpotService {
         } catch (NumberFormatException e) {
             // /spot/{hours|demands|actions|reports}/{id}
         }
-        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : k.equals("requests") ? "spot_requests" : k.equals("rfiles") ? "spot_request_files" : null;
+        String table = k.equals("hours") ? "spot_hours" : k.equals("demands") ? "spot_demands" : k.equals("actions") ? "spot_actions" : k.equals("reports") ? "spot_reports" : k.equals("files") ? "spot_files" : k.equals("invoices") ? "spot_invoices" : k.equals("requests") ? "spot_requests" : k.equals("rfiles") ? "spot_request_files" : k.equals("features") ? "spot_features" : k.equals("ffiles") ? "spot_feature_files" : null;
         if (table == null || s.size() < 3) return null;
         Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", Long.parseLong(s.get(2))); // 'table' vem só das constantes acima
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
@@ -95,9 +96,14 @@ final class SpotService {
                 case "demands": return itemRoute(m, s, req, "spot_demands", user);
                 case "actions": return itemRoute(m, s, req, "spot_actions", user);
                 case "requests":
-                    if (s.size() == 4 && s.get(3).equals("files")) return requestFiles(m, s, req, user);
+                    if (s.size() == 4 && s.get(3).equals("files")) return attachFile("spot_request_files", "request_id", "spot_requests", m, s, req, user);
                     return itemRoute(m, s, req, "spot_requests", user);
-                case "rfiles": return requestFileRoute(m, s, resp);
+                case "rfiles": return storedFileRoute("spot_request_files", m, s, resp);
+                case "ffiles": return storedFileRoute("spot_feature_files", m, s, resp);
+                case "features":
+                    if (s.size() == 4 && s.get(3).equals("files")) return attachFile("spot_feature_files", "feature_id", "spot_features", m, s, req, user);
+                    if (s.size() == 3 && m.equals("PUT")) return saveFeature(Long.parseLong(s.get(2)), ApiServlet.body(req));
+                    throw new ApiException(405, "Operação não suportada.");
                 case "files": return fileRoute(m, s, resp);
                 case "invoices":
                     if (s.size() == 4 && s.get(3).equals("file")) return invoiceFile(m, s, req, resp, user);
@@ -128,11 +134,17 @@ final class SpotService {
                                 + " FROM spot_demands d WHERE d.spot_id = ? ORDER BY CASE WHEN d.status IN ('CONCLUIDA','CANCELADA') THEN 1 ELSE 0 END, d.id", id);
                         if (m.equals("POST")) return saveDemand(null, id, ApiServlet.body(req));
                         break;
+                    case "features":
+                        if (m.equals("GET")) { backfillFeatures(id); return featureList(id); }
+                        break;
+                    case "feature-files":
+                        if (m.equals("GET")) return Db.query("SELECT id, feature_id, spot_id, file_name, size, uploaded_by, uploaded_at FROM spot_feature_files WHERE spot_id = ? ORDER BY id", id);
+                        break;
                     case "request-files":
                         if (m.equals("GET")) return Db.query("SELECT id, request_id, spot_id, file_name, size, uploaded_by, uploaded_at FROM spot_request_files WHERE spot_id = ? ORDER BY id", id);
                         break;
                     case "requests":
-                        if (m.equals("GET")) return Db.query("SELECT * FROM spot_requests WHERE spot_id = ? ORDER BY CASE WHEN status IN ('ENTREGUE','RECUSADA') THEN 1 ELSE 0 END, received_at DESC, id DESC", id);
+                        if (m.equals("GET")) { backfillFeatures(id); return Db.query(REQ_SQL + " WHERE r.spot_id = ? ORDER BY CASE WHEN r.status IN ('ENTREGUE','RECUSADA') THEN 1 ELSE 0 END, r.received_at DESC, r.id DESC", id); }
                         if (m.equals("POST")) return saveRequest(null, id, ApiServlet.body(req));
                         break;
                     case "actions":
@@ -402,12 +414,12 @@ final class SpotService {
         return String.join(", ", out);
     }
 
-    /** POST /spot/requests/{rid}/files: anexa um arquivo (print, e-mail, chamado) a um pedido; corpo = bytes do arquivo. */
-    private static Object requestFiles(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
+    /** POST /spot/{requests|features}/{id}/files: anexa um arquivo; corpo = bytes do arquivo. Tabelas e colunas vêm só de constantes. */
+    private static Object attachFile(String table, String parentCol, String parentTable, String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
         if (!m.equals("POST")) throw new ApiException(405, "Operação não suportada.");
-        long rid = Long.parseLong(s.get(2));
-        Map<String, Object> row = Db.one("SELECT spot_id FROM spot_requests WHERE id = ?", rid);
-        if (row == null) throw new ApiException(404, "Pedido não encontrado.");
+        long pid = Long.parseLong(s.get(2));
+        Map<String, Object> row = Db.one("SELECT spot_id FROM " + parentTable + " WHERE id = ?", pid);
+        if (row == null) throw new ApiException(404, "Registro não encontrado.");
         if (req.getContentLengthLong() > ApiServlet.MAX_UPLOAD) throw new ApiException(413, "Arquivo maior que 25 MB.");
         String fileName = ApiServlet.header(req, "X-File-Name").replace('\\', '/');
         fileName = fileName.substring(fileName.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "");
@@ -425,19 +437,19 @@ final class SpotService {
             }
         }
         if (buf.size() == 0) throw new ApiException(400, "O arquivo está vazio.");
-        long id = Db.insert("INSERT INTO spot_request_files(request_id,spot_id,file_name,size,content,uploaded_by) VALUES(?,?,?,?,?,?)",
-                rid, row.get("spot_id"), fileName, (long) buf.size(), buf.toByteArray(), user.get("name"));
-        return Db.one("SELECT id, request_id, spot_id, file_name, size, uploaded_by, uploaded_at FROM spot_request_files WHERE id = ?", id);
+        long id = Db.insert("INSERT INTO " + table + "(" + parentCol + ",spot_id,file_name,size,content,uploaded_by) VALUES(?,?,?,?,?,?)",
+                pid, row.get("spot_id"), fileName, (long) buf.size(), buf.toByteArray(), user.get("name"));
+        return Db.one("SELECT id, " + parentCol + ", spot_id, file_name, size, uploaded_by, uploaded_at FROM " + table + " WHERE id = ?", id);
     }
 
-    /** /spot/rfiles/{id} (DELETE) e /spot/rfiles/{id}/download (GET). */
-    private static Object requestFileRoute(String m, List<String> s, HttpServletResponse resp) throws Exception {
+    /** /spot/{rfiles|ffiles}/{id} (DELETE) e .../download (GET). */
+    private static Object storedFileRoute(String table, String m, List<String> s, HttpServletResponse resp) throws Exception {
         if (s.size() < 3) throw new ApiException(405, "Operação não suportada.");
         long id = Long.parseLong(s.get(2));
-        Map<String, Object> meta = Db.one("SELECT id, file_name FROM spot_request_files WHERE id = ?", id);
+        Map<String, Object> meta = Db.one("SELECT id, file_name FROM " + table + " WHERE id = ?", id);
         if (meta == null) throw new ApiException(404, "Arquivo não encontrado.");
         if (s.size() == 3 && m.equals("DELETE")) {
-            Db.update("DELETE FROM spot_request_files WHERE id = ?", id);
+            Db.update("DELETE FROM " + table + " WHERE id = ?", id);
             return Map.of("ok", true);
         }
         if (s.size() == 4 && s.get(3).equals("download") && m.equals("GET")) {
@@ -447,7 +459,7 @@ final class SpotService {
             resp.setHeader("Content-Security-Policy", "sandbox");
             resp.setHeader("Content-Disposition", (ApiServlet.INLINE.contains(ext) ? "inline" : "attachment") + "; filename*=UTF-8\'\'"
                     + java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"));
-            try (java.sql.Connection c = Db.get(); java.sql.PreparedStatement ps = c.prepareStatement("SELECT content FROM spot_request_files WHERE id = ?")) {
+            try (java.sql.Connection c = Db.get(); java.sql.PreparedStatement ps = c.prepareStatement("SELECT content FROM " + table + " WHERE id = ?")) {
                 ps.setLong(1, id);
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) throw new ApiException(404, "Arquivo não encontrado.");
@@ -461,6 +473,44 @@ final class SpotService {
         throw new ApiException(405, "Operação não suportada.");
     }
 
+    private static Object featureList(long spotId) throws SQLException {
+        return Db.query("SELECT f.*, (SELECT COUNT(*) FROM spot_requests r WHERE r.feature_id = f.id) request_count,"
+                + " (SELECT COUNT(*) FROM spot_feature_files x WHERE x.feature_id = f.id) file_count,"
+                + " (SELECT MAX(r.delivered_at) FROM spot_requests r WHERE r.feature_id = f.id) delivered_at"
+                + " FROM spot_features f WHERE f.spot_id = ? ORDER BY f.number DESC", spotId);
+    }
+
+    private static long nextFeatureNumber(long spotId) throws SQLException {
+        return ((Number) Db.one("SELECT COALESCE(MAX(number), 0) + 1 n FROM spot_features WHERE spot_id = ?", spotId).get("n")).longValue();
+    }
+
+    /** Pedidos entregues antes dos números de feature (só com o nome em texto) ganham a feature numerada, em ordem de entrega. */
+    private static void backfillFeatures(long spotId) throws SQLException {
+        List<Map<String, Object>> old = Db.query("SELECT id, feature, module FROM spot_requests WHERE spot_id = ? AND status = 'ENTREGUE' AND feature_id IS NULL AND feature <> '' ORDER BY delivered_at, id", spotId);
+        if (old.isEmpty()) return;
+        Map<String, Long> byName = new java.util.HashMap<>();
+        for (Map<String, Object> f : Db.query("SELECT id, name FROM spot_features WHERE spot_id = ?", spotId)) byName.put(String.valueOf(f.get("name")).trim().toLowerCase(), ((Number) f.get("id")).longValue());
+        for (Map<String, Object> r : old) {
+            String name = String.valueOf(r.get("feature")).trim(), key = name.toLowerCase();
+            Long fid = byName.get(key);
+            if (fid == null) {
+                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,created_by) VALUES(?,?,?,?,?)", spotId, nextFeatureNumber(spotId), name, r.get("module"), "migração");
+                byName.put(key, fid);
+            }
+            Db.update("UPDATE spot_requests SET feature_id = ? WHERE id = ?", fid, r.get("id"));
+        }
+    }
+
+    private static Object saveFeature(long id, JsonObject b) throws SQLException {
+        if (Db.one("SELECT id FROM spot_features WHERE id = ?", id) == null) throw new ApiException(404, "Feature não encontrada.");
+        String name = ApiServlet.str(b, "name", "Nome da feature", 200, true);
+        String module = ApiServlet.str(b, "module", "Módulo / objeto", 80, false);
+        String doc = ApiServlet.str(b, "documentation", "Documentação", 4000, false);
+        Db.update("UPDATE spot_features SET name = ?, module = ?, documentation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", name, module, doc, id);
+        Db.update("UPDATE spot_requests SET feature = ?, module = ? WHERE feature_id = ?", name, module, id);
+        return Db.one("SELECT * FROM spot_features WHERE id = ?", id);
+    }
+
     /** Projetos evolutivos: total de pedidos, entregues, em andamento e na triagem. */
     private static Map<String, Object> evoSummary(long spotId) throws SQLException {
         Map<String, Object> r = new java.util.LinkedHashMap<>();
@@ -469,7 +519,7 @@ final class SpotService {
                 + " SUM(CASE WHEN status IN ('EM_DESENVOLVIMENTO','EM_HOMOLOGACAO') THEN 1 ELSE 0 END) doing,"
                 + " SUM(CASE WHEN status = 'TRIAGEM' THEN 1 ELSE 0 END) triage,"
                 + " SUM(CASE WHEN status = 'RECUSADA' THEN 1 ELSE 0 END) refused,"
-                + " COUNT(DISTINCT CASE WHEN status = 'ENTREGUE' AND feature <> '' THEN LOWER(feature) END) features"
+                + " COUNT(DISTINCT feature_id) features"
                 + " FROM spot_requests WHERE spot_id = ?", spotId);
         for (String k : new String[]{"total", "delivered", "doing", "triage", "refused", "features"}) r.put(k, row.get(k) == null ? 0L : ((Number) row.get(k)).longValue());
         return r;
@@ -486,23 +536,39 @@ final class SpotService {
         String assignee = ApiServlet.str(b, "assignee", "Responsável do TI", 120, false);
         String solution = ApiServlet.str(b, "solution", "Solução do TI", 2000, false);
         LocalDate delivered = ApiServlet.optDate(b, "delivered_at", "Entregue em");
-        String feature = ApiServlet.str(b, "feature", "Feature", 200, false);
-        String module = ApiServlet.str(b, "module", "Módulo / objeto", 80, false);
         if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
         if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (status.equals("ENTREGUE")) {
-            if (feature.isEmpty()) throw new ApiException(400, "Para marcar como entregue, informe a feature entregue.");
             if (delivered == null) delivered = LocalDate.now();
         } else if (!status.equals("RECUSADA")) delivered = null;
         if (delivered != null && delivered.isBefore(received)) throw new ApiException(400, "A entrega não pode ser anterior ao recebimento.");
-        if (id == null) {
-            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module);
-        } else {
-            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, id);
+        // ao entregar: liga a uma feature existente ou cria uma nova com o próximo número do projeto (FT-001, FT-002…)
+        Long featureId = null;
+        String feature = "", module = "";
+        if (status.equals("ENTREGUE")) {
+            Long fid = ApiServlet.optLong(b, "feature_id");
+            String fName = ApiServlet.str(b, "feature_name", "Nome da feature", 200, false);
+            String fModule = ApiServlet.str(b, "feature_module", "Módulo / objeto", 80, false);
+            String fDoc = ApiServlet.str(b, "feature_doc", "O que foi feito (documentação)", 4000, false);
+            if (fid != null) {
+                if (Db.one("SELECT id FROM spot_features WHERE id = ? AND spot_id = ?", fid, spotId) == null) throw new ApiException(400, "A feature precisa ser do mesmo projeto.");
+                if (b.has("feature_module")) Db.update("UPDATE spot_features SET module = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fModule, fid);
+                if (b.has("feature_doc")) Db.update("UPDATE spot_features SET documentation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fDoc, fid);
+            } else {
+                if (fName.isEmpty()) throw new ApiException(400, "Para marcar como entregue, informe o nome da feature entregue.");
+                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,documentation,created_by) VALUES(?,?,?,?,?,?)", spotId, nextFeatureNumber(spotId), fName, fModule, fDoc, "");
+            }
+            Map<String, Object> f = Db.one("SELECT name, module FROM spot_features WHERE id = ?", fid);
+            featureId = fid; feature = String.valueOf(f.get("name")); module = String.valueOf(f.get("module"));
         }
-        return Db.one("SELECT * FROM spot_requests WHERE id = ?", id);
+        if (id == null) {
+            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module,feature_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId);
+        } else {
+            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, feature_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, id);
+        }
+        return Db.one(REQ_SQL + " WHERE r.id = ?", id);
     }
 
     private static Object saveProject(Long id, JsonObject b) throws SQLException {
