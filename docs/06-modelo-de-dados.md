@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **48**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **49**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -23,7 +23,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `spot_actions` | `id`, `spot_id`, `kind`, `description`, `responsible`, `status`, `note`, `updated_at` |
 | `spot_audit` | `id`, `spot_id`, `spot_name`, `user_name`, `action`, `justification`, `created_at` |
 | `spot_reports` | `id`, `spot_id`, `title`, `ref_date`, `snapshot`, `narrative`, `model`, `created_by`, `created_at`, `sent_at`, `sent_to`, `sent_by` |
-| `ai_settings` | `id`, `api_key_enc`, `key_hint`, `model`, `workspace_id`, `connected_by`, `connected_by_id`, `connected_at`, `last_test_at`, `last_test_ok`, `last_test_msg` |
+| `ai_settings` | `id`, `api_key_enc`, `key_hint`, `model`, `workspace_id`, `connected_by`, `connected_by_id`, `connected_at`, `last_test_at`, `last_test_ok`, `last_test_msg`, `extra`, `in_use` (uma linha por IA: 1 = Claude, 2 = ChatGPT, 3 = Copilot/Azure; `extra` guarda endereço e versão da API do Azure) |
 | `email_settings` | `id`, `host`, `port`, `security`, `username`, `password_enc`, `from_email`, `from_name`, `enabled`, `updated_by`, `updated_at`, `last_test_at`, `last_test_ok`, `last_test_msg` |
 | `email_rules` | `id`, `project_id`, `event`, `recipients`, `include_responsible`, `subject`, `message`, `enabled`, `created_by`, `created_at` |
 | `email_log` | `id`, `rule_id`, `project_id`, `event`, `ref_key`, `recipients`, `subject`, `status`, `error`, `created_at` |
@@ -43,7 +43,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | Projetos | `projects`, `tasks`, `finance_entries`, `documents`, `project_changes`, `ishikawa`, `ishikawa_causes` | `tasks` guarda tarefas, filhas (`parent_id`), marcos (`is_milestone`), predecessora (`depends_on`), importância (`is_important`) e dia da conclusão (`completed_at`) |
 | Spot | `spot_projects`, `spot_files`, `spot_invoices`, `spot_demands`, `spot_hours`, `spot_actions`, `spot_audit`, `spot_reports` | Arquivos e notas fiscais ficam **dentro do banco** |
 | E-mail | `email_settings`, `email_rules`, `email_log`, `email_test_log` | Senha do SMTP criptografada com a `ai.key` |
-| IA | `ai_settings` | Chave do Claude criptografada (AES-256-GCM) |
+| IA | `ai_settings` | Chaves das IAs (Claude, OpenAI, Azure) criptografadas (AES-256-GCM) |
 | Sistema | `app_meta`, `audit_log` | `app_meta` guarda versão do esquema, identificador do banco e a marca `seeded` |
 
 ## Valores fixos (enumerações)

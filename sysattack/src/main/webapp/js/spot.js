@@ -1,4 +1,4 @@
-/* SysAttack — Projetos Spot: horas, demandas, ações e relatórios gerados com o Claude. */
+/* SysAttack — Projetos Spot: horas, demandas, ações e relatórios gerados com IA. */
 const Spot = (() => {
   const { esc, fmt, todayIso, ic } = SA;
   // projetos encerrados: só administrador altera, e toda alteração exige justificativa (vai no cabeçalho e fica no histórico)
@@ -263,7 +263,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${p.closed_scope ? tab('tradicional', 'Relatório tradicional') : ''}${tab('relatorios', 'Relatórios com Claude')}</div>
+        ${tab('resumo', 'Resumo')}${p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : ''}${tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas')}${tab('demandas', 'Demandas')}${tab('acoes', 'Ações e pendências')}${p.closed_scope ? tab('tradicional', 'Relatório tradicional') : ''}${tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -350,7 +350,7 @@ const Spot = (() => {
         : empty('Nada registrado', 'Registre as ações do último comitê e as pendências (da Momesso ou do cliente).'));
     } else if (st.tab === 'tradicional') {
       st.reports = await api('GET', `spot/${id}/reports?kind=manual`);
-      host.innerHTML = `${vigLine()}<p class="hint" style="margin:0 0 12px">Relatório preenchido por você na tela, sem o Claude, no mesmo formato do Status Report da Fábrica. Abra, edite, imprima ou envie por e-mail.</p>
+      host.innerHTML = `${vigLine()}<p class="hint" style="margin:0 0 12px">Relatório preenchido por você na tela, sem IA, no mesmo formato do Status Report da Fábrica. Abra, edite, imprima ou envie por e-mail.</p>
         ${st.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Referência</th><th>Criado por</th><th>Envio</th><th></th></tr></thead><tbody>
         ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
           <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
@@ -360,13 +360,13 @@ const Spot = (() => {
     } else {
       st.reports = await api('GET', `spot/${id}/reports`);
       const ai = await api('GET', 'ai-status').catch(() => ({ connected: false }));
-      host.innerHTML = `${vigLine()}${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:14px">O Claude ainda não está conectado. Um administrador precisa configurar a chave em “Configurações IA Agent”.</p>'}
+      host.innerHTML = `${vigLine()}${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:14px">Nenhuma IA está em uso. Um administrador precisa conectar uma em “Configurações IA Agent”.</p>'}
         ${st.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Referência</th><th>Gerado por</th><th>Envio</th><th></th></tr></thead><tbody>
         ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
           <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
           <td>${r.sent_at ? `<span class="badge b-green">Enviado</span><span class="small">${fmt(String(r.sent_at).slice(0, 10))}</span>` : '<span class="badge b-grey">Não enviado</span>'}</td>
           <td class="acts"><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
-        : empty('Nenhum relatório ainda', 'Clique em “Gerar relatório”: o sistema calcula os números e o Claude escreve o texto de acompanhamento.')}`;
+        : empty('Nenhum relatório ainda', 'Clique em “Gerar relatório”: o sistema calcula os números e a IA escreve o texto de acompanhamento.')}`;
     }
   }
 
@@ -462,11 +462,11 @@ const Spot = (() => {
 
   function reportForm() {
     const p = st.data;
-    const f = A().openDialog('Gerar relatório com o Claude', `
+    const f = A().openDialog('Gerar relatório com IA', `
       <div class="field"><label for="rd">Data de referência</label><input id="rd" name="ref_date" type="date" min="${p.start_date}" max="${p.end_date && p.end_date < todayIso() ? p.end_date : todayIso()}" value="${clampDate(todayIso(), p)}" required></div>
       <div class="field"><label for="rt">Título</label><input id="rt" name="title" maxlength="200" value="Status Report · ${esc(p.name)}"></div>
       <div class="field full"><label for="ri">Instruções adicionais (opcional)</label><textarea id="ri" name="instructions" maxlength="600" placeholder="Ex.: destaque o atraso do Chatbot; tom mais direto."></textarea></div>
-      <p class="hint full">Os números são calculados pelo SysAttack; o Claude escreve apenas o texto. A geração leva alguns segundos.</p>`,
+      <p class="hint full">Os números são calculados pelo SysAttack; a IA escreve apenas o texto. A geração leva alguns segundos.</p>`,
       async d => {
         const r = await api('POST', `spot/${st.id}/reports/generate`, d);
         A().toast('Relatório gerado.');
@@ -673,7 +673,7 @@ const Spot = (() => {
   function reportDialog(rep) {
     const f = rep.full, count = (a, t) => `${a.length} ${t}`;
     A().openDialog('Importar relatório completo', `
-      <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar o Claude. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
+      <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar IA. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
       <div class="field full"><label for="ir-t">Título</label><input id="ir-t" name="titulo" maxlength="200" value="${esc(f.titulo)}" required></div>
       <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(clampDate(f.ref_date, st.data))}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
       <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.decisoes, 'decisões'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>

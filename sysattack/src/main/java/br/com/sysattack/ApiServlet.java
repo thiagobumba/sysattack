@@ -1141,24 +1141,30 @@ public class ApiServlet extends HttpServlet {
         try {
             if (s.size() == 1) {
                 if (m.equals("GET")) return AiConfig.status();
-                if (m.equals("PUT")) {
-                    AiConfig.setModel(str(body(req), "model", "Modelo", 80, true));
+                if (m.equals("PUT")) { // escolhe a IA em uso nos relatórios
+                    AiConfig.setInUse(str(body(req), "in_use", "IA em uso", 20, true));
                     return AiConfig.status();
                 }
-                if (m.equals("DELETE")) {
-                    AiConfig.disconnect();
-                    return AiConfig.status();
-                }
-            } else if (s.size() == 2) {
-                String act = s.get(1);
+            } else if (s.size() == 2) { // ai/{ia}
+                String p = s.get(1);
+                if (m.equals("PUT")) { AiConfig.setModel(p, str(body(req), "model", "Modelo", 80, true)); return AiConfig.status(); }
+                if (m.equals("DELETE")) { AiConfig.disconnect(p); return AiConfig.status(); }
+            } else if (s.size() == 3) { // ai/{ia}/{ação}
+                String p = s.get(1), act = s.get(2);
                 if (act.equals("connect") && m.equals("POST")) {
                     JsonObject b = body(req);
-                    AiConfig.connect(str(b, "api_key", "Chave de API", 400, true), str(b, "model", "Modelo", 80, true),
-                            str(b, "workspace_id", "Workspace", 80, false), (String) user.get("name"), user.get("id"));
+                    String e1 = AiConfig.AZURE.equals(p) ? str(b, "endpoint", "Endereço do recurso", 200, true) : str(b, "workspace_id", "Identificador", 80, false);
+                    String e2 = AiConfig.AZURE.equals(p) ? str(b, "api_version", "Versão da API", 30, false) : "";
+                    AiConfig.connect(p, str(b, "api_key", "Chave de API", 400, true), str(b, "model", AiConfig.AZURE.equals(p) ? "Nome da implantação" : "Modelo", 80, true),
+                            e1, e2, (String) user.get("name"), user.get("id"));
                     return AiConfig.status();
                 }
-                if (act.equals("test") && m.equals("POST")) return AiConfig.test();
-                if (act.equals("models") && m.equals("GET")) return AiConfig.models();
+                if (act.equals("probe") && m.equals("POST")) {
+                    JsonObject b = body(req);
+                    return AiConfig.probe(p, str(b, "api_key", "Chave de API", 400, true), str(b, "workspace_id", "Organização", 80, false));
+                }
+                if (act.equals("test") && m.equals("POST")) return AiConfig.test(p);
+                if (act.equals("models") && m.equals("GET")) return AiConfig.models(p);
             }
         } catch (AiConfig.AiException e) {
             throw new ApiException(e.status, e.getMessage());

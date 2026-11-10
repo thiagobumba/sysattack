@@ -541,61 +541,6 @@
       `<section class="panel policy">${await r.text()}</section>`;
   }
 
-  async function viewAI() {
-    const st = await api('GET', 'ai');
-    const head = pageHead(['SysAttack', 'Configurações IA Agent'], 'Configurações IA Agent', 'Conecte uma conta Anthropic para acoplar o Claude ao SysAttack.');
-    const security = `<section class="panel"><div class="panel-head"><h2 class="panel-title">Segurança e custos</h2></div><ul class="ai-list">
-      <li>A chave é guardada <b>criptografada</b> no servidor e nunca é exibida de novo — só a versão mascarada.</li>
-      <li>Somente <b>administradores</b> veem e alteram esta página.</li>
-      <li>O uso da API é <b>cobrado na conta do Claude Console</b>, separada de qualquer assinatura do Claude.ai. Use uma <b>chave exclusiva</b> para o SysAttack, com validade, e defina limite de gastos no workspace.</li>
-      <li>O servidor do SysAttack precisa de acesso à internet (<code>api.anthropic.com</code>, porta 443). Se a rede usa proxy, avise a TI.</li></ul></section>`;
-    if (!st.connected) {
-      main.innerHTML = head + `<section class="panel"><div class="panel-head"><h2 class="panel-title">Conexão com o Claude</h2><span class="ai-status"><i></i>Desconectado</span></div>
-        <div class="notice" style="margin-bottom:18px"><b>Por que chave de API e não “entrar com a conta”?</b> A Anthropic não permite usar o login do Claude.ai (Free, Pro ou Max) dentro de sistemas de terceiros.
-          A conexão oficial é feita com uma chave de API criada na conta da empresa no <b>Claude Console</b>.</div>
-        <ol class="steps"><li>Entre em <b>platform.claude.com/settings/keys</b> com a conta da empresa (com faturamento ou créditos ativos).</li>
-          <li>Clique em <b>Create key</b>, dê o nome <b>SysAttack</b> e, se possível, defina uma data de expiração.</li>
-          <li>Copie a chave (começa com <code>sk-ant-</code>) — ela só aparece uma vez — e cole abaixo.</li></ol>
-        <form id="ai-form" class="fgrid ai-form" novalidate autocomplete="off">
-          <div class="field full"><label for="ai-k">Chave de API</label><input id="ai-k" name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" required></div>
-          <div class="field full"><label for="ai-m">Modelo</label><select id="ai-m" name="model">${st.default_models.map((m, i) => `<option value="${esc(m)}"${i === 0 ? ' selected' : ''}>${esc(m)}${i === 0 ? ' (recomendado)' : ''}</option>`).join('')}</select></div>
-          <details><summary>Opções avançadas</summary><div class="field"><label for="ai-w">ID do workspace (opcional)</label><input id="ai-w" name="workspace_id" placeholder="wrkspc_… — só se a chave não for de um workspace" maxlength="80"></div></details>
-          <div class="form-error" hidden role="alert"></div>
-          <div class="form-actions" style="justify-content:flex-start"><button type="submit" class="btn btn-primary">Conectar</button></div></form></section>` + security;
-      const form = document.getElementById('ai-form'), err = form.querySelector('.form-error');
-      form.addEventListener('submit', async e => {
-        e.preventDefault();
-        const b = form.querySelector('[type=submit]');
-        b.disabled = true; b.textContent = 'Validando na Anthropic…'; err.hidden = true;
-        try {
-          await api('POST', 'ai/connect', { api_key: form.api_key.value.trim(), model: form.model.value, workspace_id: form.workspace_id.value.trim() });
-          form.api_key.value = '';
-          toast('Claude conectado.'); await route();
-        } catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; b.textContent = 'Conectar'; }
-      });
-      return;
-    }
-    const test = st.last_test_at ? `${st.last_test_ok ? '<span class="badge b-green">OK</span>' : '<span class="badge b-red">Falhou</span>'} <span class="small" style="display:inline">${esc(st.last_test_at.slice(0, 16))} · ${esc(st.last_test_msg || '')}</span>` : '<span class="small" style="display:inline">Ainda não testado</span>';
-    main.innerHTML = head + `<section class="panel"><div class="panel-head"><h2 class="panel-title">Conexão com o Claude</h2><span class="ai-status on"><i></i>Conectado</span></div>
-      <dl class="meta-grid" style="margin-top:0;padding-top:0;border:0">
-        <div><dt>Chave</dt><dd><code>${esc(st.key_hint)}</code></dd></div>
-        <div><dt>Conectado por</dt><dd>${esc(st.connected_by || '—')}</dd></div>
-        <div><dt>Em</dt><dd>${esc((st.connected_at || '').slice(0, 16))}</dd></div>
-        ${st.workspace_id ? `<div><dt>Workspace</dt><dd>${esc(st.workspace_id)}</dd></div>` : ''}</dl>
-      <div class="field" style="max-width:560px;margin-top:24px"><label for="ai-m">Modelo usado pelo assistente</label>
-        <div class="ai-row"><select id="ai-m" aria-label="Modelo"><option value="${esc(st.model)}" selected>${esc(st.model)}</option></select>
-        <button class="btn btn-sm" data-action="ai-save-model">Salvar modelo</button></div></div>
-      <p style="margin:22px 0 6px"><b>Último teste:</b> ${test}</p>
-      <div class="bar-actions" style="margin-top:18px"><button class="btn btn-primary" data-action="ai-test">Testar conexão</button>
-        <button class="btn btn-danger" data-action="ai-disconnect">Desconectar</button></div>
-      <p class="hint" style="margin-top:14px">“Desconectar” apaga a chave do SysAttack. Para encerrar o acesso por completo, desative ou exclua também a chave no Claude Console.</p></section>` + security;
-    api('GET', 'ai/models').then(r => {   // lista os modelos que a chave realmente enxerga
-      const sel = document.getElementById('ai-m'); if (!sel) return;
-      const ids = r.models.includes(st.model) ? r.models : [st.model, ...r.models];
-      sel.innerHTML = ids.map(m => `<option value="${esc(m)}"${m === st.model ? ' selected' : ''}>${esc(m)}</option>`).join('');
-    }).catch(() => {});
-  }
-
   // ------------------------------------------------------------------ usuários
   async function viewUsers() {
     const list = await api('GET', 'users');
@@ -870,6 +815,7 @@
       if (el.dataset.action.startsWith('sp-')) { await Spot.action(el); return; }
       if (el.dataset.action.startsWith('em-')) { await Mail.action(el); return; }
       if (el.dataset.action.startsWith('sys-')) { await Sys.action(el); return; }
+      if (el.dataset.action.startsWith('ai-')) { await Ai.action(el); return; }
       if (el.dataset.action.startsWith('rp-')) { await Rep.action(el); return; }
       if (el.dataset.action.startsWith('mpp-')) { await Mpp.action(el); return; }
       if (el.dataset.action.startsWith('ish-')) { await Ish.action(el); return; }
@@ -968,18 +914,6 @@
         case 'del-fin':
           if (confirm('Excluir este lançamento?')) { await api('DELETE', 'finance/' + id); toast('Lançamento excluído.'); await route(); }
           break;
-        case 'ai-test': {
-          el.disabled = true; el.textContent = 'Testando…';
-          try { const r = await api('POST', 'ai/test', {}); toast(`Conexão OK com ${r.model}.`); }
-          catch (ex) { toast(ex.message); }
-          await route(); break;
-        }
-        case 'ai-save-model': await api('PUT', 'ai', { model: document.getElementById('ai-m').value }); toast('Modelo salvo.'); await route(); break;
-        case 'ai-disconnect':
-          if (confirm('Desconectar o Claude do SysAttack? A chave salva será apagada daqui.\n\nPara encerrar o acesso por completo, desative ou exclua também a chave no Claude Console.')) {
-            await api('DELETE', 'ai'); toast('Claude desconectado.'); await route();
-          }
-          break;
         case 'new-doc': openDocForm(); break;
         case 'edit-doc': openDocForm(view.docs.find(x => x.id === id)); break;
         case 'doc-view': openPreview(view.docs.find(x => x.id === id)); break;
@@ -1013,7 +947,7 @@
       }
       else if (name === 'email') await Mail.view();
       else if (name === 'sistema') await Sys.view();
-      else if (name === 'ia') await viewAI();
+      else if (name === 'ia') await Ai.view();
       else await viewDashboard();
     } catch (ex) {
       main.innerHTML = pageHead(['SysAttack'], 'Algo deu errado', '') + `<div class="panel">${empty('Não foi possível carregar esta tela', esc(ex.message))}</div>`;

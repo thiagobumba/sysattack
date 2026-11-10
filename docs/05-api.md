@@ -84,7 +84,8 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 
 | Método e rota | Descrição |
 |---|---|
-| `GET/PUT/DELETE /ai` · `POST /ai/connect` · `POST /ai/test` · `GET /ai/models` | Conexão com o Claude |
+| `GET /ai` · `PUT /ai` (`in_use`: `claude`, `openai` ou `azure`) | Estado das três IAs e escolha da IA em uso nos relatórios (administrador) |
+| `PUT/DELETE /ai/{ia}` · `POST /ai/{ia}/connect` · `POST /ai/{ia}/test` · `GET /ai/{ia}/models` · `POST /ai/openai/probe` | Conexão de cada IA (`claude`, `openai`, `azure`); `probe` valida a chave da OpenAI e lista os modelos |
 | `GET /ai-status` | Disponibilidade da IA (qualquer usuário logado) |
 | `GET/PUT/DELETE /email/settings` · `POST /email/settings/test` · `GET /email/settings/test-logs` | SMTP e testes |
 | `GET /email/events` · `GET/POST /email/rules` · `PUT/DELETE /email/rules/{id}` · `GET /email/log` | Gatilhos e histórico |

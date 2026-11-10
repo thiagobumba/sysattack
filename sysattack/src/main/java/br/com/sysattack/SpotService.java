@@ -653,11 +653,11 @@ final class SpotService {
     private static JsonObject parseJsonObject(String text) {
         String t = text.trim();
         int a = t.indexOf('{'), z = t.lastIndexOf('}');
-        if (a < 0 || z <= a) throw new ApiException(502, "O Claude não devolveu o texto no formato esperado. Tente gerar novamente.");
+        if (a < 0 || z <= a) throw new ApiException(502, "A IA não devolveu o texto no formato esperado. Tente gerar novamente.");
         try {
             return JsonParser.parseString(t.substring(a, z + 1)).getAsJsonObject();
         } catch (RuntimeException e) {
-            throw new ApiException(502, "O Claude não devolveu o texto no formato esperado. Tente gerar novamente.");
+            throw new ApiException(502, "A IA não devolveu o texto no formato esperado. Tente gerar novamente.");
         }
     }
 
@@ -684,7 +684,7 @@ final class SpotService {
         }
         Map<String, Object> narrative = normalizeNarrative(parseJsonObject(answer), demandIds(JsonParser.parseString(data).getAsJsonObject()));
         long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
-                spotId, title, ref, data, GSON.toJson(narrative), String.valueOf(AiConfig.availability().get("model")), user.get("name"));
+                spotId, title, ref, data, GSON.toJson(narrative), AiConfig.availability().get("label").toString().substring(0, Math.min(80, AiConfig.availability().get("label").toString().length())), user.get("name"));
         return reportView(id);
     }
 

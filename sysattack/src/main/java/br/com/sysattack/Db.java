@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 48;
+    private static final int SCHEMA_VERSION = 49;
 
     private Db() {}
 
@@ -263,6 +263,10 @@ public final class Db {
                     + "last_test_at TIMESTAMP,"
                     + "last_test_ok BOOLEAN,"
                     + "last_test_msg VARCHAR(300))");
+            s.execute("ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS extra VARCHAR(400) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS in_use BOOLEAN DEFAULT FALSE NOT NULL");
+            // a conexão que já existia (Claude, id 1) continua sendo a IA em uso
+            s.execute("UPDATE ai_settings SET in_use = TRUE WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM ai_settings WHERE in_use = TRUE)");
             s.execute("CREATE TABLE IF NOT EXISTS email_settings ("
                     + "id INT PRIMARY KEY,"
                     + "host VARCHAR(200) NOT NULL,"
