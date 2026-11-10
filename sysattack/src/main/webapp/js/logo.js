@@ -32,21 +32,44 @@ const Logo = (() => {
 
   function toBlob(cv, type, q) { return new Promise(res => cv.toBlob(res, type, q)); }
 
+  /** Área com conteúdo: ignora o que é transparente ou quase branco nas bordas (com 2% de folga). */
+  function trimBox(bmp) {
+    const full = { x: 0, y: 0, w: bmp.width, h: bmp.height };
+    try {
+      const k = Math.min(1, 600 / Math.max(bmp.width, bmp.height)), w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, w, h);
+      const d = g.getImageData(0, 0, w, h).data;
+      let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        if (d[i + 3] > 24 && (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) return full;
+      const px = Math.round(w * 0.02), py = Math.round(h * 0.02);
+      x0 = Math.max(0, x0 - px); y0 = Math.max(0, y0 - py); x1 = Math.min(w - 1, x1 + px); y1 = Math.min(h - 1, y1 + py);
+      const r = { x: Math.floor(x0 / k), y: Math.floor(y0 / k), w: Math.min(bmp.width, Math.ceil((x1 - x0 + 1) / k)), h: Math.min(bmp.height, Math.ceil((y1 - y0 + 1) / k)) };
+      return r.w < 8 || r.h < 8 ? full : r;
+    } catch (e) { return full; }
+  }
+
   /** Reduz a imagem para caber em MAX_PX e em menos de ~900 KB. */
   async function shrink(file) {
     if (!TYPES.includes(file.type)) throw new Error('Formato não aceito. Use PNG, JPG, WEBP ou GIF.');
     let bmp;
     try { bmp = await createImageBitmap(file); } catch (e) { throw new Error('Não foi possível ler essa imagem.'); }
+    // corta as bordas em branco ou transparentes: sem isso, a logo fica pequena dentro do avatar
+    const crop = trimBox(bmp);
     // sempre quadrada: o avatar é redondo. Imagem já quase quadrada (ex.: selo redondo) ocupa tudo; as demais ganham uma margem
-    const ratio = bmp.width / bmp.height, squareish = ratio > 0.9 && ratio < 1.1;
+    const ratio = crop.w / crop.h, squareish = ratio > 0.9 && ratio < 1.1;
     let side = Math.min(MAX_PX, Math.max(bmp.width, bmp.height));
     for (let i = 0; i < 4; i++, side = Math.round(side * 0.75)) {
       const cv = document.createElement('canvas'); cv.width = cv.height = Math.max(8, side);
       const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
-      if (squareish) g.drawImage(bmp, 0, 0, cv.width, cv.height);
+      if (squareish) g.drawImage(bmp, crop.x, crop.y, crop.w, crop.h, 0, 0, cv.width, cv.height);
       else {
-        const box = cv.width * 0.84, sc = Math.min(box / bmp.width, box / bmp.height), w = bmp.width * sc, h = bmp.height * sc;
-        g.drawImage(bmp, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+        const box = cv.width * 0.84, sc = Math.min(box / crop.w, box / crop.h), w = crop.w * sc, h = crop.h * sc;
+        g.drawImage(bmp, crop.x, crop.y, crop.w, crop.h, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
       }
       const blob = await toBlob(cv, 'image/png'); // PNG mantém a transparência
       if (blob && blob.size <= 900 * 1024) return blob;
