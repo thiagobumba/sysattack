@@ -930,3 +930,10 @@ tr[hidden] { display: none; }
 .ia-form select, .ia-form input:not([type=radio]) { max-width: 100%; }
 @media (max-width: 640px) { .ia-dl { grid-template-columns: 1fr; } .ia-actions .btn { flex: 1 1 140px; } .ia-card .btn { align-self: stretch; } }
 .ia-steps { align-content: start; }
+
+/* Change = tarefa marcada como change */
+.chg-tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; background: #fff0e6; color: #b23a00; border: 1px solid #f3b48c; vertical-align: middle; white-space: nowrap; }
+.chg-box { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; padding: 16px; background: #fff7f1; border-left: 4px solid var(--orange); grid-column: 1 / -1; }
+.chg-box[hidden] { display: none; }
+.chg-box .full { grid-column: 1 / -1; }
+@media (max-width: 640px) { .chg-box { grid-template-columns: 1fr; padding: 12px; } }

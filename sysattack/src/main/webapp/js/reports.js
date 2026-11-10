@@ -227,26 +227,13 @@ const Rep = (() => {
     const days = list.filter(c => c.status === 'APROVADA').reduce((a, c) => a + c.impact_days, 0);
     host.innerHTML = `<div class="mini-kpis"><div class="mini"><span>Changes</span><b>${list.length}</b></div><div class="mini"><span>Aprovadas</span><b>${list.filter(c => c.status === 'APROVADA').length}</b></div>
       <div class="mini ${days > 0 ? 'neg' : ''}"><span>Atraso por changes aprovadas</span><b>${days} dia(s)</b></div></div>
-      ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Change</th><th>Solicitante</th><th class="num">Impacto (dias)</th><th class="num">Impacto R$</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Change</th><th>Solicitante</th><th class="num">Impacto (dias)</th><th class="num">Impacto R$</th><th>Situação</th><th>Tarefa</th><th></th></tr></thead><tbody>
       ${list.map(c => `<tr><td>${fmt(c.change_date)}</td><td class="strong">${esc(c.title)}${c.reason ? `<span class="small">${esc(c.reason)}</span>` : ''}</td><td>${esc(c.requested_by || '—')}</td>
         <td class="num">${c.impact_days}</td><td class="num">${Number(c.impact_cost) > 0 ? money(c.impact_cost) : '—'}</td><td>${badge(CH, c.status)}</td>
+        <td>${c.task_id ? `<span class="small" style="display:inline">${esc(c.task_status === 'CONCLUIDA' ? 'Concluída' : c.task_status === 'CANCELADA' ? 'Cancelada' : c.task_progress + '%')} · até ${fmt(c.task_end)}</span>` : '<span class="small" style="display:inline" title="Edite a change para criar a tarefa dela">sem tarefa</span>'}</td>
         <td class="acts"><button class="icon-btn" title="Editar" aria-label="Editar change" data-action="rp-edit-change" data-id="${c.id}">${ic('edit')}</button>
         <button class="icon-btn del" title="Excluir" aria-label="Excluir change" data-action="rp-del-change" data-id="${c.id}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
         : empty('Nenhuma change registrada', 'Registre aqui as mudanças de escopo, prazo ou custo pedidas durante o projeto.')}`;
-  }
-
-  function changeForm(id) {
-    const c = id ? changeCtx.list.find(x => x.id === id) : { title: '', reason: '', requested_by: '', change_date: SA.todayIso(), impact_days: 0, impact_cost: '', status: 'PENDENTE' };
-    A().openDialog(id ? 'Editar change' : 'Nova change', `
-      <div class="field full"><label for="ct">Título</label><input id="ct" name="title" maxlength="200" value="${esc(c.title)}" required></div>
-      <div class="field"><label for="cd">Data</label><input id="cd" name="change_date" type="date" value="${c.change_date}" required></div>
-      <div class="field"><label for="cs">Situação</label><select id="cs" name="status">${Object.entries(CH).map(([k, v]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${v[0]}</option>`).join('')}</select></div>
-      <div class="field"><label for="ci">Impacto no prazo (dias)</label><input id="ci" name="impact_days" type="number" min="0" max="3650" value="${c.impact_days}"></div>
-      <div class="field"><label for="cc">Impacto em custo (R$)</label>${SA.moneyInput('cc', 'impact_cost', Number(c.impact_cost) > 0 ? c.impact_cost : '')}</div>
-      <div class="field full"><label for="cr">Solicitante</label><input id="cr" name="requested_by" maxlength="120" value="${esc(c.requested_by)}"></div>
-      <div class="field full"><label for="cx">Motivo / descrição</label><textarea id="cx" name="reason" maxlength="2000">${esc(c.reason)}</textarea></div>
-      <p class="hint full">Só changes <b>aprovadas</b> entram no relatório “Atrasos gerados por changes”.</p>`,
-      async d => { await api(id ? 'PUT' : 'POST', id ? 'changes/' + id : 'changes', { ...d, project_id: changeCtx.projectId }); A().toast('Change salva.'); });
   }
 
   async function action(el) {
@@ -255,9 +242,9 @@ const Rep = (() => {
       case 'rp-tab': st.tab = el.dataset.tab; await view(); break;
       case 'rp-print': window.print(); break;
       case 'rp-pick': st.project = String(id); await view(); break;
-      case 'rp-new-change': changeForm(); break;
-      case 'rp-edit-change': changeForm(id); break;
-      case 'rp-del-change': if (confirm('Excluir esta change?')) { await api('DELETE', 'changes/' + id); A().toast('Change excluída.'); await A().route(); } break;
+      case 'rp-new-change': A().openChange(null); break;
+      case 'rp-edit-change': A().openChange(changeCtx.list.find(x => x.id === id)); break;
+      case 'rp-del-change': if (confirm('Remover esta change? A tarefa ligada a ela (se houver) continua no cronograma, só sai do fluxo de changes.')) { await api('DELETE', 'changes/' + id); A().toast('Change removida.'); await A().route(); } break;
     }
   }
 

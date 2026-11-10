@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **49**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **50**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -28,7 +28,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `email_rules` | `id`, `project_id`, `event`, `recipients`, `include_responsible`, `subject`, `message`, `enabled`, `created_by`, `created_at` |
 | `email_log` | `id`, `rule_id`, `project_id`, `event`, `ref_key`, `recipients`, `subject`, `status`, `error`, `created_at` |
 | `email_test_log` | `id`, `created_at`, `created_by`, `recipient`, `ok`, `summary`, `file_name`, `log` |
-| `project_changes` | `id`, `project_id`, `title`, `reason`, `requested_by`, `change_date`, `impact_days`, `impact_cost`, `status`, `created_by`, `created_at` |
+| `project_changes` | `id`, `project_id`, `title`, `reason`, `requested_by`, `change_date`, `impact_days`, `impact_cost`, `status`, `task_id`, `created_by`, `created_at` (`task_id` liga a change à tarefa marcada como change; nulo em changes antigas ou quando a tarefa foi excluída) |
 | `ishikawa` | `id`, `project_id`, `problem`, `created_by`, `created_at` |
 | `ishikawa_causes` | `id`, `ishikawa_id`, `category`, `text`, `parent_id` |
 | `project_logos` | `kind` (`P` projeto, `S` Spot), `ref_id`, `content_type`, `content` (BLOB), `size`, `updated_at` (chave: `kind` + `ref_id`) |

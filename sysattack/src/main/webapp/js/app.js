@@ -337,7 +337,7 @@
           ? (depDone ? `<span class="lock fr" title="A tarefa anterior já terminou: pode começar">✔ Liberada — “${esc(dep.name)}” ${dep.status === 'CANCELADA' ? 'cancelada' : 'concluída'}</span>`
             : `<span class="lock lk" title="Só deve começar depois que “${esc(dep.name)}” terminar">🔒 Bloqueada por “${esc(dep.name)}”</span>`)
           : (dep ? `<span class="lock dn" title="Dependia de: ${esc(dep.name)}">↳ Dependia de “${esc(dep.name)}”</span>` : '');
-        return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"${level ? ` data-of="${t.parent_id}"` : ''}${hide ? ' hidden' : ''}><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${kids.length ? `<button type="button" class="t-tog" data-action="toggle-kids" data-id="${t.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas" title="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas">${collapsed ? '▸' : '▾'}</button>` : ''}${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)} ${sum}</span>
+        return `<tr class="${t.child_count ? 'row-parent' : ''}${level ? ' row-child' : ''}${lastKid ? ' last-child' : ''}"${level ? ` data-of="${t.parent_id}"` : ''}${hide ? ' hidden' : ''}><td class="strong"><div class="t-line">${level ? '<span class="t-branch" aria-hidden="true"></span>' : ''}<div class="t-txt"><span>${kids.length ? `<button type="button" class="t-tog" data-action="toggle-kids" data-id="${t.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas" title="${collapsed ? 'Mostrar' : 'Ocultar'} as filhas">${collapsed ? '▸' : '▾'}</button>` : ''}${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}${t.is_change ? ' <span class="chg-tag" title="Tarefa marcada como change">CHANGE</span>' : ''} ${sum}</span>
         <span class="small">${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}</span>${lock ? `<span class="rels">${lock}</span>` : ''}</div></div></td>
         ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
         <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
@@ -740,8 +740,13 @@
     const t0 = taskId ? allTasks.find(x => x.id === taskId) : null;
     const projects = view.projects || [];
     const projectId = t0 ? t0.project_id : (preset.projectId || null);
-    const t = t0 || { name: '', description: '', responsible: '', progress: 0, status: 'A_FAZER', depends_on: null, parent_id: preset.parentId || null,
+    const fc = preset.fromChange || null; // change antiga (sem tarefa) que está sendo transformada em tarefa
+    const t = t0 || { name: fc ? fc.title : '', description: '', responsible: '', progress: 0, status: 'A_FAZER', depends_on: null, parent_id: preset.parentId || null,
       is_milestone: !!preset.milestone, project_id: projectId || '' };
+    const ch = t0 && t0.is_change ? { status: t0.change_status, who: t0.change_requested_by, reason: t0.change_reason, date: String(t0.change_date || '').slice(0, 10), days: t0.change_impact_days, cost: t0.change_impact_cost }
+      : fc ? { status: fc.status, who: fc.requested_by, reason: fc.reason, date: String(fc.change_date).slice(0, 10), days: fc.impact_days, cost: fc.impact_cost }
+      : { status: 'PENDENTE', who: '', reason: '', date: todayIso(), days: 0, cost: '' };
+    const isChange = !!(t0 && t0.is_change) || !!preset.change || !!fc;
     if (!t0) {
       const pr = (view.project && view.project.id === projectId) ? view.project : projects.find(x => x.id === projectId);
       const today = todayIso(), inside = pr && today >= pr.start_date && today <= pr.end_date;
@@ -751,10 +756,19 @@
     const hasKids = !!(t0 && t0.child_count > 0);
     const projSel = !taskId && !projectId
       ? `<div class="field full"><label for="tp">Projeto</label><select id="tp" name="project_id" required>${projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>` : '';
-    const form = openDialog(taskId ? (t.is_milestone && !hasKids ? 'Editar marco' : 'Editar tarefa') : (preset.asParent ? 'Nova tarefa pai' : preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
+    const form = openDialog(taskId ? (isChange ? 'Editar change' : t.is_milestone && !hasKids ? 'Editar marco' : 'Editar tarefa') : (preset.change || fc ? 'Nova change' : preset.asParent ? 'Nova tarefa pai' : preset.parentId ? 'Nova tarefa filha' : preset.milestone ? 'Novo marco' : 'Nova tarefa'), `${projSel}
       <div class="field full"><label for="tn">Nome</label><input id="tn" name="name" maxlength="160" value="${esc(t.name)}" required></div>
       <div class="field full"${hasKids ? ' hidden' : ''}><label class="check"><input type="checkbox" name="is_milestone" ${t.is_milestone && !hasKids ? 'checked' : ''} ${hasKids ? 'disabled' : ''}> Marcar como marco (entrega ou ponto de controle — aparece como losango no Gantt)</label></div>
       <div class="field full"><label class="check"><input type="checkbox" name="is_important" ${t.is_important ? 'checked' : ''}> Marcar como importante (entra no quadrante "importante" da Matriz de prioridades, mesmo que o projeto não seja prioritário)</label></div>
+      <div class="field full"><label class="check"><input type="checkbox" name="is_change" ${isChange ? 'checked' : ''}> <span>Esta tarefa é uma <b>change</b> (mudança de escopo, prazo ou custo pedida durante o projeto): ela entra no fluxo de changes e nos relatórios de changes.</span></label></div>
+      <div class="chg-box full" id="chg-box"${isChange ? '' : ' hidden'}>
+        <div class="field"><label for="cg-s">Situação da change</label><select id="cg-s" name="chg_status">${Object.entries({ PENDENTE: 'Pendente', APROVADA: 'Aprovada', REJEITADA: 'Rejeitada' }).map(([k, v]) => `<option value="${k}"${k === ch.status ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+        <div class="field"><label for="cg-d">Data da solicitação</label><input id="cg-d" name="chg_date" type="date" value="${ch.date}"></div>
+        <div class="field"><label for="cg-i">Impacto no prazo (dias)</label><input id="cg-i" name="chg_days" type="number" min="0" max="3650" value="${ch.days || 0}"></div>
+        <div class="field"><label for="cg-c">Impacto em custo (R$)</label>${SA.moneyInput('cg-c', 'chg_cost', Number(ch.cost) > 0 ? ch.cost : '')}</div>
+        <div class="field full"><label for="cg-w">Solicitante</label><input id="cg-w" name="chg_who" maxlength="120" value="${esc(ch.who)}"></div>
+        <div class="field full"><label for="cg-r">Motivo da change</label><textarea id="cg-r" name="chg_reason" maxlength="2000" style="min-height:70px">${esc(ch.reason)}</textarea></div>
+        <p class="hint full">Só changes <b>aprovadas</b> entram no relatório “Atrasos gerados por changes”.${t0 && t0.is_change ? ' Desmarcar “é uma change” tira esta tarefa do fluxo de changes (a tarefa continua no cronograma).' : ''}</p></div>
       ${preset.asParent ? '<p class="hint full" style="grid-column:1/-1">Uma tarefa pai agrupa outras. Depois de salvar, use o botão <b>+ Filha</b> na linha dela para criar as tarefas dentro dela, ou edite tarefas existentes e escolha esta como “Pertence a”. Início, fim, progresso e situação passam a ser calculados pelas filhas.</p>' : ''}
       <div class="field"><label for="tpar">Pertence a (tarefa pai)</label><select id="tpar" name="parent_id" ${hasKids || preset.asParent ? 'disabled' : ''}></select></div>
       <div class="field"><label for="td">Depende de</label><select id="td" name="depends_on"></select></div>
@@ -766,7 +780,9 @@
       ${hasKids ? '<p class="hint full" style="grid-column:1/-1">Esta tarefa tem filhas: o <b>progresso</b> e a <b>situação</b> são calculados a partir delas. O <b>início</b> e o <b>fim</b> são desta tarefa: você define, e alterar as filhas não muda estas datas.</p>' : ''}
       <div class="field full"><label for="tx">Descrição</label><textarea id="tx" name="description" maxlength="4000" style="min-height:80px">${esc(t.description)}</textarea></div>`,
       async d => {
-        const body = { ...d, is_milestone: !!d.is_milestone, is_important: !!d.is_important, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
+        const body = { ...d, is_milestone: !!d.is_milestone, is_important: !!d.is_important, is_change: !!d.is_change, parent_id: d.parent_id || null, depends_on: d.depends_on || null };
+        if (body.is_change) body.change = { status: d.chg_status, change_date: d.chg_date || null, impact_days: d.chg_days || 0, impact_cost: d.chg_cost, requested_by: d.chg_who, reason: d.chg_reason, ...(fc && !taskId ? { link_id: fc.id } : {}) };
+        ['chg_status', 'chg_date', 'chg_days', 'chg_cost', 'chg_who', 'chg_reason'].forEach(k => delete body[k]);
         if (taskId) delete body.project_id;
         else if (projectId) body.project_id = projectId; // dentro do projeto não há seletor: usa o projeto atual
         await api(taskId ? 'PUT' : 'POST', taskId ? 'tasks/' + taskId : 'tasks', body);
@@ -789,6 +805,9 @@
     fillSelects();
     el.parent_id.addEventListener('change', () => fillSelects(true));
     if (el.project_id && !taskId && !projectId) el.project_id.addEventListener('change', () => { t.parent_id = null; fillSelects(); });
+    const chk = el.is_change, box = form.querySelector('#chg-box');
+    const syncChg = () => { box.hidden = !chk.checked; };
+    chk.addEventListener('change', syncChg);
     const syncMs = () => { form.querySelector('#g-end').hidden = ms.checked; form.querySelector('#l-start').textContent = ms.checked ? 'Data do marco' : 'Início'; };
     ms.addEventListener('change', syncMs); syncMs();
     rng.addEventListener('input', () => {
@@ -955,7 +974,11 @@
     window.scrollTo(0, y);
   }
 
-  window.App = { get me() { return me; }, get main() { return main; }, get view() { return view; }, isLate, T_STATUS, dayDiff, dlg, api, openDialog, toast, pageHead, route };
+  function openChange(c) {   // aba Changes: a change é uma tarefa marcada como change, com o mesmo formulário de tarefa
+    if (c && c.task_id) openTaskForm(view.tasks, c.task_id);
+    else openTaskForm(view.tasks, null, { projectId: view.projectId, change: true, ...(c ? { fromChange: c } : {}) });
+  }
+  window.App = { openChange, get me() { return me; }, get main() { return main; }, get view() { return view; }, isLate, T_STATUS, dayDiff, dlg, api, openDialog, toast, pageHead, route };
   window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
   // menu do celular: abre/fecha, fecha ao navegar e com Esc
   const sidebar = document.querySelector('.sidebar'), menuBtn = document.getElementById('menu-btn');

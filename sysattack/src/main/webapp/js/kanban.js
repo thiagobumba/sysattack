@@ -41,7 +41,7 @@ const Kan = (() => {
     const who = people(t);
     const prev = COLS[idx - 1], next = COLS[idx + 1];
     return `<article class="kb-card${t.status === 'CANCELADA' ? ' canceled' : ''}" draggable="true" tabindex="0" data-id="${t.id}" data-st="${t.status}">
-      <button type="button" class="kb-name" data-action="edit-task" data-id="${t.id}" title="Abrir a tarefa">${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}</button>
+      <button type="button" class="kb-name" data-action="edit-task" data-id="${t.id}" title="Abrir a tarefa">${t.is_milestone ? '<i class="dia-ic" title="Marco"></i>' : ''}${esc(t.name)}${t.is_change ? ' <span class="chg-tag" title="Tarefa marcada como change">CHANGE</span>' : ''}</button>
       <div class="kb-meta">${who.length ? `<span class="kb-av" title="${esc(t.responsible)}">${esc(initials(who[0]))}${who.length > 1 ? `<small>+${who.length - 1}</small>` : ''}</span>` : '<span class="kb-av ph" title="Sem responsável">?</span>'}${chips(t, byId)}</div>
       ${t.status === 'EM_ANDAMENTO' ? `<div class="kb-pb" title="Progresso ${t.progress}%"><i style="width:${t.progress}%"></i></div>` : ''}
       <div class="kb-mv">${prev ? `<button type="button" data-action="kb-move" data-id="${t.id}" data-to="${prev.k}" title="Mover para ${prev.label}" aria-label="Mover para ${prev.label}">‹</button>` : '<span></span>'}${next ? `<button type="button" data-action="kb-move" data-id="${t.id}" data-to="${next.k}" title="Mover para ${next.label}" aria-label="Mover para ${next.label}">›</button>` : ''}</div>

@@ -88,8 +88,10 @@ public class ApiServlet extends HttpServlet {
 
     private static final String TASK_SQL =
             "SELECT t.*, p.name project_name, p.priority project_priority, p.company_goal project_goal, p.status project_status,"
-          + " (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) child_count"
-          + " FROM tasks t JOIN projects p ON p.id = t.project_id";
+          + " (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) child_count,"
+          + " (pc.id IS NOT NULL) is_change, pc.id change_id, pc.status change_status, pc.requested_by change_requested_by, pc.reason change_reason,"
+          + " pc.change_date change_date, pc.impact_days change_impact_days, pc.impact_cost change_impact_cost"
+          + " FROM tasks t JOIN projects p ON p.id = t.project_id LEFT JOIN project_changes pc ON pc.task_id = t.id";
 
     /** Controle de tentativas de login: chave "email|ip" -> [falhas, bloqueado até (ms)]. */
     private static final Map<String, long[]> ATTEMPTS = new ConcurrentHashMap<>();
@@ -193,7 +195,7 @@ public class ApiServlet extends HttpServlet {
                 return users(m, s, req, user);
             case "dashboard": return dashboard();
             case "projects": return projects(m, s, req, resp, user);
-            case "tasks": return tasks(m, s, req);
+            case "tasks": return tasks(m, s, req, user);
             case "finance": return finance(m, s, req);
             case "documents": return documents(m, s, req, resp, user);
             case "ai": requireAdmin(user); return ai(m, s, req, user);
@@ -861,21 +863,22 @@ public class ApiServlet extends HttpServlet {
 
     // ------------------------------------------------------------------ tarefas
 
-    private Object tasks(String m, List<String> s, HttpServletRequest req) throws Exception {
+    private Object tasks(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws Exception {
         if (s.size() == 1) {
             if (m.equals("GET")) return Db.query(TASK_SQL + " ORDER BY t.start_date, t.id");
-            if (m.equals("POST")) return saveTask(null, body(req));
+            if (m.equals("POST")) return saveTask(null, body(req), user);
         } else if (s.size() >= 2) {
             long id = Long.parseLong(s.get(1));
             Map<String, Object> t = Db.one(TASK_SQL + " WHERE t.id = ?", id);
             if (t == null) throw new ApiException(404, "Tarefa não encontrada.");
             if (s.size() == 2) {
                 if (m.equals("GET")) return t;
-                if (m.equals("PUT")) return saveTask(t, body(req));
+                if (m.equals("PUT")) return saveTask(t, body(req), user);
                 if (m.equals("DELETE")) {
                     String taskBlock = taskDeleteBlock(t);
                     if (taskBlock != null) throw new ApiException(409, taskBlock);
                     Long parent = optNum(t.get("parent_id"));
+                    Db.update("UPDATE project_changes SET task_id = NULL WHERE task_id = ?", id); // a change continua registrada, sem tarefa
                     Db.update("DELETE FROM tasks WHERE id = ?", id);
                     TaskRules.rollup(parent);
                     return Map.of("ok", true);
@@ -910,7 +913,7 @@ public class ApiServlet extends HttpServlet {
         return saved;
     }
 
-    private Object saveTask(Map<String, Object> existing, JsonObject b) throws SQLException {
+    private Object saveTask(Map<String, Object> existing, JsonObject b, Map<String, Object> user) throws SQLException {
         Long id = existing == null ? null : ((Number) existing.get("id")).longValue();
         long projectId = existing == null ? longOf(b, "project_id", "Projeto")
                                           : ((Number) existing.get("project_id")).longValue();
@@ -982,6 +985,7 @@ public class ApiServlet extends HttpServlet {
         }
         TaskRules.rollup(parent);
         if (oldParent != null && !oldParent.equals(parent)) TaskRules.rollup(oldParent);
+        ChangeService.syncWithTask(id, projectId, name, b, user);
         Map<String, Object> saved = Db.one(TASK_SQL + " WHERE t.id = ?", id);
         taskEvents(existing, saved);
         return saved;

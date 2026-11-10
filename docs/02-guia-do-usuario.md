@@ -110,7 +110,7 @@ Envie PDF, imagens, Office, ZIP, DWG etc. (até 25 MB), visualize PDF/imagem no 
 
 ## Changes
 
-Registre solicitações de mudança: título, motivo, solicitante, data, **impacto em dias** e **em R$**, situação (pendente, aprovada, rejeitada). Changes aprovadas com impacto em dias aparecem em Relatórios (Atrasos gerados por changes); changes pendentes há muito tempo afetam a saúde do projeto.
+Toda change é também uma **tarefa** do projeto marcada como change: no formulário de tarefa há a opção **“Esta tarefa é uma change”**, que mostra os campos da change; o botão **+ Nova change** da aba Changes abre esse mesmo formulário já marcado. A tarefa aparece no cronograma, nas tarefas e no Kanban com a etiqueta **CHANGE**. Changes antigas (sem tarefa) mostram “sem tarefa” e, ao editar, viram tarefa. Remover a change (ou desmarcar a opção) tira a tarefa do fluxo de changes, mas a tarefa continua; excluir a tarefa mantém a change registrada. Campos da change: título (nome da tarefa), motivo, solicitante, data, **impacto em dias** e **em R$**, situação (pendente, aprovada, rejeitada). Changes aprovadas com impacto em dias aparecem em Relatórios (Atrasos gerados por changes); changes pendentes há muito tempo afetam a saúde do projeto.
 
 ## Ishikawa (espinha de peixe)
 

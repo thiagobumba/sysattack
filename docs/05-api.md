@@ -56,7 +56,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 | `PUT /tasks/{id}/important` | Marcar importante (`{ "important": true }`) |
 | `GET/POST /finance` · `PUT/DELETE /finance/{id}` | Lançamentos financeiros |
 | `PUT/DELETE /documents/{id}` · `GET /documents/{id}/file` | Editar metadados, apagar, baixar/visualizar |
-| `GET/POST /changes` · `PUT/DELETE /changes/{id}` | Changes (`GET /changes?project_id=`) |
+| `GET /changes` · `DELETE /changes/{id}` | Changes (`GET /changes?project_id=`, com dados da tarefa ligada); a change é criada e editada pela **tarefa**: `POST/PUT /tasks` com `is_change` e `change` (`status`, `change_date`, `impact_days`, `impact_cost`, `requested_by`, `reason`, `link_id` para ligar uma change antiga). `is_change: false` tira a tarefa do fluxo de changes; sem o campo, nada muda |
 | `GET/POST /ishikawa` · `PUT/DELETE /ishikawa/{id}` | Diagramas (`GET /ishikawa?project_id=`) |
 | `POST /ishikawa/{id}/causes` · `PUT/DELETE /ishikawa/causes/{id}` | Causas e subcausas |
 | `GET /reports` | Dados de Relatórios & Dashs |
