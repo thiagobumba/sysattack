@@ -437,7 +437,6 @@ const Spot = (() => {
       A().openDialog(id ? 'Editar projeto spot' : copyFrom ? 'Copiar projeto spot' : 'Novo projeto spot', `
         ${Logo.field('S', copyFrom ? {} : p)}
         <div class="field full"><label for="sk">Tipo do projeto</label><select id="sk" name="kind">${opts(P_KIND, p.kind || 'PADRAO')}</select><small class="fhint" id="sk-h"></small></div>
-        <div class="field full" id="tk-f"><label for="tk">Link base do chamado TIFlux <span class="opt">(opcional)</span></label><input id="tk" name="ticket_url" maxlength="300" value="${esc(p.ticket_url || '')}" placeholder="https://seu-tiflux/tickets/{n}"><small class="fhint">Use {n} onde vai o número do chamado. Sem {n}, o número é colocado no fim do endereço.</small></div>
         <div class="field full"><label for="sn">Nome</label><input id="sn" name="name" maxlength="160" value="${esc(p.name)}" required></div>
         <div class="field"><label for="sc">Cliente</label><input id="sc" name="client" maxlength="160" value="${esc(p.client)}"></div>
         <div class="field"><label for="sp">Fornecedor / equipe</label><input id="sp" name="provider" maxlength="160" value="${esc(p.provider)}"></div>
@@ -457,14 +456,13 @@ const Spot = (() => {
         <div class="field full"><label for="sx">Descrição</label><textarea id="sx" name="description" maxlength="2000">${esc(p.description)}</textarea></div>
         ${copyFrom ? '<p class="hint full"><b>Cópia do contrato anterior.</b> Informe o início e a data final do novo período. Demandas, horas, ações e relatórios não são copiados.</p>' : ''}
         <p data-std class="hint full">Franquia mensal: o consumo conta do dia 1º do mês de referência até a data. Pacote: conta desde o início do projeto.</p>`,
-        async d => { const evo = d.kind !== 'PADRAO'; const cs = !evo && !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, kind: d.kind || 'PADRAO', ticket_url: evo ? (d.ticket_url || '') : '', closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); const lf = document.querySelector('#dlg form'); if (Logo.has(lf)) await Logo.apply('S', s.id, lf, await logoSender(s.id)); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
+        async d => { const evo = d.kind !== 'PADRAO'; const cs = !evo && !!d.closed_scope; const s = await api(id ? 'PUT' : 'POST', id ? 'spot/' + id : 'spot', { ...d, kind: d.kind || 'PADRAO', closed_scope: cs, project_value: cs ? d.project_value : 0, partner_hour_rate: cs ? 0 : d.partner_hour_rate, partner_overage_rate: cs ? 0 : d.partner_overage_rate, recurring: cs ? false : !!d.recurring, hours_model: cs ? 'PACOTE' : d.hours_model, contracted_hours: cs ? 0 : d.contracted_hours, end_date: d.end_date || null }); const lf = document.querySelector('#dlg form'); if (Logo.has(lf)) await Logo.apply('S', s.id, lf, await logoSender(s.id)); A().toast('Projeto spot salvo.'); if (!id) location.hash = '#/spot/' + s.id; });
       // tipo do projeto: escopo fechado não controla horas; contrato e escopo fechado são excludentes
       const f = document.querySelector('#dlg form'), cs = f.elements.closed_scope, rc = f.elements.recurring;
       Logo.bind(f);
       const kd = f.elements.kind;
       const evoSync = () => {
         const evo = kd.value !== 'PADRAO';
-        document.getElementById('tk-f').style.display = evo ? '' : 'none';
         document.getElementById('sk-h').textContent = evo ? 'Reúne os pedidos que chegam por e-mail ou chamado TIFlux, o que o TI fez e a feature entregue. Não controla horas.' : '';
         f.querySelectorAll('[data-std]').forEach(e => { e.style.display = evo ? 'none' : ''; });
         if (evo) { cs.checked = false; rc.checked = false; }
