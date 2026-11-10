@@ -277,7 +277,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>`}
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('relatorio', 'Relatório') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
+        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('economia', 'Economia') + tab('relatorio', 'Relatório') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
@@ -341,6 +341,46 @@ const Spot = (() => {
   }
 
   const ftEco = (f, rows) => { const est = rows.filter(r => r.feature_id === f.id && r.status === 'ENTREGUE').reduce((s, r) => s + Number(r.estimate_hours || 0), 0), ex = Number(f.effort_hours || 0); return est > 0 || ex > 0 ? `<p class="ft-eco"><b>Estimado × Executado:</b> ${est > 0 ? hh(est) : 'sem estimativa'} × ${ex > 0 ? hh(ex) : 'sem esforço'}${est > 0 && ex > 0 ? ` · <b class="${est >= ex ? 'pos' : 'neg'}">${est >= ex ? 'economia de ' : 'acima em '}${hh(Math.abs(est - ex))}</b>` : ''}</p>` : ''; };
+  const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  /** Aba Economia: o que o time interno devolveu à empresa, mês a mês e por feature (para mostrar à diretoria). */
+  function ecoTab(p) {
+    const c = p.evo.eco, rate = Number(c.rate) || 0, est = Number(c.estimated), exe = Number(c.executed);
+    if (!c.features.length) return `<p class="hint">Ainda sem dados de economia.</p>${empty('Sem economia calculada', 'Informe a Estimativa Beecloud (h) nas demandas e o Esforço (h) do time interno na feature entregue. Em Editar projeto, informe o valor da hora do time externo.')}${c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa.</p>` : ''}`;
+    const money = rate > 0, unit = v => money ? brl(v * rate) : hh(v);
+    // série mensal acumulada, sem buracos entre o primeiro mês e o mês atual
+    const by = Object.fromEntries(c.months.map(m => [m.month, Number(m.estimated)]));
+    const keys = Object.keys(by).sort();
+    const series = [];
+    if (keys.length) {
+      let [y, m] = keys[0].split('-').map(Number); const now = todayIso().slice(0, 7); let acc = 0;
+      for (let i = 0; i < 60; i++) { const k = `${y}-${String(m).padStart(2, '0')}`; if (k > now && k > keys[keys.length - 1]) break; acc += by[k] || 0; series.push({ k, v: acc, label: MES[m - 1] }); if (++m > 12) { m = 1; y++; } }
+    }
+    const W = 520, H = 190, L = 24, R = 24, T = 14, B = 26, mx = Math.max(...series.map(s => s.v), 1);
+    const X = i => L + (series.length < 2 ? (W - L - R) / 2 : i * (W - L - R) / (series.length - 1)), Y = v => T + (H - T - B) * (1 - v / mx);
+    const chart = series.length ? `<svg viewBox="0 0 ${W} ${H}" class="eco-svg" role="img" aria-label="${money ? 'Reais' : 'Horas'} que deixamos de gastar por mês, acumulado">
+      ${[0, .5, 1].map(f => `<line x1="${L}" x2="${W - R}" y1="${Y(mx * f)}" y2="${Y(mx * f)}" stroke="#e5e5e5"/>`).join('')}
+      <polyline fill="none" stroke="#1a7f37" stroke-width="3" points="${series.map((s, i) => `${X(i)},${Y(s.v)}`).join(' ')}"/>
+      ${series.map((s, i) => `<circle cx="${X(i)}" cy="${Y(s.v)}" r="4" fill="#1a7f37"><title>${s.label}: ${unit(s.v)}</title></circle><text x="${X(i)}" y="${H - 8}" font-size="11" fill="#666" text-anchor="middle">${s.label}</text>`).join('')}</svg>` : '';
+    const items = [...c.features].sort((a, b) => b.estimated - a.estimated);
+    const mxf = Math.max(...items.map(f => Number(f.estimated)), 1);
+    const eff = est > 0 ? Math.round(exe / est * 100) : 0, saved = est - exe;
+    return `<div class="eco-tab">
+      <div class="eco-top"><div><span class="eco-k">${money ? 'Deixamos de gastar' : 'Horas estimadas pelo time externo'}</span><b class="eco-big">${money ? brl(c.avoided) : hh(est)}</b>
+        <p class="eco-p">Com o time interno entregamos <b>${c.demands} demanda(s) em ${hh(exe)}</b>. O time externo (Beecloud) estimou <b>${hh(est)}</b>${money ? ` a <b>${brl(rate)}/h</b>` : ''}. Foram <b class="${saved >= 0 ? 'pos' : 'neg'}">${hh(Math.abs(saved))} ${saved >= 0 ? 'a menos' : 'a mais'}</b> (${Math.abs(100 - eff)}%).</p>
+        ${money ? '' : '<p class="hint">Informe o valor da hora do time externo em Editar projeto para ver o valor em reais.</p>'}</div>
+        <div><span class="eco-k">${money ? 'R$ que deixamos de gastar, acumulado por mês' : 'Horas estimadas, acumuladas por mês'}</span>${chart}</div></div>
+      <div class="eco-cards">
+        <div class="eco-c"><span>Estimado Beecloud</span><b>${hh(est)}</b></div>
+        <div class="eco-c"><span>Executado interno</span><b>${hh(exe)}</b></div>
+        <div class="eco-c"><span>Eficiência (executado ÷ estimado)</span><b>${eff}%</b></div>
+        <div class="eco-c"><span>Demandas sem estimativa</span><b class="${c.no_estimate ? 'neg' : ''}">${c.no_estimate}</b><small>não entram no cálculo</small></div></div>
+      <h3 class="evo-h" style="margin-top:22px">Features que mais economizaram</h3>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>Feature</th><th class="num">Estimado</th><th class="num">Executado</th><th class="num">${money ? 'Deixamos de gastar' : 'Horas a menos'}</th></tr></thead><tbody>
+      ${items.map(f => { const d = Number(f.estimated) - Number(f.executed); return `<tr><td><span class="badge b-dark">${fmtNo(f.number)}</span> <b>${esc(f.name)}</b><span class="eco-b" style="margin-top:6px"><i class="${d >= 0 ? 'exe' : 'bad'}" style="width:${(Number(f.estimated) / mxf * 100).toFixed(1)}%"></i></span></td>
+        <td class="num">${hh(f.estimated)}</td><td class="num ${d < 0 ? 'neg' : ''}">${hh(f.executed)}</td><td class="num strong ${d < 0 ? 'neg' : 'pos'}">${money ? brl(Number(f.estimated) * rate) : (d >= 0 ? '' : '− ') + hh(Math.abs(d))}${money && d < 0 ? `<span class="small neg">${hh(Math.abs(d))} acima da estimativa</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:10px">Como é calculado: R$ = estimativa Beecloud (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
+  }
+
   /** HTML do relatório do projeto evolutivo (estilos inline: serve para o navegador, o PDF e anexo de e-mail). */
   function evoReportHtml(p, rows, feats, o) {
     const INK = '#1a1a1a', MUTED = '#5f5f66', LINE = '#dddde0', ORANGE = '#f45200';
@@ -446,6 +486,8 @@ const Spot = (() => {
       };
       draw();
       document.getElementById('rq-q').addEventListener('input', e => { st.reqQ = e.target.value; draw(); });
+    } else if (st.tab === 'economia') {
+      host.innerHTML = ecoTab(p);
     } else if (st.tab === 'relatorio') {
       renderEvoReport(host, p, rows);
     } else if (st.tab === 'features') {

@@ -1046,3 +1046,11 @@ button.jr-ins { cursor: pointer; } button.jr-ins:hover { border-color: var(--ink
 .eco-b em{position:relative;font-style:normal;font-size:11px;padding-left:6px;line-height:18px}
 .eco-warn{margin:8px 0 0}.ft-eco{margin:8px 0}
 @media(max-width:800px){.eco-cards{grid-template-columns:repeat(2,1fr)}}
+
+.eco-top{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;margin-bottom:18px}
+.eco-k{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#555;margin-bottom:4px}
+.eco-big{display:block;font-size:44px;line-height:1.1;color:#1a7f37;font-weight:300}
+.eco-p{margin:10px 0 0;font-size:15px}.eco-svg{width:100%;height:auto;display:block}
+.eco-b .bad{background:#f3c1be}.pos{color:#1a7f37}.neg{color:#c0392b}
+.eco-tab .eco-b{height:8px}
+@media(max-width:800px){.eco-top{grid-template-columns:1fr}.eco-big{font-size:34px}}

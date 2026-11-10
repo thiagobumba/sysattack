@@ -544,14 +544,21 @@ final class SpotService {
         BigDecimal rate = (BigDecimal) Db.one("SELECT external_rate FROM spot_projects WHERE id = ?", spotId).get("external_rate");
         BigDecimal est = BigDecimal.ZERO, exec = BigDecimal.ZERO;
         List<Map<String, Object>> items = new ArrayList<>();
+        java.util.TreeMap<String, BigDecimal[]> months = new java.util.TreeMap<>(); // mês de entrega -> {estimado, executado}
+        long nDem = 0;
         for (Map<String, Object> f : Db.query("SELECT f.id, f.number, f.name, f.effort_hours,"
+                + " (SELECT MAX(r.delivered_at) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE') dt,"
+                + " (SELECT COUNT(*) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE' AND r.estimate_hours > 0) nd,"
                 + " (SELECT COALESCE(SUM(r.estimate_hours), 0) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE') est"
                 + " FROM spot_features f WHERE f.spot_id = ? AND f.effort_hours IS NOT NULL ORDER BY f.number DESC", spotId)) {
             BigDecimal e = (BigDecimal) f.get("est"), x = (BigDecimal) f.get("effort_hours");
             if (e.signum() <= 0) continue; // sem estimativa da Beecloud não há o que comparar
             est = est.add(e); exec = exec.add(x);
+            nDem += ((Number) f.get("nd")).longValue();
+            String mo = f.get("dt") == null ? "" : String.valueOf(f.get("dt")).substring(0, 7);
+            if (!mo.isEmpty()) { BigDecimal[] a = months.computeIfAbsent(mo, k -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO}); a[0] = a[0].add(e); a[1] = a[1].add(x); }
             Map<String, Object> it = new java.util.LinkedHashMap<>();
-            it.put("id", f.get("id")); it.put("number", f.get("number")); it.put("name", f.get("name")); it.put("estimated", e); it.put("executed", x);
+            it.put("id", f.get("id")); it.put("number", f.get("number")); it.put("name", f.get("name")); it.put("estimated", e); it.put("executed", x); it.put("month", mo);
             items.add(it);
         }
         long noEst = ((Number) Db.one("SELECT COUNT(*) n FROM spot_requests WHERE spot_id = ? AND status = 'ENTREGUE' AND (estimate_hours IS NULL OR estimate_hours = 0)", spotId).get("n")).longValue();
@@ -560,7 +567,14 @@ final class SpotService {
         out.put("saved_pct", est.signum() > 0 ? saved.multiply(new BigDecimal(100)).divide(est, 0, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO);
         out.put("avoided", est.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP)); // o que teria sido pago ao time externo
         out.put("saved_value", saved.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP)); // diferença de horas em reais
-        out.put("features", items); out.put("no_estimate", noEst);
+        out.put("features", items); out.put("no_estimate", noEst); out.put("demands", nDem);
+        List<Map<String, Object>> ml = new ArrayList<>();
+        for (Map.Entry<String, BigDecimal[]> en : months.entrySet()) {
+            Map<String, Object> mm = new java.util.LinkedHashMap<>();
+            mm.put("month", en.getKey()); mm.put("estimated", en.getValue()[0]); mm.put("executed", en.getValue()[1]);
+            ml.add(mm);
+        }
+        out.put("months", ml);
         return out;
     }
 
