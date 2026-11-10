@@ -377,9 +377,11 @@ const Spot = (() => {
       b += h2('Demandas') + (rq.length ? `<table style="border-collapse:collapse;width:100%"><tr><th style="${th}">Recebido</th><th style="${th}">Chamado</th><th style="${th}">Pedido</th><th style="${th}">Solicitante</th><th style="${th}">Situação</th><th style="${th}">Feature</th></tr>${rq.map(r => `<tr><td style="${td}">${fmt(String(r.received_at).slice(0, 10))}</td><td style="${td}">${esc(r.ticket_no || (r.channel === 'EMAIL' ? 'E-mail' : '—'))}</td><td style="${td}">${esc(r.title)}</td><td style="${td}">${esc(r.requester || '—')}</td><td style="${td}">${esc(R_STATUS[r.status][0])}</td><td style="${td}">${r.feature_id ? fmtNo(r.feature_no) : '—'}</td></tr>`).join('')}</table>` : `<p style="font-size:13px;color:${MUTED}">Nenhum pedido no período.</p>`);
     }
     const per = o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período';
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório · ${esc(p.name)}</title><style>@page{margin:14mm}</style></head><body style="margin:0;padding:24px 30px;font-family:'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;color:${INK};background:#fff">
-      <div style="border-bottom:4px solid ${ORANGE};padding-bottom:10px"><div style="font-size:12px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div><h1 style="font-size:24px;margin:2px 0">${esc(p.name)}</h1><div style="font-size:12px;color:${MUTED}">Período: ${per} · Emitido em ${fmt(todayIso())}</div></div>${b}</body></html>`;
+    return `<div style="border-bottom:4px solid ${ORANGE};padding-bottom:10px"><div style="font-size:12px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div><h1 style="font-size:24px;margin:2px 0">${esc(p.name)}</h1><div style="font-size:12px;color:${MUTED}">Período: ${per} · Emitido em ${fmt(todayIso())}</div></div>${b}`;
   }
+  const evoReportTitle = (p, o) => `Relatório · ${p.name}${o.from || o.to ? ' · ' + (o.from ? fmt(o.from) : 'início') + ' a ' + (o.to ? fmt(o.to) : 'hoje') : ''}`;
+  /** Documento completo (preview, download e edição): mesma moldura que o servidor usa. */
+  const evoReportDoc = (title, body, edit) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{margin:14mm}${edit ? 'body{outline:none}' : ''}</style></head><body style="margin:0;padding:24px 30px;background:#fff"><div style="max-width:780px;margin:0 auto;font-family:'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a">${body}</div></body></html>`;
 
   function renderEvoReport(host, p, rows) {
     const o = st.rep = st.rep || { from: '', to: '', sum: true, eco: true, feat: true, dem: true };
@@ -387,9 +389,17 @@ const Spot = (() => {
       <div class="field"><label for="rpf">De</label><input id="rpf" type="date" value="${o.from}"></div><div class="field"><label for="rpt">Até</label><input id="rpt" type="date" value="${o.to}"></div>
       </div><div style="display:flex;gap:8px 22px;flex-wrap:wrap;margin-top:12px" role="group" aria-label="Seções do relatório">${[['sum', 'Resumo'], ['eco', 'Economia'], ['feat', 'Features entregues'], ['dem', 'Demandas']].map(([k, l]) => `<label style="display:inline-flex;gap:6px;align-items:center;background:none;border:0;padding:0;text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" data-rp="${k}"${o[k] ? ' checked' : ''} style="width:auto;margin:0"> ${l}</label>`).join('')}</div>
       <p class="hint" style="margin:8px 0">Confira o preview abaixo. Sem datas, o relatório traz todo o período.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"><button class="btn btn-sm btn-primary" data-action="sp-rep-html">Gerar HTML</button><button class="btn btn-sm btn-primary" data-action="sp-rep-pdf">Gerar PDF</button></div></div>
-      <iframe class="preview" id="rp-frame" title="Preview do relatório" style="height:70vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>`;
-    const draw = () => { document.getElementById('rp-frame').srcdoc = st.repHtml = evoReportHtml(p, rows, st.features || [], o); };
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${locked() ? '' : '<button class="btn btn-sm btn-primary" data-action="sp-rep-save">Gerar relatório</button>'}<button class="btn btn-sm" data-action="sp-rep-html">Baixar HTML</button><button class="btn btn-sm" data-action="sp-rep-pdf">Baixar PDF</button></div></div>
+      <iframe class="preview" id="rp-frame" title="Preview do relatório" style="height:70vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>
+      <h3 class="evo-h" style="margin-top:22px">Relatórios gerados</h3><div id="rp-saved"></div>`;
+    api('GET', `spot/${st.id}/reports?kind=evo`).then(list => {
+      const box = document.getElementById('rp-saved'); if (!box) return;
+      box.innerHTML = list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Gerado por</th><th>Envio</th><th></th></tr></thead><tbody>${list.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
+        <td>${r.sent_at ? `<span class="badge b-green">Enviado</span><span class="small">${fmt(String(r.sent_at).slice(0, 10))}</span>` : '<span class="badge b-grey">Não enviado</span>'}</td>
+        <td class="acts">${locked() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar relatório" data-action="sp-edit-evo" data-id="${r.id}">${ic('edit')}</button><button class="icon-btn del" title="Excluir" aria-label="Excluir relatório" data-action="sp-del-report" data-id="${r.id}">${ic('trash')}</button>`}</td></tr>`).join('')}</tbody></table></div>`
+        : empty('Nenhum relatório gerado', 'Confira o preview e clique em “Gerar relatório”: ele fica guardado aqui para editar, imprimir ou enviar por e-mail.');
+    }).catch(() => {});
+    const draw = () => { st.repBody = evoReportHtml(p, rows, st.features || [], o); st.repTitle = evoReportTitle(p, o); document.getElementById('rp-frame').srcdoc = st.repHtml = evoReportDoc(st.repTitle, st.repBody); };
     host.querySelector('#rpf').addEventListener('change', e => { o.from = e.target.value; draw(); });
     host.querySelector('#rpt').addEventListener('change', e => { o.to = e.target.value; draw(); });
     host.querySelectorAll('[data-rp]').forEach(c => c.addEventListener('change', () => { o[c.dataset.rp] = c.checked; draw(); }));
@@ -825,7 +835,7 @@ const Spot = (() => {
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(r.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
       <iframe class="preview" id="sp-frame" src="api/spot/reports/${r.id}/html" title="${esc(r.title)}" style="height:60vh"></iframe>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
-        ${r.model === 'importado' ? '' : r.model === 'manual' ? `<button class="btn btn-sm" data-action="sp-edit-manual" data-id="${r.id}">Editar relatório</button>` : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
+        ${r.model === 'importado' ? '' : r.model === 'evolutivo' ? `<button class="btn btn-sm" data-action="sp-edit-evo" data-id="${r.id}">Editar relatório</button>` : r.model === 'manual' ? `<button class="btn btn-sm" data-action="sp-edit-manual" data-id="${r.id}">Editar relatório</button>` : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
         <button class="btn btn-sm" data-action="sp-print-report">Imprimir / salvar PDF</button>
         <button class="btn btn-sm btn-primary" data-action="sp-send-report" data-id="${r.id}">Enviar por e-mail</button></div></div>`;
     dlg.showModal();
@@ -847,6 +857,28 @@ const Spot = (() => {
         A().toast('Texto atualizado.');
         setTimeout(() => openReport(id), 300);
       });
+  }
+
+  /** Edita o HTML do relatório do projeto evolutivo direto no preview (como um editor de texto simples). */
+  async function evoReportEditor(id) {
+    const r = await api('GET', 'spot/reports/' + id);
+    const dlg = document.getElementById('dlg');
+    const tool = (c, l, t) => `<button type="button" class="btn btn-sm" data-ex="${c}" title="${t}">${l}</button>`;
+    A().openDialog('Editar relatório', `
+      <div class="field full"><label for="ert">Título</label><input id="ert" name="titulo" maxlength="200" value="${esc(r.title)}" required></div>
+      <div class="full" style="display:flex;gap:6px;flex-wrap:wrap">${tool('bold', '<b>N</b>', 'Negrito')}${tool('italic', '<i>I</i>', 'Itálico')}${tool('underline', '<u>S</u>', 'Sublinhado')}${tool('insertUnorderedList', '• Lista', 'Lista')}${tool('removeFormat', 'Limpar formatação', 'Remove a formatação do trecho selecionado')}</div>
+      <p class="hint full" style="margin:0">Clique no texto do relatório para ajustar. As cores e a estrutura (tabelas, títulos) são mantidas.</p>
+      <iframe id="er-frame" class="preview full" title="Editor do relatório" style="height:52vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>`,
+      async d => {
+        const body = document.getElementById('er-frame').contentDocument.body.firstElementChild;
+        await api('PUT', 'spot/reports/' + id, { title: d.titulo, html: body.innerHTML });
+        A().toast('Relatório salvo.');
+      });
+    dlg.className = 'wide';
+    const fr = document.getElementById('er-frame');
+    fr.addEventListener('load', () => { fr.contentDocument.designMode = 'on'; });
+    fr.srcdoc = evoReportDoc(r.title, r.data.html, true);
+    dlg.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { fr.contentWindow.focus(); fr.contentDocument.execCommand(b.dataset.ex, false, null); }));
   }
 
   async function sendReport(id) {
@@ -1236,6 +1268,8 @@ const Spot = (() => {
       case 'sp-edit-report': dlg.close(); await editReport(id); break;
       case 'sp-send-report': dlg.close(); await sendReport(id); break;
       case 'sp-rep-html': { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([st.repHtml], { type: 'text/html;charset=utf-8' })); a.download = 'relatorio-' + String(st.data.name || 'projeto').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + todayIso() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); A().toast('Relatório HTML gerado.'); break; }
+      case 'sp-rep-save': { const r = await api('POST', `spot/${st.id}/reports/evo`, { titulo: st.repTitle, html: st.repBody, ref_date: todayIso() }); A().toast('Relatório gerado.'); await openReport(r.id); break; }
+      case 'sp-edit-evo': dlg.close(); await evoReportEditor(id); break;
       case 'sp-rep-pdf': { const f = document.getElementById('rp-frame'); if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } break; }
       case 'sp-print-report': { const f = document.getElementById('sp-frame'); if (f && f.contentWindow) f.contentWindow.print(); break; }
     }

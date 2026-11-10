@@ -167,7 +167,7 @@ final class SpotService {
                         break;
                     case "reports":
                         if (m.equals("GET")) return Db.query("SELECT id, spot_id, title, ref_date, model, created_by, created_at, sent_at, sent_to, sent_by"
-                                + " FROM spot_reports WHERE spot_id = ? AND model " + ("manual".equals(req.getParameter("kind")) ? "=" : "<>") + " 'manual' ORDER BY created_at DESC, id DESC", id);
+                                + " FROM spot_reports WHERE spot_id = ? AND model " + ("evo".equals(req.getParameter("kind")) ? "= 'evolutivo'" : "manual".equals(req.getParameter("kind")) ? "= 'manual'" : "NOT IN ('manual','evolutivo')") + " ORDER BY created_at DESC, id DESC", id);
                         break;
                     default: break;
                 }
@@ -175,6 +175,8 @@ final class SpotService {
                 return generate(id, ApiServlet.body(req), user);
             } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("import") && m.equals("POST")) {
                 return importStatusReport(id, ApiServlet.body(req), user, "importado");
+            } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("evo") && m.equals("POST")) {
+                return saveEvoReport(id, ApiServlet.body(req), user);
             } else if (s.size() == 4 && s.get(2).equals("reports") && s.get(3).equals("manual") && m.equals("POST")) {
                 return importStatusReport(id, ApiServlet.body(req), user, "manual");
             }
@@ -964,6 +966,14 @@ final class SpotService {
             if (m.equals("PUT")) {
                 if (isImported(r)) throw new ApiException(400, "Relatórios importados não têm o texto editável aqui; importe o HTML novamente.");
                 JsonObject b = ApiServlet.body(req);
+                if (isEvoReport(r)) {
+                    JsonObject in = new JsonObject();
+                    in.add("titulo", b.get("title")); in.add("html", b.get("html"));
+                    JsonObject data = EvoReportHtml.normalize(in);
+                    String t = data.get("titulo").getAsString();
+                    Db.update("UPDATE spot_reports SET title = ?, snapshot = ? WHERE id = ?", t.length() > 200 ? t.substring(0, 200) : t, GSON.toJson(data), id);
+                    return reportView(id);
+                }
                 if (isManual(r)) {
                     JsonObject data = ScopeReportHtml.normalize(b);
                     String json = GSON.toJson(data);
@@ -1000,8 +1010,23 @@ final class SpotService {
         return "manual".equals(r.get("model"));
     }
 
+    /** Relatório do projeto evolutivo: montado na tela, HTML ajustável, guardado já filtrado. */
+    private static boolean isEvoReport(Map<String, Object> r) {
+        return "evolutivo".equals(r.get("model"));
+    }
+
+    private static Object saveEvoReport(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+        if ("PADRAO".equals(project(spotId).get("kind"))) throw new ApiException(400, "Este relatório é só para projetos evolutivos.");
+        JsonObject data = EvoReportHtml.normalize(b);
+        String title = data.get("titulo").getAsString();
+        LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
+        long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
+                spotId, title.length() > 200 ? title.substring(0, 200) : title, ref == null ? LocalDate.now() : ref, GSON.toJson(data), "{}", "evolutivo", user.get("name"));
+        return reportView(id);
+    }
+
     private static boolean statusLayout(Map<String, Object> r) {
-        return isImported(r) || isManual(r);
+        return isImported(r) || isManual(r) || isEvoReport(r);
     }
 
     /** Guarda um Status Report importado de HTML (mesmo conteúdo do arquivo), sem passar pelo Claude. */
@@ -1025,7 +1050,7 @@ final class SpotService {
     private static String renderReport(Map<String, Object> r, boolean email) {
         if (statusLayout(r)) {
             JsonObject sd = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
-            return isManual(r) ? ScopeReportHtml.render(sd, email) : ImportedReportHtml.render(sd, email);
+            return isEvoReport(r) ? EvoReportHtml.render(sd, email) : isManual(r) ? ScopeReportHtml.render(sd, email) : ImportedReportHtml.render(sd, email);
         }
         JsonObject snap = JsonParser.parseString((String) r.get("snapshot")).getAsJsonObject();
         JsonObject narr = JsonParser.parseString((String) r.get("narrative")).getAsJsonObject();
