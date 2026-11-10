@@ -277,7 +277,7 @@ const Spot = (() => {
         <div class="wide"><dt>Destinatários</dt><dd>${esc(String(p.recipients || '—').split(/\s*[,;]\s*/).join(', '))}</dd></div></dl>
         ${p.description ? `<p class="scope-text">${esc(p.description)}</p>` : ''}</section>`}
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1;flex-wrap:wrap">
-        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') + tab('acoes', 'Ações e pendências') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + tab('acoes', 'Ações e pendências') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
+        ${isEvo(p) ? tab('resumo', 'Visão geral') + tab('demandas', 'Demandas') + tab('features', 'Features entregues') : tab('resumo', 'Resumo') + (p.closed_scope ? tab('escopo', 'Escopo') + tab('financeiro', 'Financeiro') : '') + tab('horas', p.closed_scope ? 'Apontamentos' : 'Apontamentos de horas') + tab('demandas', 'Demandas') + (p.closed_scope ? tab('tradicional', 'Relatório tradicional') : '') + tab('relatorios', 'Relatórios com IA')}</div>
         <div class="bar-actions" id="sp-actions"></div></div><div id="sp-body"></div></section>`;
     await renderTab();
   }
