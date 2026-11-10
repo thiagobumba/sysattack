@@ -310,7 +310,7 @@ const Spot = (() => {
         ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Chamado</th><th>Recebido</th><th>Solicitante</th><th>Pedido</th><th>Responsável do TI</th><th>Situação</th><th>Feature</th><th></th></tr></thead><tbody>
         ${shown.map(r => `<tr><td>${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></td><td>${fmt(String(r.received_at).slice(0, 10))}</td><td>${esc(r.requester || '—')}</td>
           <td class="strong">${esc(r.title)}${r.description ? `<span class="small">${cut(r.description)}</span>` : ''}${r.solution ? `<span class="small"><b>TI:</b> ${cut(r.solution)}</span>` : ''}${clips(r)}</td>
-          <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
+          <td>${esc(r.assignee || '—')}</td><td>${badge(R_STATUS, r.status)}${r.validated_by ? `<span class="small"><b>Validado por:</b> ${esc(r.validated_by)}</span>` : ''}${r.delivered_at ? `<span class="small">${fmt(String(r.delivered_at).slice(0, 10))}</span>` : ''}</td>
           <td>${r.feature_id ? `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}` + (r.feature_module ? `<span class="small">${esc(r.feature_module)}</span>` : '') : '—'}</td>${iconBtns('req', r.id)}</tr>`).join('')}</tbody></table></div>`
         : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
     } else if (st.tab === 'features') {
@@ -565,6 +565,7 @@ const Spot = (() => {
       <div class="field full"><label for="rx">O que foi pedido</label><textarea id="rx" name="description" maxlength="2000">${esc(x.description)}</textarea></div>
       <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
       <div class="field"><label for="ra">Responsável do TI <span class="opt" id="ra-req" hidden>(obrigatório ao entregar)</span></label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
+      <div class="field full" id="vb-f"><label for="rv">Validado por <span class="opt">(e-mails; separe vários com ;)</span></label><input id="rv" name="validated_by" maxlength="1000" value="${esc(x.validated_by || '')}" placeholder="maria@empresa.com; joao@empresa.com"></div>
       <div class="field full" id="ro-f"><label for="ro">O que o TI fez para resolver <span class="opt">(obrigatório)</span></label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
       <div class="field full"><label for="rfl">Anexos do pedido <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
         ${fileList('rf-files', (st.rfiles || []).filter(f => f.request_id === id), 'rf')}
@@ -613,7 +614,7 @@ const Spot = (() => {
       document.getElementById('ff-list').innerHTML = ex ? fileList('ff-files', (st.ffiles || []).filter(z => z.feature_id === ex.id), 'ff') : '';
       bindFileDel('ff-files', 'ff', 'spot/ffiles/');
     };
-    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; document.getElementById('ro-f').style.display = on ? '' : 'none'; document.getElementById('ra-req').hidden = !on; if (on) fsync(); };
+    const bsync = () => { const on = stt.value === 'ENTREGUE'; box.style.display = on ? 'grid' : 'none'; document.getElementById('ro-f').style.display = on ? '' : 'none'; document.getElementById('vb-f').style.display = on || stt.value === 'EM_HOMOLOGACAO' ? '' : 'none'; document.getElementById('ra-req').hidden = !on; if (on) fsync(); };
     fs.addEventListener('change', fsync); stt.addEventListener('change', bsync); bsync();
   }
 

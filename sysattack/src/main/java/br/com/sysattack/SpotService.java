@@ -525,6 +525,19 @@ final class SpotService {
         return r;
     }
 
+    /** "Validado por": e-mails separados por ponto e vírgula (aceita também vírgula); guarda "a@x.com; b@y.com". */
+    static String normalizeValidators(String raw) {
+        List<String> out = new ArrayList<>();
+        for (String p : raw.split("[;,\\n]")) {
+            String e = p.trim();
+            if (e.isEmpty()) continue;
+            if (!e.matches("^[^\\s@;,]+@[^\\s@;,]+\\.[^\\s@;,]+$")) throw new ApiException(400, "E-mail inválido em “Validado por”: " + e + ". Separe vários com ponto e vírgula (;).");
+            if (out.stream().noneMatch(x -> x.equalsIgnoreCase(e))) out.add(e);
+        }
+        if (out.size() > 10) throw new ApiException(400, "Informe no máximo 10 e-mails em “Validado por”.");
+        return String.join("; ", out);
+    }
+
     private static Object saveRequest(Long id, long spotId, JsonObject b) throws SQLException {
         String title = ApiServlet.str(b, "title", "Pedido", 200, true);
         String channel = ApiServlet.str(b, "channel", "Canal", 10, true);
@@ -536,6 +549,7 @@ final class SpotService {
         String assignee = ApiServlet.str(b, "assignee", "Responsável do TI", 120, false);
         String solution = ApiServlet.str(b, "solution", "Solução do TI", 2000, false);
         LocalDate delivered = ApiServlet.optDate(b, "delivered_at", "Entregue em");
+        String validatedBy = normalizeValidators(ApiServlet.str(b, "validated_by", "Validado por", 1000, false));
         if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
         if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
         if (status.equals("ENTREGUE")) {
@@ -564,11 +578,11 @@ final class SpotService {
             featureId = fid; feature = String.valueOf(f.get("name")); module = String.valueOf(f.get("module"));
         }
         if (id == null) {
-            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module,feature_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId);
+            id = Db.insert("INSERT INTO spot_requests(spot_id,channel,ticket_no,requester,received_at,title,description,status,assignee,solution,delivered_at,feature,module,feature_id,validated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    spotId, channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy);
         } else {
-            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, feature_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, id);
+            Db.update("UPDATE spot_requests SET channel=?, ticket_no=?, requester=?, received_at=?, title=?, description=?, status=?, assignee=?, solution=?, delivered_at=?, feature=?, module=?, feature_id=?, validated_by=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    channel, ticket, requester, received, title, desc, status, assignee, solution, delivered, feature, module, featureId, validatedBy, id);
         }
         return Db.one(REQ_SQL + " WHERE r.id = ?", id);
     }
