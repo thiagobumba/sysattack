@@ -315,14 +315,22 @@ const Spot = (() => {
         : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro acima para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.'));
     } else if (st.tab === 'features') {
       const fclips = f => { const fl = (st.ffiles || []).filter(x => x.feature_id === f.id); return fl.length ? fl.map(x => `<a href="api/spot/ffiles/${x.id}/download" target="_blank" rel="noopener" title="${esc(x.file_name)}">📎 ${esc(x.file_name.length > 34 ? x.file_name.slice(0, 32) + '…' : x.file_name)}</a>`).join(' &nbsp; ') : ''; };
-      host.innerHTML = (st.features || []).length ? st.features.map(f => {
+      // filtro por tipo de objeto (módulo): um botão por valor já usado, sem diferenciar maiúsculas
+      const mk = f => String(f.module || '').trim().toLowerCase();
+      const mods = new Map();
+      (st.features || []).forEach(f => { const k = mk(f); const e = mods.get(k) || { label: String(f.module || '').trim() || 'Sem objeto', n: 0 }; e.n++; mods.set(k, e); });
+      if (st.featFilter !== undefined && st.featFilter !== '*' && !mods.has(st.featFilter)) st.featFilter = '*';
+      const ff = st.featFilter === undefined ? '*' : st.featFilter;
+      const list = (st.features || []).filter(f => ff === '*' || mk(f) === ff);
+      const chips = (st.features || []).length > 1 && mods.size > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center"><span class="small">Tipo de objeto:</span><button class="btn btn-sm${ff === '*' ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="*">Todos (${st.features.length})</button>${[...mods.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, 'pt-BR')).map(([k, e]) => `<button class="btn btn-sm${ff === k ? ' btn-primary' : ''}" data-action="sp-feat-filter" data-m="${esc(k)}">${esc(e.label)} (${e.n})</button>`).join('')}</div>` : '';
+      host.innerHTML = chips + (list.length ? list.map(f => {
         const reqs = rows.filter(r => r.feature_id === f.id), nodoc = !f.documentation && !(st.ffiles || []).some(x => x.feature_id === f.id);
         return `<div class="panel" style="margin:0 0 12px;padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="badge b-dark">${fmtNo(f.number)}</span><b style="font-size:15px">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${nodoc ? '<span class="badge b-orange">sem documentação</span>' : ''}
           <span class="small" style="margin-left:auto">${f.request_count} pedido(s)${f.delivered_at ? ' · entregue em ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button>`}</div>
           ${f.documentation ? `<div class="small" style="margin-top:10px;white-space:pre-wrap"><b>O que foi feito:</b> ${esc(f.documentation)}</div>` : ''}${fclips(f) ? `<div class="small" style="margin-top:8px">${fclips(f)}</div>` : ''}
           ${reqs.map(r => `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:8px">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}<div>${clips(r)}</div></div>`).join('')}</div>`;
       }).join('')
-        : empty('Nenhuma feature entregue ainda', 'Ao marcar uma demanda como Entregue, a feature ganha um número (FT-001…) e aparece aqui com a documentação e os pedidos que a originaram.');
+        : empty((st.features || []).length ? 'Nenhuma feature neste filtro' : 'Nenhuma feature entregue ainda', (st.features || []).length ? 'Escolha outro tipo de objeto ou “Todos”.' : 'Ao marcar uma demanda como Entregue, a feature ganha um número (FT-001…) e aparece aqui com a documentação e os pedidos que a originaram.'));
     }
   }
 
@@ -1066,6 +1074,7 @@ const Spot = (() => {
       case 'sp-new-req': requestForm(); break;
       case 'sp-edit-req': requestForm(id); break;
       case 'sp-del-req': await del('spot/requests/' + id, 'Excluir este pedido?'); break;
+      case 'sp-feat-filter': st.featFilter = el.dataset.m; await renderTab(); break;
       case 'sp-edit-feature': featureForm(id); break;
       case 'sp-req-filter': st.reqFilter = el.dataset.f; await renderTab(); break;
       case 'sp-new-action': actionForm(); break;
