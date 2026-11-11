@@ -17,7 +17,7 @@ const Spot = (() => {
   const vigRange = p => ({ s: p.start_date, e: p.end_date || '' });
   const clampDate = (iso, p) => (iso < p.start_date ? p.start_date : p.end_date && iso > p.end_date ? p.end_date : iso);
   const vigText = p => p.end_date ? `${fmt(p.start_date)} a ${fmt(p.end_date)}` : `${fmt(p.start_date)} em diante`;
-  const vigLine = () => `<p class="hint" style="margin:0 0 14px"><b>Vigência do contrato:</b> ${vigText(st.data)}</p>`;
+  const vigLine = () => `<p class="hint" style="margin:0 0 16px"><b>Vigência do contrato:</b> ${vigText(st.data)}</p>`;
   const closedScope = () => !!(st.data && st.data.closed_scope);
   const isAdmin = () => A().me && A().me.role === 'ADMIN';
   const locked = () => !!(st.data && st.data.status === 'ENCERRADO' && !isAdmin());
@@ -25,7 +25,7 @@ const Spot = (() => {
     return new Promise(resolve => {
       const d = document.createElement('dialog');
       d.className = 'just';
-      d.innerHTML = `<form method="dialog" class="fgrid" style="padding:24px 28px;min-width:min(520px,90vw)"><h2 style="margin:0;font-size:22px;font-weight:300;color:var(--orange)" class="full">${esc(title)}</h2>
+      d.innerHTML = `<form method="dialog" class="fgrid" style="padding:24px 32px;min-width:min(520px,90vw)"><h2 style="margin:0;font-size:22px;font-weight:300;color:var(--orange)" class="full">${esc(title)}</h2>
         <p class="hint full">Este projeto está encerrado. Informe o motivo da alteração (mínimo de 10 caracteres); ele fica registrado no histórico.</p>
         <div class="field full"><label for="jt">Justificativa</label><textarea id="jt" maxlength="1000" required></textarea></div>
         <div class="form-error full" hidden role="alert"></div>
@@ -268,9 +268,9 @@ const Spot = (() => {
     if (isEvo(p)) await loadEvo();
     const tab = (k, label) => `<button class="tab ${st.tab === k ? 'active' : ''}" data-action="sp-tab" data-tab="${k}">${label}</button>`;
     A().main.innerHTML = A().pageHead(['SysAttack', { t: 'Projetos Spot', href: '#/spot' }, p.name], p.name, [p.client, (isEvo(p) ? P_KIND[p.kind] : p.closed_scope ? 'Escopo fechado' : MODEL[p.hours_model]) + (isEvo(p) ? '' : ' · ' + s.period_label)].filter(Boolean).join(' · '), Logo.avatar('S', p, 'lg')) + `
-      ${isEvo(p) ? evoHead(p) : `      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período ${isEvo(p) ? '' : p.closed_scope ? healthChip(p.scope.health) : healthChip(s.health)}</h2><div class="bar-actions">
+      ${isEvo(p) ? evoHead(p) : `      <section class="panel"><div class="panel-head"><h2 class="panel-title">Visão do período${(() => { const hl = p.closed_scope ? p.scope.health : s.health; return hl ? ' ' + healthChip(hl) : ''; })()}</h2><div class="bar-actions">
  <a class="btn btn-sm" href="#/spot">← Voltar</a> ${p.recurring && !p.closed_scope ? `<button class="btn btn-sm" data-action="sp-copy-project" data-id="${p.id}">Copiar projeto</button>` : ''}${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
-        ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
+        ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 16px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
         ${isEvo(p) ? evoCards(p.evo) : p.closed_scope ? scopeCards(p.scope) + scopeHealthNote(p.scope.health) + financeCards(p.finance) : kpiCards(s.kpi, p.hours_model === 'MENSAL' ? 'Franquia' : 'Pacote') + ritmoPanel(s.health, s.kpi) + billingCards(s.billing, s.kpi)}
         <dl class="meta-grid"><div><dt>Situação</dt><dd>${badge(S_STATUS, p.status)}</dd></div><div><dt>Fornecedor / equipe</dt><dd>${esc(p.provider || '—')}</dd></div>
         <div><dt>Início</dt><dd>${fmt(p.start_date)}</dd></div><div><dt>Data final</dt><dd>${p.end_date ? fmt(p.end_date) : '—'}${endedNote(p)}</dd></div><div><dt>Tipo</dt><dd>${isEvo(p) ? `<span class="badge b-dark">${esc(P_KIND[p.kind])}</span>` : p.closed_scope ? '<span class="badge b-dark">Escopo fechado</span>' : p.recurring ? '<span class="badge b-dark">Contrato recorrente</span>' : 'Avulso'}</dd></div><div class="wide"><dt>Participantes do comitê</dt><dd>${esc(p.participants || '—')}</dd></div>
@@ -326,8 +326,8 @@ const Spot = (() => {
     const ins = (l, v, cls, act) => `<${act ? 'button type="button" data-action="' + act + '"' : 'div'} class="jr-ins ${cls || ''}"><span>${l}</span><b>${v}</b></${act ? 'button' : 'div'}>`;
     return `<section class="panel evo-head"><div class="panel-head"><h2 class="panel-title">Jornada de atendimento</h2><div class="bar-actions">
       <a class="btn btn-sm" href="#/spot">← Voltar</a>${locked() ? '' : `<button class="btn btn-sm" data-action="sp-edit-project" data-id="${p.id}">Editar projeto</button>`}</div></div>
-      ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 14px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
-      ${p.billing_note ? `<p class="hint" style="margin:0 0 14px"><b>Observação:</b> ${esc(p.billing_note)}</p>` : ''}
+      ${p.status === 'ENCERRADO' ? `<p class="hint ${locked() ? 'late-txt' : ''}" style="margin:0 0 16px"><b>Projeto encerrado.</b> ${locked() ? 'Somente um administrador pode alterá-lo.' : 'Como administrador, toda alteração exige uma justificativa e fica registrada no histórico.'}</p>` : ''}
+      ${p.billing_note ? `<p class="hint" style="margin:0 0 16px"><b>Observação:</b> ${esc(p.billing_note)}</p>` : ''}
       <ol class="jr" aria-label="Etapas do atendimento">
         <li>${step('TRIAGEM', 'Triagem', by('TRIAGEM'), 'g')}</li><li>${step('EM_ESTIMATIVA', 'Em estimativa', by('EM_ESTIMATIVA'), 'o')}</li><li>${step('ESTIMADO', 'Estimado', by('ESTIMADO'), 'd')}</li><li>${step('EM_DESENVOLVIMENTO', 'Em desenvolvimento', by('EM_DESENVOLVIMENTO'), 'o')}</li>
         <li>${step('EM_HOMOLOGACAO', 'Em homologação', by('EM_HOMOLOGACAO'), 'd')}</li><li>${step('ENTREGUE', 'Entregue', by('ENTREGUE'), 'v')}</li></ol>
@@ -384,11 +384,11 @@ const Spot = (() => {
         <div class="eco-c"><span>Executado interno</span><b>${hh(exe)}</b></div>
         <div class="eco-c"><span>Eficiência (executado ÷ estimado)</span><b>${eff}%</b></div>
         <div class="eco-c"><span>Demandas sem estimativa</span><b class="${c.no_estimate ? 'neg' : ''}">${c.no_estimate}</b><small>não entram no cálculo</small></div></div>
-      <h3 class="evo-h" style="margin-top:22px">Features que mais economizaram</h3>
+      <h3 class="evo-h" style="margin-top:24px">Features que mais economizaram</h3>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Feature</th><th class="num">Estimado</th><th class="num">Executado</th><th class="num">${money ? 'Deixamos de gastar' : 'Horas a menos'}</th></tr></thead><tbody>
-      ${items.map(f => { const d = Number(f.estimated) - Number(f.executed); return `<tr><td><span class="badge b-dark">${fmtNo(f.number)}</span> <b>${esc(f.name)}</b><span class="eco-b" style="margin-top:6px"><i class="${d >= 0 ? 'exe' : 'bad'}" style="width:${(Number(f.estimated) / mxf * 100).toFixed(1)}%"></i></span></td>
+      ${items.map(f => { const d = Number(f.estimated) - Number(f.executed); return `<tr><td><span class="badge b-dark">${fmtNo(f.number)}</span> <b>${esc(f.name)}</b><span class="eco-b" style="margin-top:8px"><i class="${d >= 0 ? 'exe' : 'bad'}" style="width:${(Number(f.estimated) / mxf * 100).toFixed(1)}%"></i></span></td>
         <td class="num">${hh(f.estimated)}</td><td class="num ${d < 0 ? 'neg' : ''}">${hh(f.executed)}</td><td class="num strong ${d < 0 ? 'neg' : 'pos'}">${money ? brl(Number(f.estimated) * rate) : (d >= 0 ? '' : '− ') + hh(Math.abs(d))}${money && d < 0 ? `<span class="small neg">${hh(Math.abs(d))} acima da estimativa</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="hint" style="margin-top:10px">Como é calculado: R$ = estimativa Beecloud (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
+      <p class="hint" style="margin-top:8px">Como é calculado: R$ = estimativa Beecloud (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
   }
 
   /** HTML do relatório do projeto evolutivo. Só tabelas e estilos inline (Outlook), classes só para o ajuste em telas estreitas. */
@@ -400,11 +400,11 @@ const Spot = (() => {
     const fs = feats.filter(f => !o.from && !o.to ? true : rows.some(r => r.feature_id === f.id && inP(r.delivered_at)));
     const cnt = k => rq.filter(r => r.status === k).length;
     const gap = n => `<table${T0} width="100%"><tr><td height="${n}" style="height:${n}px;font-size:1px;line-height:1px">&nbsp;</td></tr></table>`;
-    const sec = s => `${gap(10)}<table${T0} width="100%"><tr><td style="padding:12px 0 6px;font-size:18px;font-weight:bold;color:${INK};border-bottom:2px solid ${ORANGE}">${s}</td></tr></table>${gap(10)}`;
+    const sec = s => `${gap(10)}<table${T0} width="100%"><tr><td style="padding:12px 0 8px;font-size:18px;font-weight:bold;color:${INK};border-bottom:2px solid ${ORANGE}">${s}</td></tr></table>${gap(10)}`;
     const note = s => `<p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:${MUTED}">${s}</p>`;
     const cells = list => { const w = Math.floor(100 / list.length); return `<table${T0} width="100%"><tr>${list.map(([l, v]) => `<td class="stc" width="${w}%" valign="top" align="center" bgcolor="${SOFT}" style="background-color:${SOFT};padding:12px 8px;border:1px solid ${LINE};text-align:center"><div style="font-size:24px;line-height:1.2;font-weight:bold;color:${INK}">${v}</div><div style="font-size:12px;line-height:1.3;color:${MUTED}">${l}</div></td>`).join('')}</tr></table>`; };
-    const th = (s, al) => `<td bgcolor="${SOFT}" style="background-color:${SOFT};padding:8px 10px;border-bottom:2px solid ${INK};font-size:12px;font-weight:bold;text-align:${al || 'left'}">${s}</td>`;
-    const td = (s, al) => `<td valign="top" style="padding:8px 10px;border-bottom:1px solid ${LINE};font-size:13px;line-height:1.4;text-align:${al || 'left'}">${s}</td>`;
+    const th = (s, al) => `<td bgcolor="${SOFT}" style="background-color:${SOFT};padding:8px 8px;border-bottom:2px solid ${INK};font-size:12px;font-weight:bold;text-align:${al || 'left'}">${s}</td>`;
+    const td = (s, al) => `<td valign="top" style="padding:8px 8px;border-bottom:1px solid ${LINE};font-size:13px;line-height:1.4;text-align:${al || 'left'}">${s}</td>`;
     let b = `<table${T0} width="100%"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td style="padding:2px 0 2px 16px"><div style="font-size:13px;color:${MUTED}">${esc(P_KIND[p.kind] || 'Projeto evolutivo')}${p.client ? ' · ' + esc(p.client) : ''}</div>
       <div style="font-size:26px;line-height:1.2;font-weight:bold;color:${INK};padding:2px 0">${esc(p.name)}</div>
       <div style="font-size:13px;color:${MUTED}">Período: ${o.from || o.to ? `${o.from ? fmt(o.from) : 'início'} a ${o.to ? fmt(o.to) : 'hoje'}` : 'todo o período'} · Emitido em ${fmt(todayIso())}</div>${p.billing_note ? `<div style="font-size:13px;color:${MUTED};padding-top:4px"><b>Observação:</b> ${esc(p.billing_note)}</div>` : ''}</td></tr></table>`;
@@ -424,12 +424,12 @@ const Spot = (() => {
     }
     if (o.feat) {
       b += sec('Features entregues') + (fs.length ? fs.map(f => { const rs = rows.filter(r => r.feature_id === f.id), fl = (st.ffiles || []).filter(x => x.feature_id === f.id);
-        return `<table${T0} width="100%" style="page-break-inside:avoid"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td bgcolor="#ffffff" style="background-color:#ffffff;padding:12px 14px;border:1px solid ${LINE};border-left:0">
+        return `<table${T0} width="100%" style="page-break-inside:avoid"><tr><td width="4" bgcolor="${ORANGE}" style="background-color:${ORANGE};font-size:1px">&nbsp;</td><td bgcolor="#ffffff" style="background-color:#ffffff;padding:12px 16px;border:1px solid ${LINE};border-left:0">
         <div style="font-size:15px;line-height:1.4"><b>${fmtNo(f.number)} · ${esc(f.name)}</b>${f.module ? ` <span style="color:${MUTED}">(${esc(f.module)})</span>` : ''}</div>
         ${Number(f.effort_hours) > 0 ? `<div style="font-size:12px;color:${MUTED}">Esforço do time interno: ${hh(f.effort_hours)}</div>` : ''}
         <p style="margin:8px 0;font-size:13px;line-height:1.5">${f.documentation ? esc(f.documentation).replace(/\n/g, '<br>') : '<i>Sem descrição do que foi feito.</i>'}</p>
         ${fl.length ? `<div style="font-size:12px;color:${MUTED}">Anexos: ${fl.map(x => esc(x.file_name)).join(', ')}</div>` : ''}
-        ${rs.map(r => `<div style="font-size:12px;line-height:1.4;margin-top:6px"><b>Pedido:</b> ${esc(r.title)}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}${r.delivered_at ? ' · entregue em ' + fmt(String(r.delivered_at).slice(0, 10)) : ''}</div>`).join('')}</td></tr></table>${gap(10)}`; }).join('') : note('Nenhuma feature entregue no período.'));
+        ${rs.map(r => `<div style="font-size:12px;line-height:1.4;margin-top:8px"><b>Pedido:</b> ${esc(r.title)}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}${r.delivered_at ? ' · entregue em ' + fmt(String(r.delivered_at).slice(0, 10)) : ''}</div>`).join('')}</td></tr></table>${gap(10)}`; }).join('') : note('Nenhuma feature entregue no período.'));
     }
     if (o.dem) {
       b += sec('Demandas') + (rq.length ? `<table${T0} width="100%"><tr>${th('Pedido')}${th('Situação')}${th('Feature')}</tr>${rq.map(r => `<tr>${td(`<b>${esc(r.title)}</b><div style="font-size:12px;color:${MUTED}">${fmt(String(r.received_at).slice(0, 10))} · ${esc(r.ticket_no || (r.channel === 'EMAIL' ? 'E-mail' : 'TIFlux'))}${r.requester ? ' · ' + esc(r.requester) : ''}</div>`)}${td(esc(R_STATUS[r.status][0]))}${td(r.feature_id ? fmtNo(r.feature_no) : '—')}</tr>`).join('')}</table>` : note('Nenhum pedido no período.'));
@@ -437,10 +437,10 @@ const Spot = (() => {
     return b;
   }
   const evoReportTitle = (p, o) => `Relatório · ${p.name}${o.from || o.to ? ' · ' + (o.from ? fmt(o.from) : 'início') + ' a ' + (o.to ? fmt(o.to) : 'hoje') : ''}`;
-  const EVO_CSS = "body,table,td,th,p{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a}table{border-collapse:collapse}img{border:0}@media only screen and (max-width:620px){.stc{display:inline-block!important;width:48%!important;box-sizing:border-box!important;vertical-align:top}.pad{padding:12px 8px 24px!important}.cp{padding:16px 14px!important}}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:14mm}}";
+  const EVO_CSS = "body,table,td,th,p{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a}table{border-collapse:collapse}img{border:0}@media only screen and (max-width:620px){.stc{display:inline-block!important;width:48%!important;box-sizing:border-box!important;vertical-align:top}.pad{padding:12px 8px 24px!important}.cp{padding:16px 16px!important}}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:14mm}}";
   /** Documento completo (preview, download e edição): mesma moldura que o servidor usa. Só o miolo (#rb) é editável. */
-  const evoReportDoc = (title, body, logo) => `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${EVO_CSS}#rb:focus{outline:none}</style></head><body bgcolor="#f6f6f4" style="margin:0;background-color:#f6f6f4;font-size:14px"><table${T0} width="100%" bgcolor="#f6f6f4"><tr><td align="center" class="pad" style="padding:22px 18px 40px"><table${T0} width="100%" style="max-width:760px"><tr><td bgcolor="#ffffff" class="cp" style="background-color:#ffffff;padding:24px 28px">
-    <table${T0} width="100%"><tr><td valign="middle" style="padding:0 0 14px"><img src="${logo}" alt="Momesso" width="150" style="display:block;border:0;width:150px;height:auto"></td><td valign="middle" align="right" style="padding:0 0 14px;font-size:12px;color:#888888">Relatório do projeto</td></tr><tr><td colspan="2" height="1" bgcolor="#e3e3e3" style="background-color:#e3e3e3;font-size:1px;line-height:1px">&nbsp;</td></tr><tr><td colspan="2" height="18" style="font-size:1px;line-height:1px">&nbsp;</td></tr></table>
+  const evoReportDoc = (title, body, logo) => `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${EVO_CSS}#rb:focus{outline:none}</style></head><body bgcolor="#f6f6f4" style="margin:0;background-color:#f6f6f4;font-size:14px"><table${T0} width="100%" bgcolor="#f6f6f4"><tr><td align="center" class="pad" style="padding:24px 16px 40px"><table${T0} width="100%" style="max-width:760px"><tr><td bgcolor="#ffffff" class="cp" style="background-color:#ffffff;padding:24px 32px">
+    <table${T0} width="100%"><tr><td valign="middle" style="padding:0 0 16px"><img src="${logo}" alt="Momesso" width="150" style="display:block;border:0;width:150px;height:auto"></td><td valign="middle" align="right" style="padding:0 0 16px;font-size:12px;color:#888888">Relatório do projeto</td></tr><tr><td colspan="2" height="1" bgcolor="#e3e3e3" style="background-color:#e3e3e3;font-size:1px;line-height:1px">&nbsp;</td></tr><tr><td colspan="2" height="18" style="font-size:1px;line-height:1px">&nbsp;</td></tr></table>
     <div id="rb">${body}</div></td></tr></table></td></tr></table></body></html>`;
   const EVO_LOGO = 'img/logo-light-bg.png';
   /** Para baixar o HTML: a logo vai embutida (data URI), assim o arquivo funciona em qualquer lugar. */
@@ -450,13 +450,13 @@ const Spot = (() => {
 
   function renderEvoReport(host, p, rows) {
     const o = st.rep = st.rep || { from: '', to: '', sum: true, eco: true, feat: true, dem: true };
-    host.innerHTML = `<div class="rp-tools"><div class="fgrid" style="gap:10px 16px;align-items:end;max-width:480px">
+    host.innerHTML = `<div class="rp-tools"><div class="fgrid" style="gap:8px 16px;align-items:end;max-width:480px">
       <div class="field"><label for="rpf">De</label><input id="rpf" type="date" value="${o.from}"></div><div class="field"><label for="rpt">Até</label><input id="rpt" type="date" value="${o.to}"></div>
-      </div><div style="display:flex;gap:8px 22px;flex-wrap:wrap;margin-top:12px" role="group" aria-label="Seções do relatório">${[['sum', 'Resumo'], ['eco', 'Economia'], ['feat', 'Features entregues'], ['dem', 'Demandas']].map(([k, l]) => `<label style="display:inline-flex;gap:6px;align-items:center;background:none;border:0;padding:0;text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" data-rp="${k}"${o[k] ? ' checked' : ''} style="width:auto;margin:0"> ${l}</label>`).join('')}</div>
+      </div><div style="display:flex;gap:8px 24px;flex-wrap:wrap;margin-top:12px" role="group" aria-label="Seções do relatório">${[['sum', 'Resumo'], ['eco', 'Economia'], ['feat', 'Features entregues'], ['dem', 'Demandas']].map(([k, l]) => `<label style="display:inline-flex;gap:8px;align-items:center;background:none;border:0;padding:0;text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:inherit"><input type="checkbox" data-rp="${k}"${o[k] ? ' checked' : ''} style="width:auto;margin:0"> ${l}</label>`).join('')}</div>
       <p class="hint" style="margin:8px 0">Confira o preview abaixo. Sem datas, o relatório traz todo o período.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${locked() ? '' : '<button class="btn btn-sm btn-primary" data-action="sp-rep-save">Gerar relatório</button>'}<button class="btn btn-sm" data-action="sp-rep-html">Baixar HTML</button><button class="btn btn-sm" data-action="sp-rep-pdf">Baixar PDF</button></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${locked() ? '' : '<button class="btn btn-sm btn-primary" data-action="sp-rep-save">Gerar relatório</button>'}<button class="btn btn-sm" data-action="sp-rep-html">Baixar HTML</button><button class="btn btn-sm" data-action="sp-rep-pdf">Baixar PDF</button></div></div>
       <iframe class="preview" id="rp-frame" title="Preview do relatório" style="height:70vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>
-      <h3 class="evo-h" style="margin-top:22px">Relatórios gerados</h3><div id="rp-saved"></div>`;
+      <h3 class="evo-h" style="margin-top:24px">Relatórios gerados</h3><div id="rp-saved"></div>`;
     api('GET', `spot/${st.id}/reports?kind=evo`).then(list => {
       const box = document.getElementById('rp-saved'); if (!box) return;
       box.innerHTML = list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Gerado por</th><th>Envio</th><th></th></tr></thead><tbody>${list.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
@@ -489,7 +489,7 @@ const Spot = (() => {
         : empty('Nada em aberto', rows.length ? 'Todos os pedidos foram entregues ou recusados.' : 'Cadastre os pedidos na aba Demandas.')}</div>
         <div><h3 class="evo-h">Últimas features entregues</h3>
         ${feats.length ? `<div class="ft-grid">${feats.map(f => `<button type="button" class="ft-mini" data-action="sp-open-feat" data-id="${f.id}"><span class="badge b-dark">${fmtNo(f.number)}</span><b>${esc(f.name)}</b><span class="small">${f.module ? esc(f.module) + ' · ' : ''}${f.delivered_at ? fmt(String(f.delivered_at).slice(0, 10)) : ''}</span>${hasDoc(f) ? '' : '<span class="badge b-orange">sem documentação</span>'}</button>`).join('')}</div>` : empty('Nenhuma feature ainda', 'Ao entregar uma demanda, a feature aparece aqui.')}</div></div>
-        <h3 class="evo-h" style="margin-top:26px">Linha do tempo <span class="small" style="display:inline">(últimas movimentações)</span></h3>
+        <h3 class="evo-h" style="margin-top:24px">Linha do tempo <span class="small" style="display:inline">(últimas movimentações)</span></h3>
         ${ev.length ? `<ol class="tl-feed">${ev.slice(0, 14).map(x => `<li class="${x.k}"><time>${fmt(x.d)}</time><div>${x.k === 'out' ? `<b>Entregue${x.r.feature_no ? ' · ' + fmtNo(x.r.feature_no) + ' ' + esc(x.r.feature_name) : ''}</b><span class="small">${esc(x.r.title)}${x.r.assignee ? ' · ' + esc(x.r.assignee) : ''}${x.r.validated_by ? ' · validado por ' + esc(x.r.validated_by) : ''}</span>` : `<b>Pedido recebido</b><span class="small">${x.r.ticket_no ? ticketCell(p, x.r) + ' ' : ''}${esc(x.r.title)}${x.r.requester ? ' · ' + esc(x.r.requester) : ''} (${esc(R_CHANNEL[x.r.channel])})</span>`}</div></li>`).join('')}</ol>` : empty('Sem movimentações', 'Os pedidos recebidos e as entregas aparecem aqui em ordem de data.')}`;
     } else if (st.tab === 'demandas') {
       const f = st.reqFilter || 'ABERTAS', q0 = st.reqQ || '';
@@ -561,21 +561,21 @@ const Spot = (() => {
         const sc = st.data.scope;
         st.demands = await api('GET', `spot/${id}/demands`);
         const live = st.demands.filter(d => d.status !== 'CANCELADA');
-        host.innerHTML = `${vigLine()}<h3 style="margin:0 0 10px;font-size:15px">Entrega do escopo</h3>${pct(sc.pct)}
-          <p class="hint" style="margin:10px 0 14px">Cada demanda só conta como entregue quando existe um apontamento vinculado a ela (aba Apontamentos). Este projeto não controla horas.</p>
+        host.innerHTML = `${vigLine()}<h3 style="margin:0 0 8px;font-size:15px">Entrega do escopo</h3>${pct(sc.pct)}
+          <p class="hint" style="margin:8px 0 16px">Cada demanda só conta como entregue quando existe um apontamento vinculado a ela (aba Apontamentos). Este projeto não controla horas.</p>
           ${live.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Demanda</th><th>Situação</th><th class="num">Apontamentos</th><th>Entrega</th></tr></thead><tbody>
           ${live.map(d => `<tr><td class="strong">${esc(d.name)}</td><td>${badge(D_STATUS, d.status)}</td><td class="num">${d.entries}</td>
             <td>${entryBadge(d)}${d.status === 'CONCLUIDA' && !Number(d.entries) ? '<span class="small late-txt">Concluída, mas sem apontamento</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`
           : empty('Nenhuma demanda cadastrada', 'Cadastre as demandas do escopo na aba Demandas.')}
-          <p class="hint" style="margin-top:14px">${sc.files} arquivo(s) do escopo anexado(s) na aba “Escopo”.</p>`;
+          <p class="hint" style="margin-top:16px">${sc.files} arquivo(s) do escopo anexado(s) na aba “Escopo”.</p>`;
       } else
       host.innerHTML = `${vigLine()}${s.by_item.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Frente</th><th>Atividade</th><th class="num">Horas</th></tr></thead><tbody>
         ${s.by_item.map(i => `<tr><td>${esc(i.front || '—')}</td><td class="strong">${esc(i.label)}</td><td class="num">${h(i.hours)}</td></tr>`).join('')}</tbody></table></div>`
         : empty('Sem horas no período', 'Lance as horas consumidas na aba “Apontamentos de horas”.')}
-        ${st.data.billing_note ? `<p class="hint" style="margin-top:14px"><b>Faturamento:</b> ${esc(st.data.billing_note)}</p>` : ''}`;
+        ${st.data.billing_note ? `<p class="hint" style="margin-top:16px"><b>Faturamento:</b> ${esc(st.data.billing_note)}</p>` : ''}`;
       const audit = await api('GET', `spot/${id}/audit`).catch(() => []);
       if (audit.length) {
-        host.insertAdjacentHTML('beforeend', `<h3 style="margin:22px 0 8px;font-size:15px">Histórico de alterações após o encerramento</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Quando</th><th>Quem</th><th>Justificativa</th></tr></thead><tbody>
+        host.insertAdjacentHTML('beforeend', `<h3 style="margin:24px 0 8px;font-size:15px">Histórico de alterações após o encerramento</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Quando</th><th>Quem</th><th>Justificativa</th></tr></thead><tbody>
           ${audit.map(x => `<tr><td>${esc(String(x.created_at).slice(0, 16).replace('T', ' '))}</td><td>${esc(x.user_name)}</td><td class="strong">${esc(x.justification)}<span class="small">${esc(x.action)}</span></td></tr>`).join('')}</tbody></table></div>`);
       }
     } else if (st.tab === 'horas') {
@@ -583,8 +583,8 @@ const Spot = (() => {
       const from = st.from || v.s, to = st.to || v.e;
       st.hours = await api('GET', `spot/${id}/hours?from=${from}&to=${to || '2999-12-31'}`);
       const total = st.hours.reduce((a, x) => a + Number(x.hours), 0), cs = closedScope();
-      const inp = 'min-height:36px;border:1px solid #cfcfcf;padding:0 10px';
-      host.innerHTML = `${vigLine()}<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><label for="sp-f" class="hint">De</label>
+      const inp = 'min-height:36px;border:1px solid #cfcfcf;padding:0 8px';
+      host.innerHTML = `${vigLine()}<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap"><label for="sp-f" class="hint">De</label>
         <input id="sp-f" type="date" value="${from}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}"><label for="sp-t" class="hint">Até</label>
         <input id="sp-t" type="date" value="${to}" min="${v.s}"${v.e ? ` max="${v.e}"` : ''} style="${inp}">
         <button class="btn btn-sm" data-action="sp-vig-all">Vigência completa</button><span class="hint">${st.hours.length} ${cs ? 'apontamento(s) · cada um entrega uma demanda' : `lançamento(s) · <b>${h(total)}</b>`}</span></div>
@@ -601,7 +601,7 @@ const Spot = (() => {
     } else if (st.tab === 'escopo') {
       st.files = await api('GET', `spot/${id}/files`);
       const fsz = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
-      host.innerHTML = `${vigLine()}${st.data.description ? `<p class="scope-text" style="margin-bottom:18px">${esc(st.data.description)}</p>` : ''}
+      host.innerHTML = `${vigLine()}${st.data.description ? `<p class="scope-text" style="margin-bottom:16px">${esc(st.data.description)}</p>` : ''}
         <p class="hint" style="margin:0 0 12px">Arquivos do escopo (PDF, proposta, contrato…) guardados no banco somente para registro.</p>
         ${st.files.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Tamanho</th><th>Enviado por</th><th></th></tr></thead><tbody>
         ${st.files.map(f => `<tr><td class="strong">${esc(f.title)}<span class="small">${esc(f.file_name)}${f.description ? ' · ' + esc(f.description) : ''}</span></td><td>${fsz(f.size)}</td>
@@ -611,7 +611,7 @@ const Spot = (() => {
     } else if (st.tab === 'financeiro') {
       st.invoices = await api('GET', `spot/${id}/invoices`);
       const f = st.data.finance;
-      host.innerHTML = `${financeCards(f)}<p class="hint" style="margin:14px 0 12px">Notas fiscais do escopo fechado. Notas canceladas não entram no total faturado.</p>
+      host.innerHTML = `${financeCards(f)}<p class="hint" style="margin:16px 0 12px">Notas fiscais do escopo fechado. Notas canceladas não entram no total faturado.</p>
         ${st.invoices.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Nota</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Arquivo</th><th></th></tr></thead><tbody>
         ${st.invoices.map(n => `<tr><td class="strong">${esc(n.number)}${n.description ? `<span class="small">${esc(n.description)}</span>` : ''}</td><td>${fmt(n.issue_date)}</td><td>${n.due_date ? fmt(n.due_date) : '—'}</td>
           <td class="num strong">${brl(n.amount)}</td><td>${badge(I_STATUS, n.status)}</td>
@@ -641,7 +641,7 @@ const Spot = (() => {
     } else {
       st.reports = await api('GET', `spot/${id}/reports`);
       const ai = await api('GET', 'ai-status').catch(() => ({ connected: false }));
-      host.innerHTML = `${vigLine()}${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:14px">Nenhuma IA está em uso. Um administrador precisa conectar uma em “Configurações IA Agent”.</p>'}
+      host.innerHTML = `${vigLine()}${ai.connected ? '' : '<p class="hint late-txt" style="margin-bottom:16px">Nenhuma IA está em uso. Um administrador precisa conectar uma em “Configurações IA Agent”.</p>'}
         ${st.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Relatório</th><th>Referência</th><th>Gerado por</th><th>Envio</th><th></th></tr></thead><tbody>
         ${st.reports.map(r => `<tr class="click" data-action="sp-open-report" data-id="${r.id}"><td class="strong">${esc(r.title)}</td><td>${fmt(r.ref_date)}</td>
           <td>${esc(r.created_by)}<span class="small">${esc(String(r.created_at).slice(0, 16).replace('T', ' '))}</span></td>
@@ -767,7 +767,7 @@ const Spot = (() => {
     return failed;
   }
   const FILE_ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.eml,.msg,.doc,.docx,.xls,.xlsx,.csv,.zip';
-  const fileList = (id, items, attr) => `<ul id="${id}" class="small" style="list-style:none;margin:0 0 8px;padding:0">${items.map(f => `<li style="display:flex;gap:10px;align-items:center;padding:3px 0"><a href="api/spot/${attr === 'rf' ? 'rfiles' : 'ffiles'}/${f.id}/download" target="_blank" rel="noopener">📎 ${esc(f.file_name)}</a><span>${Math.max(1, Math.round(f.size / 1024))} KB</span><button type="button" class="btn btn-sm" data-${attr}-del="${f.id}">Remover</button></li>`).join('')}</ul>`;
+  const fileList = (id, items, attr) => `<ul id="${id}" class="small" style="list-style:none;margin:0 0 8px;padding:0">${items.map(f => `<li style="display:flex;gap:8px;align-items:center;padding:3px 0"><a href="api/spot/${attr === 'rf' ? 'rfiles' : 'ffiles'}/${f.id}/download" target="_blank" rel="noopener">📎 ${esc(f.file_name)}</a><span>${Math.max(1, Math.round(f.size / 1024))} KB</span><button type="button" class="btn btn-sm" data-${attr}-del="${f.id}">Remover</button></li>`).join('')}</ul>`;
   function bindFileDel(id, attr, path) {
     const ul = document.getElementById(id);
     if (ul) ul.addEventListener('click', async e => {
@@ -796,7 +796,7 @@ const Spot = (() => {
         ${fileList('rf-files', (st.rfiles || []).filter(f => f.request_id === id), 'rf')}
         <input id="rfl" name="files" type="file" multiple accept="${FILE_ACCEPT}">
         <small class="fhint">PDF, imagens, texto, e-mail salvo (.eml, .msg), Word, Excel ou ZIP; até 25 MB cada.</small></div>
-      <div class="field full" id="ft-box" style="border:2px solid var(--orange);background:#fff7f1;padding:14px;display:grid;gap:10px">
+      <div class="field full" id="ft-box" style="border:2px solid var(--orange);background:#fff7f1;padding:16px;display:grid;gap:8px">
         <b style="color:var(--orange);font-size:15px">✔ Feature entregue</b>
         <div><label for="ffs">Feature</label><select id="ffs" name="feature_id"><option value="">+ Nova feature (gerar número)</option>${feats.map(f => `<option value="${f.id}"${f.id === x.feature_id ? ' selected' : ''}>${fmtNo(f.number)} · ${esc(f.name)}</option>`).join('')}</select>
           <small class="fhint">Pedidos parecidos podem entrar na mesma feature.</small></div>
@@ -901,7 +901,7 @@ const Spot = (() => {
     dlg.className = 'wide';
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(r.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
       <iframe class="preview" id="sp-frame" src="api/spot/reports/${r.id}/html" title="${esc(r.title)}" style="height:60vh"></iframe>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
         ${r.model === 'importado' ? '' : r.model === 'evolutivo' ? `<button class="btn btn-sm" data-action="sp-edit-evo" data-id="${r.id}">Editar relatório</button>` : r.model === 'manual' ? `<button class="btn btn-sm" data-action="sp-edit-manual" data-id="${r.id}">Editar relatório</button>` : `<button class="btn btn-sm" data-action="sp-edit-report" data-id="${r.id}">Editar texto</button>`}
         <button class="btn btn-sm" data-action="sp-print-report">Imprimir / salvar PDF</button>
         <button class="btn btn-sm btn-primary" data-action="sp-send-report" data-id="${r.id}">Enviar por e-mail</button></div></div>`;
@@ -933,7 +933,7 @@ const Spot = (() => {
     const tool = (c, l, t) => `<button type="button" class="btn btn-sm" data-ex="${c}" title="${t}">${l}</button>`;
     A().openDialog('Editar relatório', `
       <div class="field full"><label for="ert">Título</label><input id="ert" name="titulo" maxlength="200" value="${esc(r.title)}" required></div>
-      <div class="full" style="display:flex;gap:6px;flex-wrap:wrap">${tool('bold', '<b>N</b>', 'Negrito')}${tool('italic', '<i>I</i>', 'Itálico')}${tool('underline', '<u>S</u>', 'Sublinhado')}${tool('insertUnorderedList', '• Lista', 'Lista')}${tool('removeFormat', 'Limpar formatação', 'Remove a formatação do trecho selecionado')}</div>
+      <div class="full" style="display:flex;gap:8px;flex-wrap:wrap">${tool('bold', '<b>N</b>', 'Negrito')}${tool('italic', '<i>I</i>', 'Itálico')}${tool('underline', '<u>S</u>', 'Sublinhado')}${tool('insertUnorderedList', '• Lista', 'Lista')}${tool('removeFormat', 'Limpar formatação', 'Remove a formatação do trecho selecionado')}</div>
       <p class="hint full" style="margin:0">Clique no texto do relatório para ajustar. As cores e a estrutura (tabelas, títulos) são mantidas.</p>
       <iframe id="er-frame" class="preview full" title="Editor do relatório" style="height:52vh;width:100%;border:1px solid var(--line,#ddd)"></iframe>`,
       async d => {
@@ -1073,7 +1073,7 @@ const Spot = (() => {
     const body = isH ? `
       <p class="hint full">Revise o que será lançado. Horas já lançadas (mesma data, atividade e valor) são ignoradas. As horas são ligadas às demandas já cadastradas quando o nome bate; por isso importe as demandas antes, na aba Demandas.</p>
       <div class="field"><label for="imp-d">Data dos lançamentos</label><input id="imp-d" name="date" type="date" value="${clampDate(rep.date, st.data)}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
-      <div class="field"><label>Total de horas</label><div class="strong" style="padding:10px 0">${h(total)}</div></div>${warn}
+      <div class="field"><label>Total de horas</label><div class="strong" style="padding:8px 0">${h(total)}</div></div>${warn}
       <div class="full"><div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Atividade</th><th>Frente</th><th>Demanda</th><th class="num">Horas</th></tr></thead><tbody>${hl}</tbody></table></div></div>`
       : `
       <p class="hint full">Revise as demandas. As que já existem com o mesmo nome são atualizadas (situação, próximo passo e horas aprovadas); as demais são criadas.</p>
@@ -1118,7 +1118,7 @@ const Spot = (() => {
       <p class="hint full">O relatório será salvo na lista, com o mesmo conteúdo e a mesma organização do arquivo, sem usar IA. Depois você pode abrir, imprimir ou enviar por e-mail.</p>
       <div class="field full"><label for="ir-t">Título</label><input id="ir-t" name="titulo" maxlength="200" value="${esc(f.titulo)}" required></div>
       <div class="field"><label for="ir-d">Data de referência</label><input id="ir-d" name="ref_date" type="date" value="${esc(clampDate(f.ref_date, st.data))}" min="${st.data.start_date}"${st.data.end_date ? ` max="${st.data.end_date}"` : ''} required></div>
-      <div class="field"><label>Conteúdo</label><div class="small" style="padding:10px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.decisoes, 'decisões'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
+      <div class="field"><label>Conteúdo</label><div class="small" style="padding:8px 0">${[count(f.kpis, 'indicadores'), count(f.consumo, 'linhas de consumo'), count(f.chat, 'alterações do chatbot'), count(f.decisoes, 'decisões'), count(f.acoes, 'ações'), count(f.andamento, 'em andamento'), count(f.previsao, 'previstas'), count(f.defs, 'definições')].join(' · ')}</div></div>
       <div class="field full"><label>Meta</label><div class="small">${esc(f.meta)}</div></div>`, async d => {
       const r = await api('POST', `spot/${st.id}/reports/import`, { ...f, titulo: d.titulo, ref_date: d.ref_date });
       A().toast('Relatório importado.');
@@ -1257,7 +1257,7 @@ const Spot = (() => {
           <div class="mr-list" data-list="demandas">${d.demandas.map(mrDemand).join('')}</div><button type="button" class="btn btn-sm mr-add" data-mr-add="demandas">+ Adicionar demanda</button></div>
         <div class="mr-pane" data-pane="fin" hidden><p class="hint">Valor do projeto e notas lançadas na guia Financeiro.</p>
           <section class="mr-card"><h4>Indicadores financeiros</h4>${mrList('fin', d.fin)}</section><section class="mr-card"><h4>Notas</h4>${mrList('notas', d.notas)}</section></div>
-        <div class="field" style="margin-top:14px"><label>Rodapé</label><input data-k="rodape" maxlength="1000" value="${esc(d.rodape)}"></div>
+        <div class="field" style="margin-top:16px"><label>Rodapé</label><input data-k="rodape" maxlength="1000" value="${esc(d.rodape)}"></div>
       </div>`, async () => {
       const out = {};
       host.querySelectorAll('[data-k]').forEach(i => { out[i.dataset.k] = i.value.trim(); });

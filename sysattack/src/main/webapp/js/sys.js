@@ -21,8 +21,8 @@ const Sys = (() => {
   };
 
   function warnings(list) {
-    if (!list.length) return `<p class="hint" style="margin:0 0 14px"><span class="badge b-green">Tudo certo</span> Nenhum alerta sobre os backups.</p>`;
-    return `<div class="form-error" role="alert" style="margin-bottom:16px"><strong>Atenção</strong><ul style="margin:6px 0 0 18px;padding:0">${list.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
+    if (!list.length) return `<p class="hint" style="margin:0 0 16px"><span class="badge b-green">Tudo certo</span> Nenhum alerta sobre os backups.</p>`;
+    return `<div class="form-error" role="alert" style="margin-bottom:16px"><strong>Atenção</strong><ul style="margin:8px 0 0 16px;padding:0">${list.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
   }
 
   function backupsTable(list) {
@@ -63,14 +63,14 @@ const Sys = (() => {
           <div class="mini"><span>Documentos (${st.docs_count})</span><strong>${size(st.docs_size)}</strong></div>
           <div class="mini"><span>Espaço livre no destino</span><strong>${size(st.free_space)}</strong></div>
         </div>
-        <dl class="kv" style="margin:16px 0 4px;display:grid;grid-template-columns:max-content 1fr;gap:6px 16px">
+        <dl class="kv" style="margin:16px 0 4px;display:grid;grid-template-columns:max-content 1fr;gap:8px 16px">
           <dt>Pasta de dados</dt><dd><code>${esc(st.data_dir)}</code> <span class="small" style="display:inline">(${esc(st.data_source)})</span></dd>
           <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}</dd>
           <dt>Pasta dos backups</dt><dd><code>${esc(st.backup_dir)}</code></dd>
           <dt>Segunda cópia</dt><dd>${st.mirror_dir ? `<code>${esc(st.mirror_dir)}</code>` : '<span class="badge b-red">Não configurada</span>'}</dd>
           <dt>Banco</dt><dd>H2 ${esc(st.h2_version)} · id <code>${esc(st.data_id)}</code></dd>
         </dl>
-        <p class="hint" style="margin:10px 0 0">Cada backup é um único arquivo com o banco (cópia física e script SQL), os documentos, a chave <code>ai.key</code> e o <code>config.properties</code>. É verificado ao terminar. Retenção: 1 por dia (14 dias), 1 por semana (8 semanas), 1 por mês (12 meses). Como o arquivo contém a chave de criptografia, guarde-o como informação confidencial. Para restaurar, use <code>restaurar-backup.ps1</code> (veja o README).</p>
+        <p class="hint" style="margin:8px 0 0">Cada backup é um único arquivo com o banco (cópia física e script SQL), os documentos, a chave <code>ai.key</code> e o <code>config.properties</code>. É verificado ao terminar. Retenção: 1 por dia (14 dias), 1 por semana (8 semanas), 1 por mês (12 meses). Como o arquivo contém a chave de criptografia, guarde-o como informação confidencial. Para restaurar, use <code>restaurar-backup.ps1</code> (veja o README).</p>
       </section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Backups disponíveis</h2></div>${backupsTable(st.backups)}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Histórico de execuções</h2></div>${historyTable(st.history)}</section>

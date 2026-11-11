@@ -46,7 +46,7 @@ const Prio = (() => {
           <label class="small" for="pr-days" style="align-self:center">Urgente = vence em até</label>
           <select id="pr-days" aria-label="Limite de urgência">${[3, 7, 14, 30].map(n => `<option value="${n}"${n === st.days ? ' selected' : ''}>${n} dias</option>`).join('')}</select></div>
         <div id="pr-body"></div>
-        <p class="hint" style="margin-top:14px"><b>Importante</b> = tarefa marcada como importante, ou de projeto Meta Empresa ou de prioridade Crítica/Alta. <b>Urgente</b> = vence dentro do prazo escolhido ou já está atrasada. Entram só tarefas abertas (sem as concluídas, canceladas e tarefas-pai) de projetos que não estão concluídos nem pausados. Clique na ★ para marcar ou desmarcar uma tarefa como importante.</p>`;
+        <p class="hint" style="margin-top:16px"><b>Importante</b> = tarefa marcada como importante, ou de projeto Meta Empresa ou de prioridade Crítica/Alta. <b>Urgente</b> = vence dentro do prazo escolhido ou já está atrasada. Entram só tarefas abertas (sem as concluídas, canceladas e tarefas-pai) de projetos que não estão concluídos nem pausados. Clique na ★ para marcar ou desmarcar uma tarefa como importante.</p>`;
 
     const people = new Set();
     st.tasks.forEach(t => (t.responsible || '').split(',').map(x => x.trim()).filter(Boolean).forEach(x => people.add(x)));

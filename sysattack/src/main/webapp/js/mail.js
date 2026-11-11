@@ -34,7 +34,7 @@ const Mail = (() => {
 
   function testLogsTable(logs, dir) {
     if (!logs.length) return '';
-    return `<h3 style="margin:22px 0 8px;font-size:15px">Logs dos testes de envio</h3>
+    return `<h3 style="margin:24px 0 8px;font-size:15px">Logs dos testes de envio</h3>
       <p class="hint" style="margin:0 0 8px">Cada tentativa gera um arquivo .log (sem senha), guardado no banco e também na pasta <code>${esc(dir || '')}</code> do servidor, para extração.</p>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Quando</th><th>Por</th><th>Destino</th><th>Resultado</th><th></th></tr></thead><tbody>
       ${logs.map(l => `<tr><td>${esc(String(l.created_at).slice(0, 16).replace('T', ' '))}</td><td>${esc(l.created_by)}</td><td>${esc(l.recipient)}</td>
@@ -63,10 +63,10 @@ const Mail = (() => {
           <div class="form-error" hidden role="alert" style="grid-column:1/-1"></div>
           <div class="form-actions" style="grid-column:1/-1;justify-content:flex-start"><button type="submit" class="btn btn-primary">Salvar configuração</button>
             ${st.configured ? '<button type="button" class="btn btn-danger" data-action="em-remove">Remover</button>' : ''}</div></form>
-        ${st.configured ? `<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+        ${st.configured ? `<hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
           <div class="field" style="max-width:520px"><label for="em-t">Enviar e-mail de teste para</label><div class="ai-row"><input id="em-t" type="email" placeholder="deixe vazio para enviar para você">
             <button class="btn btn-sm btn-primary" data-action="em-test">Enviar teste</button></div></div>
-          <p style="margin:14px 0 0"><b>Último teste:</b> ${test}${tlogs.length ? ` <a class="btn btn-sm" href="api/email/settings/test-logs/${tlogs[0].id}/download" download>Baixar log</a>` : ''}</p>
+          <p style="margin:16px 0 0"><b>Último teste:</b> ${test}${tlogs.length ? ` <a class="btn btn-sm" href="api/email/settings/test-logs/${tlogs[0].id}/download" download>Baixar log</a>` : ''}</p>
           ${testLogsTable(tlogs, st.log_dir)}` : ''}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Gatilhos de e-mail (todos os projetos)</h2>
         <button class="btn btn-primary btn-sm" data-action="em-new-rule" data-global="1">+ Novo gatilho</button></div>${rulesTable(rules, true)}</section>
@@ -89,8 +89,8 @@ const Mail = (() => {
     projectId = pid;
     await load();
     const [rules, log] = await Promise.all([api('GET', 'email/rules?project_id=' + pid), api('GET', 'email/log?project_id=' + pid)]);
-    host.innerHTML = `<p class="hint" style="margin-bottom:14px">Gatilhos avisam pessoas por e-mail quando algo acontece neste projeto. O envio usa o e-mail de saída configurado em <a href="#/email">Configurações de E-mail</a>.</p>
-      ${rulesTable(rules, false)}<h3 style="margin:26px 0 10px;font-size:15px">Últimos envios</h3>${logTable(log.slice(0, 15), false)}`;
+    host.innerHTML = `<p class="hint" style="margin-bottom:16px">Gatilhos avisam pessoas por e-mail quando algo acontece neste projeto. O envio usa o e-mail de saída configurado em <a href="#/email">Configurações de E-mail</a>.</p>
+      ${rulesTable(rules, false)}<h3 style="margin:24px 0 8px;font-size:15px">Últimos envios</h3>${logTable(log.slice(0, 15), false)}`;
   }
 
   async function ruleForm(id, global) {

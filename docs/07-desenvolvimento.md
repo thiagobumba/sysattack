@@ -20,9 +20,22 @@
 | `js/tips.js` | Balões de explicação (`Tip`) |
 | `js/gantt.js`, `burndown.js`, `pert.js`, `ishikawa.js`, `prioridades.js` | Visões e gráficos |
 | `js/reports.js`, `spot.js`, `mail.js`, `sys.js`, `mpp.js`, `qr.js` | Relatórios, Spot, e-mail, sistema, importação, QR do 2FA |
-| `css/style.css` | Estilos (identidade Momesso) |
+| `css/style.css` | Estrutura, espaçamento, tamanhos, tipografia e responsivo |
+| `css/theme.css` | Só cor, sombra, gradiente e textura (carregado depois do `style.css`) |
 
 `window.App` expõe `me`, `main`, `view`, `isLate`, `T_STATUS`, `dayDiff`, `dlg`, `api`, `openDialog`, `toast`, `pageHead` e `route` para os módulos.
+
+## Grade de 8 (visual)
+
+Toda a tela segue a grade de 8. O cabeçalho do `css/style.css` tem as regras completas; em resumo:
+
+- **Espaçamento** (`padding`, `margin`, `gap`) só em 4, 8, 12, 16, 24, 32, 40, 48 e 64px. De 1 a 3px apenas para linhas e ajustes ópticos.
+- **Tipografia** em 11, 12, 13, 15, 17, 20, 24, 32 e 44px, com entrelinha múltipla de 4 (corpo 15/24).
+- **Alturas**: botão 40px, botão pequeno 32px, campo 48px, item do menu 40px, célula de tabela com 16px de recuo. No celular, botão e campo vão a 48px.
+- **Responsivo**: só quatro quebras — 1560, 1200, 900 e 640px, todas no fim do `style.css`.
+- Cada propriedade é declarada **uma única vez**. Se precisar mudar um valor, mude onde ele já está em vez de criar uma regra nova no fim do arquivo.
+- A faixa laranja do cabeçalho (`.page-head`) sangra até a borda com margem negativa igual ao recuo lateral de `.content`. **Mudou um, mude o outro**, ou a página ganha rolagem lateral.
+- O mesmo vale para os estilos escritos direto no JS (`style="padding:16px"`): use os valores da grade.
 
 ## Regras de código que importam
 

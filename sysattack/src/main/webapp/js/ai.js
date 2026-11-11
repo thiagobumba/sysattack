@@ -72,7 +72,7 @@ const Ai = (() => {
       <form id="ai-form" data-p="claude" class="ia-form" novalidate autocomplete="off">
         <div class="field"><label for="ai-k">Chave de API</label><input id="ai-k" name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" required></div>
         <div class="field"><label for="ai-m">Modelo</label><select id="ai-m" name="model">${st.d.default_models.map((m, i) => `<option value="${esc(m)}"${i === 0 ? ' selected' : ''}>${esc(m)}${i === 0 ? ' (recomendado)' : ''}</option>`).join('')}</select></div>
-        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:10px"><label for="ai-w">ID do workspace (opcional)</label><input id="ai-w" name="workspace_id" placeholder="wrkspc_… (só se a chave não for de um workspace)" maxlength="80"></div></details>
+        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:8px"><label for="ai-w">ID do workspace (opcional)</label><input id="ai-w" name="workspace_id" placeholder="wrkspc_… (só se a chave não for de um workspace)" maxlength="80"></div></details>
         ${lock}<div class="form-error" hidden role="alert"></div><div><button type="submit" class="btn btn-primary">Conectar</button></div></form></div></section>`;
   }
 
@@ -85,7 +85,7 @@ const Ai = (() => {
       <form id="ai-form" data-p="openai" class="ia-form" novalidate autocomplete="off">
         <div class="field"><label for="ai-k">Chave de API</label><input id="ai-k" name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" required></div>
         <div class="field"><label for="ai-m">Modelo</label><select id="ai-m" name="model" disabled><option value="">Valide a chave para listar os modelos</option></select></div>
-        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:10px"><label for="ai-w">ID da organização (opcional)</label><input id="ai-w" name="workspace_id" placeholder="org-…" maxlength="80"></div></details>
+        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:8px"><label for="ai-w">ID da organização (opcional)</label><input id="ai-w" name="workspace_id" placeholder="org-…" maxlength="80"></div></details>
         ${lock}<div class="form-error" hidden role="alert"></div>
         <div class="ia-actions"><button type="button" class="btn" data-action="ai-probe">Validar chave</button><button type="submit" class="btn btn-primary" disabled>Conectar</button></div></form></div></section>`;
   }
@@ -100,7 +100,7 @@ const Ai = (() => {
         <div class="field"><label for="ai-e">Endereço do recurso</label><input id="ai-e" name="endpoint" placeholder="https://nome-do-recurso.openai.azure.com" maxlength="200" required></div>
         <div class="field"><label for="ai-k">Chave</label><input id="ai-k" name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="Cole a chave do recurso" required></div>
         <div class="field"><label for="ai-m">Nome da implantação</label><input id="ai-m" name="model" placeholder="ex.: relatorios-spot" maxlength="64" required></div>
-        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:10px"><label for="ai-v">Versão da API</label><input id="ai-v" name="api_version" value="${esc(st.d.azure_version)}" maxlength="30"></div></details>
+        <details><summary>Opções avançadas</summary><div class="field" style="margin-top:8px"><label for="ai-v">Versão da API</label><input id="ai-v" name="api_version" value="${esc(st.d.azure_version)}" maxlength="30"></div></details>
         ${lock}<div class="form-error" hidden role="alert"></div><div><button type="submit" class="btn btn-primary">Validar e conectar</button></div></form></div></section>`;
   }
 

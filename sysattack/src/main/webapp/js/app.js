@@ -119,7 +119,7 @@
     if (!e) return '';
     if (!e.available) {
       const msg = e.reason === 'NO_BUDGET' ? 'Informe o orçamento do projeto para ver a projeção de custo.' : 'Cadastre tarefas para calcular os indicadores de prazo e custo.';
-      return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b></div><p class="hint" style="margin:6px 0 0">${msg}</p></div>`;
+      return `<div class="evm"><div class="evm-head"><b>Indicadores de custo e prazo</b></div><p class="hint" style="margin:8px 0 0">${msg}</p></div>`;
     }
     const over = e.eac != null && e.eac > e.bac, noCost = !(e.ac > 0);
     const eacTxt = e.eac == null ? 'Sem projeção' : money(e.eac);
@@ -147,7 +147,7 @@
         <div class="evm-card ${over ? 'bad' : 'ok'}"${Tip.attr('Custo previsto no término (EAC)', tipEac)}><small>Custo previsto no término (EAC)</small><b>${eacTxt}</b><span>Orçamento ${money(e.bac)}</span></div>
         <div class="evm-card ${e.vac != null && e.vac < 0 ? 'bad' : 'ok'}"${Tip.attr('Desvio no término (VAC)', tipVac)}><small>Desvio no término</small><b>${e.vac == null ? '—' : (e.vac < 0 ? '−' : '+') + money(Math.abs(e.vac))}</b><span>${e.vac == null ? '' : e.vac < 0 ? 'Estouro projetado' : 'Dentro do orçamento'}</span></div>
       </div>
-      <p class="hint" style="margin:10px 0 0">Previsto até hoje ${money(e.pv)} (${e.planned_pct}%) · Realizado ${money(e.ev)} (${e.actual_pct}%) · Custo lançado ${money(e.ac)}${over && e.reliable ? ' · <b class="late-txt">Atenção: a projeção passa do orçamento.</b>' : ''}</p></div>`;
+      <p class="hint" style="margin:8px 0 0">Previsto até hoje ${money(e.pv)} (${e.planned_pct}%) · Realizado ${money(e.ev)} (${e.actual_pct}%) · Custo lançado ${money(e.ac)}${over && e.reliable ? ' · <b class="late-txt">Atenção: a projeção passa do orçamento.</b>' : ''}</p></div>`;
   }
 
   // ------------------------------------------------------------------ visão geral
@@ -341,7 +341,7 @@
         <span class="small">${esc(t.responsible || 'Sem responsável')}${!tree && t.parent_id && byId[t.parent_id] ? ` · filha de ${esc(byId[t.parent_id].name)}` : ''}</span>${lock ? `<span class="rels">${lock}</span>` : ''}</div></div></td>
         ${showProject ? `<td><a href="#/projeto/${t.project_id}">${esc(t.project_name)}</a></td>` : ''}
         <td>${t.is_milestone ? '—' : fmt(t.start_date)}</td><td class="${isLate(t) ? 'late-txt' : ''}">${fmt(t.end_date)}</td><td>${pbar(t.progress, t.status === 'CONCLUIDA')}</td><td>${taskBadge(t)}</td>
-        <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 10px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
+        <td class="acts">${!t.parent_id ? `<button class="btn btn-sm" style="min-height:28px;padding:0 8px" title="Criar tarefa filha" data-action="new-subtask" data-id="${t.id}">+ Filha</button>` : ''}
         <button class="icon-btn" title="Editar" aria-label="Editar tarefa" data-action="edit-task" data-id="${t.id}">${ic('edit')}</button>
         <button class="icon-btn del" title="Excluir" aria-label="Excluir tarefa" data-action="del-task" data-id="${t.id}">${ic('trash')}</button></td></tr>`; }).join('')}</tbody></table></div>`;
   }
@@ -528,7 +528,7 @@
     dlg.className = 'wide';
     dlg.innerHTML = `<div class="dlg-head"><h2>${esc(d.title)}</h2><button class="icon-btn" data-action="close" aria-label="Fechar">${ic('x')}</button></div><div class="dlg-body">
       ${ext === 'pdf' || ext === 'txt' ? `<iframe class="preview" src="${url}" title="${esc(d.title)}"></iframe>` : `<img class="preview" src="${url}" alt="${esc(d.title)}">`}
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><a class="btn btn-sm" href="${url}" target="_blank" rel="noopener">Abrir em nova aba</a>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><a class="btn btn-sm" href="${url}" target="_blank" rel="noopener">Abrir em nova aba</a>
       <a class="btn btn-sm btn-primary" href="${url}?download=1">Baixar</a></div></div>`;
     dlg.showModal();
   }
@@ -579,7 +579,7 @@
     box.innerHTML = `<p><b>Verificação em duas etapas (2FA):</b> ${st.enabled ? '<span class="badge b-green">Ativa</span>' : '<span class="badge b-grey">Desativada</span>'}
       ${st.required ? '<span class="badge b-orange">Exigida pelo administrador</span>' : ''}</p>
       <p class="hint">Além da senha, o login pede um código de 6 dígitos de um aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy).${st.enabled ? ` Códigos de recuperação restantes: <b>${st.recovery_left}</b>.` : ''}</p>
-      <p style="margin-top:14px">${st.enabled
+      <p style="margin-top:16px">${st.enabled
         ? `<button class="btn btn-sm" data-action="2fa-codes">Gerar novos códigos de recuperação</button> ${st.required ? '' : '<button class="btn btn-sm" data-action="2fa-off">Desativar</button>'}`
         : '<button class="btn btn-primary btn-sm" data-action="2fa-on">Ativar verificação em duas etapas</button>'}</p>`;
   }
@@ -644,7 +644,7 @@
       <div class="field"><label for="ue">E-mail (usado no login)</label><input id="ue" name="email" type="email" maxlength="120" value="${esc(u.email)}" ${id ? 'disabled' : 'required'}></div>
       <div class="field"><label for="uj">Cargo</label><input id="uj" name="job_title" maxlength="80" list="cargos" value="${esc(u.job_title || '')}" placeholder="Ex.: Engenheiro de projetos"><datalist id="cargos">${cargos.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <div class="field"><label for="ur">Perfil</label><select id="ur" name="role"><option value="USER"${u.role === 'USER' ? ' selected' : ''}>Usuário</option><option value="ADMIN"${u.role === 'ADMIN' ? ' selected' : ''}>Administrador</option></select></div>
-      ${id ? `<div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" name="totp_required" style="width:auto;margin:0" ${u.totp_required ? 'checked' : ''}> Exigir verificação em duas etapas (2FA)</label><p class="hint">A pessoa terá de configurar o aplicativo autenticador no próximo acesso.</p></div>` : ''}
+      ${id ? `<div class="field full"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="totp_required" style="width:auto;margin:0" ${u.totp_required ? 'checked' : ''}> Exigir verificação em duas etapas (2FA)</label><p class="hint">A pessoa terá de configurar o aplicativo autenticador no próximo acesso.</p></div>` : ''}
       ${id ? `<div class="field full"><label for="up">Nova senha (deixe em branco para manter)</label><input id="up" name="password" type="password" autocomplete="new-password"></div>
         <div class="full">${SA.rulesHtml()}<p class="hint">Ao definir uma senha aqui, a pessoa será obrigada a trocá-la no próximo acesso. Para que ela mesma crie a senha, use o botão de e-mail na lista.</p></div>`
       : '<div class="full"><p class="hint">A pessoa receberá um e-mail de boas-vindas com o endereço do sistema, as políticas de uso e um link para criar a própria senha (válido por 72 horas).</p></div>'}`,
@@ -720,7 +720,7 @@
       <div class="field"><label for="o">Responsável</label><input id="o" name="owner" maxlength="120" value="${esc(p.owner)}"></div>
       <div class="field"><label for="s">Situação</label><select id="s" name="status">${opts(P_STATUS, p.status)}</select></div>
       <div class="field"><label for="pr">Prioridade</label><select id="pr" name="priority">${opts(PRIORITY, p.priority || 'MEDIA')}</select></div>
-      <div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" name="company_goal" style="width:auto;margin:0" ${p.company_goal ? 'checked' : ''}> ★ Meta Empresa</label><p class="hint">Projeto do plano de desenvolvimento da empresa. Fica acima de qualquer prioridade nas listas e na visão geral.</p></div>
+      <div class="field full"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="company_goal" style="width:auto;margin:0" ${p.company_goal ? 'checked' : ''}> ★ Meta Empresa</label><p class="hint">Projeto do plano de desenvolvimento da empresa. Fica acima de qualquer prioridade nas listas e na visão geral.</p></div>
       <div class="field"><label for="a">Início</label><input id="a" name="start_date" type="date" value="${p.start_date}" required></div>
       <div class="field"><label for="b">Fim</label><input id="b" name="end_date" type="date" value="${p.end_date}" required></div>
       <div class="field full"><label for="bu">Orçamento (R$)</label>${SA.moneyInput('bu', 'budget', Number(p.budget) > 0 ? p.budget : '', { placeholder: 'Opcional — usado no controle financeiro' })}</div>

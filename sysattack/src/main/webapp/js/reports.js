@@ -71,7 +71,7 @@ const Rep = (() => {
       return `<div class="tl-row"><div class="tl-name"><b>${esc(r.label)}</b>${r.sub ? `<small>${esc(r.sub)}</small>` : ''}</div><div class="tl-track">${grid}${mark}<i class="tl-today" style="left:${x(today)}%"></i></div></div>`;
     }).join('');
     const head = `<div class="tl-row tl-head"><div class="tl-name"></div><div class="tl-track">${ticks.filter(t => t.pos < 95).map(t => `<span class="tl-label" style="left:${t.pos}%">${esc(t.label)}</span>`).join('')}</div></div>`;
-    return `<div class="tl" style="--tl-min:${minW}px">${head}${body}</div><p class="hint" style="margin-top:10px">Barra escura = progresso. Linha laranja = hoje (${fmt(d.today)}). Losango = marco. Vermelho = atrasado.</p>`;
+    return `<div class="tl" style="--tl-min:${minW}px">${head}${body}</div><p class="hint" style="margin-top:8px">Barra escura = progresso. Linha laranja = hoje (${fmt(d.today)}). Losango = marco. Vermelho = atrasado.</p>`;
   }
 
   function repLate(d, projects) {
@@ -82,7 +82,7 @@ const Rep = (() => {
     return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Item</th><th>Projeto</th><th>Responsável</th><th>Prazo</th><th class="num">Dias de atraso</th><th class="num">Progresso</th></tr></thead><tbody>
       ${late.map(t => `<tr class="click" data-go="#/projeto/${t.project_id}"><td class="strong">${t.is_milestone ? '◆ ' : ''}${esc(t.name)}</td><td>${esc(pn[t.project_id])}</td><td>${esc(t.responsible || '—')}</td>
         <td class="late-txt">${fmt(t.end_date)}</td><td class="num strong late-txt">${t.days}</td><td class="num">${t.progress}%</td></tr>`).join('')}</tbody></table></div>
-      <p class="hint" style="margin-top:10px">${late.length} item(ns) em atraso. Tarefas pai não entram: elas são calculadas a partir das filhas.</p>`;
+      <p class="hint" style="margin-top:8px">${late.length} item(ns) em atraso. Tarefas pai não entram: elas são calculadas a partir das filhas.</p>`;
   }
 
   function repPlanned(d, projects) {
@@ -94,7 +94,7 @@ const Rep = (() => {
         <div class="rline"><span>Realizado</span>${hbar(a.actual, 100, diff < -5 ? 'var(--red)' : 'var(--orange)')}<em>${pct(a.actual)}</em></div></div>
         <div class="rdiff ${diff < -5 ? 'neg' : ''}">${diff >= 0 ? '+' : ''}${Math.round(diff)} p.p.<small>${diff < -5 ? 'atrás do previsto' : diff > 5 ? 'à frente' : 'no ritmo'}</small></div></div>`;
     }).join('')}</div>
-    <p class="hint" style="margin-top:10px">Previsto = parte do prazo de cada tarefa que já passou até hoje; realizado = progresso informado. Média ponderada pela duração das tarefas (marcos ficam de fora).</p>`;
+    <p class="hint" style="margin-top:8px">Previsto = parte do prazo de cada tarefa que já passou até hoje; realizado = progresso informado. Média ponderada pela duração das tarefas (marcos ficam de fora).</p>`;
   }
 
   function repChangeCount(d, projects) {
@@ -108,7 +108,7 @@ const Rep = (() => {
       <div class="rbars"><div class="rline"><span></span><div class="rbar stack" title="Aprovadas ${r.ap} · Pendentes ${r.pe} · Rejeitadas ${r.re}">
         <div style="width:${r.ap / max * 100}%;background:var(--green)"></div><div style="width:${r.pe / max * 100}%;background:var(--orange)"></div><div style="width:${r.re / max * 100}%;background:#b5b5b5"></div></div><em>${r.total}</em></div></div>
       <div class="rdiff"><small>${r.ap} aprov. · ${r.pe} pend. · ${r.re} rej.</small></div></div>`).join('')}</div>
-      <p class="hint" style="margin-top:10px"><i class="dot-k" style="background:var(--green)"></i> Aprovadas <i class="dot-k" style="background:var(--orange)"></i> Pendentes <i class="dot-k" style="background:#b5b5b5"></i> Rejeitadas</p>`;
+      <p class="hint" style="margin-top:8px"><i class="dot-k" style="background:var(--green)"></i> Aprovadas <i class="dot-k" style="background:var(--orange)"></i> Pendentes <i class="dot-k" style="background:#b5b5b5"></i> Rejeitadas</p>`;
   }
 
   function repChangeDelay(d, projects) {
@@ -122,7 +122,7 @@ const Rep = (() => {
     return `<div class="rrows">${rows.map(r => `<div class="rrow"><div class="rlabel"><b>${esc(r.p.name)}</b><small>${r.n} change(s) com impacto</small></div>
       <div class="rbars"><div class="rline"><span></span>${hbar(r.days, max, 'var(--red)')}<em>${r.days} dia(s)</em></div></div>
       <div class="rdiff"><small>${r.cost > 0 ? money(r.cost) : ''}</small></div></div>`).join('')}</div>
-      <div class="table-wrap" style="margin-top:18px"><table class="tbl"><thead><tr><th>Change</th><th>Projeto</th><th>Data</th><th class="num">Atraso (dias)</th><th class="num">Impacto R$</th></tr></thead><tbody>
+      <div class="table-wrap" style="margin-top:16px"><table class="tbl"><thead><tr><th>Change</th><th>Projeto</th><th>Data</th><th class="num">Atraso (dias)</th><th class="num">Impacto R$</th></tr></thead><tbody>
       ${list.map(x => `<tr><td class="strong">${esc(x.title)}${x.reason ? `<span class="small">${esc(x.reason)}</span>` : ''}</td><td>${esc(x.project_name)}</td><td>${fmt(x.change_date)}</td>
         <td class="num strong late-txt">${x.impact_days}</td><td class="num">${Number(x.impact_cost) > 0 ? money(x.impact_cost) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -144,7 +144,7 @@ const Rep = (() => {
         <div class="rline"><span>Realizado</span>${hbar(r.c.total, max, over ? 'var(--red)' : 'var(--orange)')}<em>${money(r.c.total)}</em></div></div>
         <div class="rdiff ${over ? 'neg' : ''}">${r.b > 0 ? (saldo >= 0 ? 'Saldo ' : 'Estouro ') + money(Math.abs(saldo)) : '—'}<small>${over ? 'acima do orçamento' : r.b > 0 ? 'dentro do orçamento' : ''}</small></div></div>`;
     }).join('')}</div>
-    <p class="hint" style="margin-top:10px">Previsto = orçamento do projeto. Realizado = soma das notas fiscais de serviço e faturas lançadas na aba Financeiro.</p>`;
+    <p class="hint" style="margin-top:8px">Previsto = orçamento do projeto. Realizado = soma das notas fiscais de serviço e faturas lançadas na aba Financeiro.</p>`;
   }
 
   function repCost(d, projects) {
@@ -175,7 +175,7 @@ const Rep = (() => {
           <td class="num">${money(e.bac)}</td><td class="num">${money(e.ac)}</td><td class="num ${cls(e.spi)}">${idx(e.spi)}</td><td class="num ${e.ac > 0 ? cls(e.cpi) : ''}">${e.ac > 0 ? idx(e.cpi) : '—'}</td>
           <td class="num ${e.eac > e.bac ? 'late-txt' : ''}">${e.eac == null ? '—' : money(e.eac)}</td>
           <td class="num ${vac < 0 ? 'late-txt' : ''}">${vac == null ? '—' : (vac < 0 ? '−' : '+') + money(Math.abs(vac))}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="hint" style="margin-top:10px">SPI = valor realizado ÷ valor previsto até hoje (prazo). CPI = valor realizado ÷ custo lançado. EAC = orçamento ÷ CPI. Desvio = orçamento − EAC. Valor realizado e previsto = orçamento × progresso (ponderado pela duração das tarefas). Abaixo de 1: atraso (SPI) ou gasto acima do entregue (CPI).</p>`;
+      <p class="hint" style="margin-top:8px">SPI = valor realizado ÷ valor previsto até hoje (prazo). CPI = valor realizado ÷ custo lançado. EAC = orçamento ÷ CPI. Desvio = orçamento − EAC. Valor realizado e previsto = orçamento × progresso (ponderado pela duração das tarefas). Abaixo de 1: atraso (SPI) ou gasto acima do entregue (CPI).</p>`;
   }
 
   // texto de apoio no topo de cada aba (com o projeto já escolhido)
@@ -193,7 +193,7 @@ const Rep = (() => {
       <p><b>Como usar:</b> escolha o projeto no campo <b>Projeto</b> (acima, à direita) ou clique em um da lista abaixo. Para um fechamento, escolha um projeto <b>concluído</b>: os relatórios mostram o que foi planejado, o que foi entregue e quanto custou. Depois, alterne entre as abas Projetos e Orçamentária.</p>
       ${byName.length ? `<div class="rp-pick">${byName.map(p => `<button type="button" class="rp-pick-item" data-action="rp-pick" data-id="${p.id}"><b>${esc(p.name)}</b><span class="small">${esc(STATUS[p.status] || p.status)}${p.owner ? ' · ' + esc(p.owner) : ''}</span></button>`).join('')}</div>`
         : '<div class="empty"><strong>Nenhum projeto ainda</strong>Crie um projeto na tela Projetos para ver os relatórios aqui.</div>'}
-      <p class="hint" style="margin-top:14px">Os projetos Spot têm relatórios próprios, dentro de cada projeto Spot.</p></section>`;
+      <p class="hint" style="margin-top:16px">Os projetos Spot têm relatórios próprios, dentro de cada projeto Spot.</p></section>`;
   }
 
   async function view() {

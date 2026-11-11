@@ -22,7 +22,7 @@ const Mpp = (() => {
   function open(projectId) {
     st = { projectId };
     const dlg = dlgShell('Importar tarefas', `
-      <p class="hint" style="margin-bottom:14px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo), o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML), um <b>JSON</b> (inclusive o exportado do Teamwork) ou um <b>CSV</b> de tarefas. Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
+      <p class="hint" style="margin-bottom:16px">Envie o arquivo <b>.mpp</b> do Microsoft Project (2010 ou mais novo), o <b>XML do Project</b> (Arquivo &gt; Salvar como &gt; XML), um <b>JSON</b> (inclusive o exportado do Teamwork) ou um <b>CSV</b> de tarefas. Você vai ver tudo o que seria criado e escolher o que importar antes de qualquer coisa ser gravada.</p>
       <div class="field full"><label for="mpp-f">Arquivo do Project</label><input id="mpp-f" type="file" accept=".mpp,.xml,.json,.csv"></div>
       <div class="form-error" id="mpp-err" role="alert" hidden></div>
       <div class="form-actions"><button type="button" class="btn" data-action="close">Cancelar</button><button type="button" class="btn btn-primary" id="mpp-read">Ler arquivo</button></div>`);
@@ -102,12 +102,12 @@ const Mpp = (() => {
     const outside = minD && (minD < st.proj.start_date || maxD > st.proj.end_date);
     const dlg = dlgShell('Importar tarefas', `
       <p class="hint" style="margin-bottom:12px"><b>${esc(st.fileName)}</b> · ${st.rows.length} linhas${st.projectName ? ` · ${esc(st.projectName)}` : ''}. Marque o que deve ser importado. Nada foi gravado ainda.</p>
-      <div class="fgrid" style="margin-bottom:10px">
+      <div class="fgrid" style="margin-bottom:8px">
         <div class="field full"><label for="mpp-lv">Qual nível do Project vira tarefa principal?</label>
           <select id="mpp-lv">${lvOpt}</select>
           <p class="hint">O SysAttack tem dois níveis (tarefa e subtarefa). Linhas abaixo do nível escolhido viram subtarefas; grupos intermediários entram como prefixo do nome.</p></div>
-        <div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="mpp-dep" style="width:auto;margin:0"${st.deps ? ' checked' : ''}${rows.some(p => p.row.preds.length) ? '' : ' disabled'}> Importar a predecessora (a primeira de cada tarefa)</label></div>
-        <div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="mpp-adj" style="width:auto;margin:0"${st.adjust ? ' checked' : ''}> Ajustar as datas do projeto para caber no cronograma${outside ? ` <span class="badge b-orange">hoje ${fmt(st.proj.start_date)} – ${fmt(st.proj.end_date)}; cronograma ${fmt(minD)} – ${fmt(maxD)}</span>` : ''}</label></div>
+        <div class="field full"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="mpp-dep" style="width:auto;margin:0"${st.deps ? ' checked' : ''}${rows.some(p => p.row.preds.length) ? '' : ' disabled'}> Importar a predecessora (a primeira de cada tarefa)</label></div>
+        <div class="field full"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="mpp-adj" style="width:auto;margin:0"${st.adjust ? ' checked' : ''}> Ajustar as datas do projeto para caber no cronograma${outside ? ` <span class="badge b-orange">hoje ${fmt(st.proj.start_date)} – ${fmt(st.proj.end_date)}; cronograma ${fmt(minD)} – ${fmt(maxD)}</span>` : ''}</label></div>
         ${st.existing ? `<div class="full"><p class="hint msg-err">Este projeto já tem ${st.existing} tarefa(s). As importadas serão adicionadas e não substituem as atuais.</p></div>` : ''}
       </div>
       <div class="bar-actions" style="margin:0 0 8px;justify-content:flex-start;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="mpp-all">Marcar todas</button><button type="button" class="btn btn-sm" id="mpp-none">Desmarcar todas</button><span class="small" id="mpp-count" style="display:inline"></span></div>
