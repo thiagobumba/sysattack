@@ -1,6 +1,6 @@
 # 06 – Modelo de dados
 
-Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **55**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
+Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema é criado e atualizado por `Db.java` ao subir o sistema; a versão do esquema está em `Db.SCHEMA_VERSION` (atualmente **56**). Colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, então atualizar o `.war` nunca apaga dados. Antes de mudar o esquema, o sistema copia o banco para `pre-update-*.mv.db`.
 
 > A lista abaixo foi gerada a partir do `Db.java`. Se houver divergência, o código é a fonte da verdade.
 
@@ -18,7 +18,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `spot_projects` | `id`, `name`, `client`, `provider`, `description`, `hours_model`, `contracted_hours`, `start_date`, `status`, `participants`, `recipients`, `billing_note`, `created_at`, `end_date`, `recurring`, `closed_scope`, `project_value`, `partner_hour_rate`, `partner_overage_rate` |
 | `spot_files` | `id`, `spot_id`, `title`, `description`, `file_name`, `size`, `content`, `uploaded_by`, `uploaded_at` |
 | `spot_invoices` | `id`, `spot_id`, `number`, `issue_date`, `due_date`, `amount`, `status`, `description`, `file_name`, `file_size`, `file_content`, `created_by`, `created_at`, `updated_at` |
-| `spot_requests` | `id`, `spot_id`, `channel`, `ticket_no`, `requester`, `received_at`, `title`, `description`, `status`, `assignee`, `solution`, `delivered_at`, `feature`, `module`, `validated_by` (e-mails separados por `;`), `estimate_hours` (estimativa Beecloud, h), `updated_at` (pedidos dos projetos Spot evolutivos; `spot_projects` ganhou `kind` PADRAO/EVOL_SF/EVOL_PT, `ticket_url` e `external_rate` R$/h do time externo) |
+| `spot_requests` | `id`, `spot_id`, `channel`, `ticket_no`, `requester`, `received_at`, `title`, `description`, `status`, `assignee`, `solution`, `delivered_at`, `feature`, `module`, `validated_by` (e-mails separados por `;`), `estimate_hours` (estimativa Beecloud, h), `updated_at` (pedidos dos projetos Spot evolutivos; `spot_projects` ganhou `kind` PADRAO/EVOL_SF/EVOL_PT, `ticket_url`, `feature_seq` (maior nº de feature já usado; número excluído não volta) e `external_rate` R$/h do time externo) |
 | `spot_request_files` | `id`, `request_id`, `spot_id`, `file_name`, `size`, `content` (BLOB), `uploaded_by`, `uploaded_at` (anexos dos pedidos; apagados em cascata com o pedido ou o projeto) |
 | `spot_features` | `id`, `spot_id`, `number` (sequencial por projeto, exibido FT-001), `name`, `module`, `documentation`, `effort_hours` (esforço interno, h), `created_by`, `created_at`, `updated_at` |
 | `spot_feature_files` | `id`, `feature_id`, `spot_id`, `file_name`, `size`, `content` (BLOB), `uploaded_by`, `uploaded_at` |

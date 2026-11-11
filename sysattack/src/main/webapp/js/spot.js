@@ -535,7 +535,7 @@ const Spot = (() => {
           const reqs = rows.filter(r => r.feature_id === f.id), nf = (st.ffiles || []).filter(x => x.feature_id === f.id).length;
           return `<details class="ft-card" data-fid="${f.id}"${st.ftOpen.has(f.id) || q ? ' open' : ''}><summary><span class="badge b-dark">${fmtNo(f.number)}</span><b class="ft-name">${esc(f.name)}</b>${f.module ? `<span class="badge b-grey">${esc(f.module)}</span>` : ''}${hasDoc(f) ? (nf ? `<span class="small ft-meta">📎 ${nf}</span>` : '') : '<span class="badge b-orange">sem documentação</span>'}
             <span class="small ft-meta ft-when">${Number(f.effort_hours) > 0 ? hh(f.effort_hours) + ' · ' : ''}${f.request_count} pedido(s)${f.delivered_at ? ' · ' + fmt(String(f.delivered_at).slice(0, 10)) : ''}</span></summary>
-            <div class="ft-body">${locked() ? '' : `<div class="ft-act"><button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button></div>`}
+            <div class="ft-body">${locked() ? '' : `<div class="ft-act"><button class="btn btn-sm" data-action="sp-edit-feature" data-id="${f.id}">Documentar</button>${isAdmin() ? ` <button class="btn btn-sm btn-danger" data-action="sp-del-feature" data-id="${f.id}">Excluir</button>` : ''}</div>`}
             ${ftEco(f, rows)}
             ${f.documentation ? `<div class="ft-doc"><b>O que foi feito</b><p>${esc(f.documentation)}</p></div>` : '<p class="hint">Ainda sem descrição do que foi feito.</p>'}${fclips(f) ? `<div class="small ft-files">${fclips(f)}</div>` : ''}
             ${reqs.length ? `<h4 class="ft-sub">Pedidos que originaram</h4>${reqs.map(r => `<div class="ft-req">${ticketCell(p, r)} <span class="small" style="display:inline">${esc(R_CHANNEL[r.channel])}${r.requester ? ' · ' + esc(r.requester) : ''}${r.validated_by ? ' · validado por ' + esc(r.validated_by) : ''}</span><div class="strong">${esc(r.title)}</div>${r.solution ? `<div class="small"><b>O que o TI fez:</b> ${esc(r.solution)}${r.assignee ? ' (' + esc(r.assignee) + ')' : ''}</div>` : ''}${clipsFor(r)}</div>`).join('')}` : ''}</div></details>`;
@@ -779,7 +779,7 @@ const Spot = (() => {
 
   function requestForm(id) {
     const x = id ? st.requests.find(r => r.id === id) : { channel: 'TIFLUX', ticket_no: '', requester: '', received_at: todayIso(), title: '', description: '', status: 'TRIAGEM', assignee: '', solution: '', delivered_at: '', feature_id: null };
-    const feats = st.features || [], nextNo = feats.reduce((m, f) => Math.max(m, f.number), 0) + 1;
+    const feats = st.features || [], nextNo = Math.max(Number((st.data.evo || {}).next_feature) || 0, feats.reduce((m, f) => Math.max(m, f.number), 0) + 1);
     A().openDialog(id ? 'Editar demanda' : 'Nova demanda', `
       <div class="field"><label for="rc">Canal</label><select id="rc" name="channel">${opts(R_CHANNEL, x.channel)}</select></div>
       <div class="field" id="rn-f"><label for="rn">Nº do chamado TIFlux <span class="opt">(opcional)</span></label><input id="rn" name="ticket_no" maxlength="40" value="${esc(x.ticket_no)}"></div>
@@ -1331,6 +1331,11 @@ const Spot = (() => {
       case 'sp-del-action': await del('spot/actions/' + id, 'Excluir este item?'); break;
       case 'sp-new-report': reportForm(); break;
       case 'sp-open-report': await openReport(id); break;
+      case 'sp-del-feature': {
+        const f = (st.features || []).find(z => z.id === id), n = (st.requests || []).filter(r => r.feature_id === id).length, na = (st.ffiles || []).filter(z => z.feature_id === id).length;
+        const msg = `Excluir ${fmtNo(f.number)} · ${f.name}?\n\n` + (n ? `${n} pedido(s) ligado(s) voltam para “Em homologação”, sem feature.\n` : '') + (na ? `${na} anexo(s) da feature serão apagados.\n` : '') + `O número ${fmtNo(f.number)} não será reaproveitado. Não dá para desfazer.`;
+        if (confirm(msg)) { await api('DELETE', `spot/features/${id}${n ? '?unlink=1' : ''}`); A().toast('Feature excluída.'); await A().route(); }
+        break; }
       case 'sp-del-report': await del('spot/reports/' + id, 'Excluir este relatório?'); break;
       case 'sp-edit-report': dlg.close(); await editReport(id); break;
       case 'sp-send-report': dlg.close(); await sendReport(id); break;

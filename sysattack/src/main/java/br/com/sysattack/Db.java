@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 55;
+    private static final int SCHEMA_VERSION = 56;
 
     private Db() {}
 
@@ -257,6 +257,8 @@ public final class Db {
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS external_rate DECIMAL(12,2) DEFAULT 0 NOT NULL");
             s.execute("ALTER TABLE spot_requests ADD COLUMN IF NOT EXISTS estimate_hours DECIMAL(8,2)");
             s.execute("ALTER TABLE spot_features ADD COLUMN IF NOT EXISTS effort_hours DECIMAL(8,2)");
+            // maior número de feature já usado no projeto: número excluído nunca é reaproveitado
+            s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS feature_seq INT DEFAULT 0 NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS spot_feature_files ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "feature_id BIGINT NOT NULL REFERENCES spot_features(id) ON DELETE CASCADE,"

@@ -103,6 +103,7 @@ final class SpotService {
                 case "features":
                     if (s.size() == 4 && s.get(3).equals("files")) return attachFile("spot_feature_files", "feature_id", "spot_features", m, s, req, user);
                     if (s.size() == 3 && m.equals("PUT")) return saveFeature(Long.parseLong(s.get(2)), ApiServlet.body(req));
+                    if (s.size() == 3 && m.equals("DELETE")) return deleteFeature(Long.parseLong(s.get(2)), "1".equals(req.getParameter("unlink")), user);
                     throw new ApiException(405, "Operação não suportada.");
                 case "files": return fileRoute(m, s, resp);
                 case "invoices":
@@ -483,7 +484,7 @@ final class SpotService {
     }
 
     private static long nextFeatureNumber(long spotId) throws SQLException {
-        return ((Number) Db.one("SELECT COALESCE(MAX(number), 0) + 1 n FROM spot_features WHERE spot_id = ?", spotId).get("n")).longValue();
+        return ((Number) Db.one("SELECT GREATEST(COALESCE((SELECT MAX(number) FROM spot_features WHERE spot_id = ?), 0), (SELECT feature_seq FROM spot_projects WHERE id = ?)) + 1 n", spotId, spotId).get("n")).longValue();
     }
 
     /** Pedidos entregues antes dos números de feature (só com o nome em texto) ganham a feature numerada, em ordem de entrega. */
@@ -514,6 +515,22 @@ final class SpotService {
         return Db.one("SELECT * FROM spot_features WHERE id = ?", id);
     }
 
+    /** Exclusão de feature (só administrador). Com pedidos ligados exige a confirmação "unlink": eles voltam para Em homologação, sem feature. O número não é reaproveitado. */
+    private static Object deleteFeature(long id, boolean unlink, Map<String, Object> user) throws SQLException {
+        if (!"ADMIN".equals(user.get("role"))) throw new ApiException(403, "Somente um administrador pode excluir uma feature.");
+        Map<String, Object> f = Db.one("SELECT spot_id, number FROM spot_features WHERE id = ?", id);
+        if (f == null) throw new ApiException(404, "Feature não encontrada.");
+        long linked = ((Number) Db.one("SELECT COUNT(*) n FROM spot_requests WHERE feature_id = ?", id).get("n")).longValue();
+        if (linked > 0 && !unlink) throw new ApiException(409, "A feature tem " + linked + " pedido(s) ligado(s). Confirme a exclusão para devolvê-los à etapa Em homologação.");
+        Db.update("UPDATE spot_projects SET feature_seq = GREATEST(feature_seq, ?) WHERE id = ?", f.get("number"), f.get("spot_id"));
+        Db.update("UPDATE spot_requests SET feature_id = NULL, feature = '', module = '', status = CASE WHEN status = 'ENTREGUE' THEN 'EM_HOMOLOGACAO' ELSE status END,"
+                + " delivered_at = CASE WHEN status = 'ENTREGUE' THEN NULL ELSE delivered_at END, updated_at = CURRENT_TIMESTAMP WHERE feature_id = ?", id);
+        Db.update("DELETE FROM spot_features WHERE id = ?", id); // anexos da feature saem junto (ON DELETE CASCADE)
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("ok", true); out.put("unlinked", linked);
+        return out;
+    }
+
     /** Projetos evolutivos: total de pedidos, entregues, em andamento e na triagem. */
     private static Map<String, Object> evoSummary(long spotId) throws SQLException {
         Map<String, Object> r = new java.util.LinkedHashMap<>();
@@ -526,6 +543,7 @@ final class SpotService {
                 + " FROM spot_requests WHERE spot_id = ?", spotId);
         for (String k : new String[]{"total", "delivered", "doing", "triage", "refused", "features"}) r.put(k, row.get(k) == null ? 0L : ((Number) row.get(k)).longValue());
         r.put("eco", evoEconomy(spotId));
+        r.put("next_feature", nextFeatureNumber(spotId));
         return r;
     }
 
