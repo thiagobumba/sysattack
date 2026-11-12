@@ -26,6 +26,10 @@ import javax.mail.internet.MimeMessage;
  *   smtp.password=********
  *   smtp.from=sysattack@empresa.com.br
  *   smtp.dev=true                 (somente testes: não envia, escreve o código no log do Tomcat)
+ *
+ * Microsoft 365 com OAuth 2.0 (sem senha), configurado pela tela:
+ *   smtp.authmode=OAUTH2
+ *   smtp.tenant=<ID do diretório>   smtp.clientid=<ID do aplicativo>   smtp.clientsecret=<segredo>
  */
 public final class Mailer {
     private static final Logger LOG = Logger.getLogger("sysattack");
@@ -54,32 +58,9 @@ public final class Mailer {
             throw new NotConfigured();
         }
         String user = c.getProperty("smtp.user", "").trim();
-        String pass = c.getProperty("smtp.password", "");
         String from = c.getProperty("smtp.from", user).trim();
-        String security = c.getProperty("smtp.security", "starttls").trim().toLowerCase();
-
-        Properties pr = new Properties();
-        pr.put("mail.smtp.host", host);
-        pr.put("mail.smtp.port", c.getProperty("smtp.port", "587").trim());
-        pr.put("mail.smtp.connectiontimeout", "10000");
-        pr.put("mail.smtp.timeout", "10000");
-        pr.put("mail.smtp.writetimeout", "10000");
-        if (security.equals("starttls")) {
-            pr.put("mail.smtp.starttls.enable", "true");
-            pr.put("mail.smtp.starttls.required", "true");
-        } else if (security.equals("ssl")) {
-            pr.put("mail.smtp.ssl.enable", "true");
-        }
-        boolean auth = !user.isEmpty();
-        pr.put("mail.smtp.auth", String.valueOf(auth));
-        Session session = auth
-                ? Session.getInstance(pr, new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(user, pass);
-                    }
-                })
-                : Session.getInstance(pr);
+        Session session = session(c);
+        if (session == null) throw new NotConfigured();
 
         MimeMessage m = new MimeMessage(session);
         m.setFrom(new InternetAddress(from, c.getProperty("smtp.fromname", "SysAttack"), "UTF-8"));
@@ -97,11 +78,14 @@ public final class Mailer {
     static final ThreadLocal<java.io.PrintStream> DEBUG_OUT = new ThreadLocal<>();
 
     /** Monta a sessão SMTP a partir do config.properties; null se o servidor não estiver configurado. */
-    private static Session session(Properties c) {
+    private static Session session(Properties c) throws Exception {
         String host = c.getProperty("smtp.host", "").trim();
         if (host.isEmpty()) return null;
         String user = c.getProperty("smtp.user", "").trim();
-        String pass = c.getProperty("smtp.password", "");
+        boolean oauth = "OAUTH2".equalsIgnoreCase(c.getProperty("smtp.authmode", "BASICO").trim());
+        String pass = oauth
+                ? MailOAuth.token(c.getProperty("smtp.tenant", "").trim(), c.getProperty("smtp.clientid", "").trim(), c.getProperty("smtp.clientsecret", ""))
+                : c.getProperty("smtp.password", "");
         String security = c.getProperty("smtp.security", "starttls").trim().toLowerCase();
         Properties pr = new Properties();
         pr.put("mail.smtp.host", host);
@@ -117,6 +101,12 @@ public final class Mailer {
         }
         boolean auth = !user.isEmpty();
         pr.put("mail.smtp.auth", String.valueOf(auth));
+        if (oauth) { // XOAUTH2: o token entra no lugar da senha; nenhum outro mecanismo pode ser tentado
+            pr.put("mail.smtp.auth.mechanisms", "XOAUTH2");
+            pr.put("mail.smtp.auth.login.disable", "true");
+            pr.put("mail.smtp.auth.plain.disable", "true");
+            pr.put("mail.smtp.auth.ntlm.disable", "true");
+        }
         return auth ? Session.getInstance(pr, new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {

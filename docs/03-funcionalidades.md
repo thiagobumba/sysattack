@@ -187,7 +187,7 @@ Para todos os usuários; projetos Spot não entram. Sempre **um projeto por vez*
 
 ## 11. E-mail e gatilhos
 
-- **SMTP pela tela** (administrador): servidor, porta, segurança, usuário, senha (criptografada com a `ai.key`), remetente; botão **Enviar teste**, que gera um `.log` completo (conversa SMTP, resultado, erros; sem a senha). Se nada estiver salvo na tela, vale o `config.properties`.
+- **SMTP pela tela** (administrador): servidor, porta, segurança, usuário, **autenticação por senha ou OAuth 2.0 (Microsoft 365: locatário, aplicativo e segredo, token XOAUTH2 pelo fluxo client credentials)**, senha e segredo criptografados com a `ai.key`, remetente; botão **Enviar teste**, que gera um `.log` completo (conversa SMTP, resultado, erros; sem a senha). Se nada estiver salvo na tela, vale o `config.properties`.
 - **Gatilhos** ("quando X → enviar para Y"), globais ou por projeto: projeto criado, situação do projeto alterada, tarefa criada, tarefa concluída, marco concluído, **tarefa atrasada** (verificada a cada 30 minutos; um aviso por tarefa), lançamento financeiro criado, documento adicionado.
 - **Destinatários:** lista de e-mails e, opcionalmente, o responsável (quando o nome dele coincide com o de um usuário ativo). **Assunto** aceita `{evento}`, `{projeto}`, `{item}`.
 - **Histórico** de envios por 90 dias. O envio é em segundo plano; falha de e-mail nunca impede a operação. Tarefas canceladas não geram aviso de atraso.

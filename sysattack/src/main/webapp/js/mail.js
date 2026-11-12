@@ -54,12 +54,16 @@ const Mail = (() => {
           <div class="field"><label for="em-h">Servidor SMTP</label><input id="em-h" name="host" maxlength="200" value="${esc(st.host)}" placeholder="smtp.office365.com" required></div>
           <div class="field"><label for="em-p">Porta</label><input id="em-p" name="port" type="number" min="1" max="65535" value="${esc(st.port)}" required></div>
           <div class="field"><label for="em-s">Segurança</label><select id="em-s" name="security">${Object.entries(SEC).map(([k, v]) => `<option value="${k}"${k === st.security ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
-          <div class="field"><label for="em-u">Usuário</label><input id="em-u" name="username" maxlength="200" value="${esc(st.username)}" placeholder="sysattack@empresa.com.br" autocomplete="off"></div>
-          <div class="field"><label for="em-w">Senha${st.has_password ? ' (guardada — deixe em branco para manter)' : ''}</label><input id="em-w" name="password" type="password" maxlength="400" autocomplete="new-password" placeholder="${st.has_password ? '••••••••' : ''}"></div>
+          <div class="field"><label for="em-a">Autenticação</label><select id="em-a" name="auth_mode"><option value="BASICO"${st.auth_mode === 'OAUTH2' ? '' : ' selected'}>Usuário e senha</option><option value="OAUTH2"${st.auth_mode === 'OAUTH2' ? ' selected' : ''}>OAuth 2.0 (Microsoft 365)</option></select></div>
+          <div class="field"><label for="em-u">Usuário<span class="opt" id="em-u-h"></span></label><input id="em-u" name="username" maxlength="200" value="${esc(st.username)}" placeholder="sysattack@empresa.com.br" autocomplete="off"></div>
+          <div class="field" id="em-w-f"><label for="em-w">Senha${st.has_password ? ' (guardada — deixe em branco para manter)' : ''}</label><input id="em-w" name="password" type="password" maxlength="400" autocomplete="new-password" placeholder="${st.has_password ? '••••••••' : ''}"></div>
+          <div class="field oa" id="em-ti-f"><label for="em-ti">ID do diretório (locatário)</label><input id="em-ti" name="tenant_id" maxlength="100" value="${esc(st.tenant_id || '')}" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"></div>
+          <div class="field oa" id="em-ci-f"><label for="em-ci">ID do aplicativo (cliente)</label><input id="em-ci" name="client_id" maxlength="100" value="${esc(st.client_id || '')}" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"></div>
+          <div class="field oa" id="em-cs-f"><label for="em-cs">Segredo do cliente${st.has_secret ? ' (guardado — deixe em branco para manter)' : ''}</label><input id="em-cs" name="client_secret" type="password" maxlength="400" autocomplete="new-password" placeholder="${st.has_secret ? '••••••••' : ''}"></div>
           <div class="field"><label for="em-f">E-mail do remetente</label><input id="em-f" name="from_email" maxlength="200" value="${esc(st.from_email)}" placeholder="igual ao usuário, se vazio"></div>
           <div class="field"><label for="em-n">Nome do remetente</label><input id="em-n" name="from_name" maxlength="120" value="${esc(st.from_name)}"></div>
           <div class="field" style="justify-content:flex-end"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" name="enabled" ${st.enabled ? 'checked' : ''} style="width:auto;min-height:0"> Envio ativo</label></div>
-          <p class="hint" style="grid-column:1/-1">Office 365: <code>smtp.office365.com</code>, 587, STARTTLS. Gmail/Workspace: <code>smtp.gmail.com</code>, 587, STARTTLS, com <b>senha de app</b>. A senha é guardada <b>criptografada</b> e nunca é exibida de novo.</p>
+          <p class="hint" style="grid-column:1/-1" id="em-help"></p>
           <div class="form-error" hidden role="alert" style="grid-column:1/-1"></div>
           <div class="form-actions" style="grid-column:1/-1;justify-content:flex-start"><button type="submit" class="btn btn-primary">Salvar configuração</button>
             ${st.configured ? '<button type="button" class="btn btn-danger" data-action="em-remove">Remover</button>' : ''}</div></form>
@@ -72,13 +76,24 @@ const Mail = (() => {
         <button class="btn btn-primary btn-sm" data-action="em-new-rule" data-global="1">+ Novo gatilho</button></div>${rulesTable(rules, true)}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Histórico de envios</h2></div>${logTable(log, true)}</section>`;
     const form = document.getElementById('em-form'), err = form.querySelector('.form-error');
+    const BASICO = 'Office 365: <code>smtp.office365.com</code>, 587, STARTTLS. Gmail/Workspace: <code>smtp.gmail.com</code>, 587, STARTTLS, com <b>senha de app</b>. A senha é guardada <b>criptografada</b> e nunca é exibida de novo.';
+    const OAUTH = 'No <b>Microsoft Entra ID</b>, registre um aplicativo, dê a ele a permissão <b>SMTP.SendAsApp</b> (Office 365 Exchange Online) com consentimento do administrador e gere um segredo do cliente. No PowerShell do Exchange: <code>New-ServicePrincipal</code> (use o <b>ID do objeto da Aplicação Empresarial</b>), <code>Add-MailboxPermission</code> na caixa remetente e <code>Set-CASMailbox -SmtpClientAuthenticationDisabled $false</code>. O <b>Usuário</b> tem de ser a caixa remetente. O segredo é guardado <b>criptografado</b> e nunca é exibido de novo.';
+    const amSync = () => {
+      const oauth = form.auth_mode.value === 'OAUTH2';
+      document.getElementById('em-w-f').style.display = oauth ? 'none' : '';
+      form.querySelectorAll('.oa').forEach(e => { e.style.display = oauth ? '' : 'none'; });
+      document.getElementById('em-u-h').textContent = oauth ? ' (caixa remetente)' : '';
+      document.getElementById('em-help').innerHTML = oauth ? OAUTH : BASICO;
+    };
+    form.auth_mode.addEventListener('change', amSync); amSync();
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const b = form.querySelector('[type=submit]');
       b.disabled = true; err.hidden = true;
       try {
         await api('PUT', 'email/settings', { host: form.host.value.trim(), port: Number(form.port.value), security: form.security.value, username: form.username.value.trim(),
-          password: form.password.value, from_email: form.from_email.value.trim(), from_name: form.from_name.value.trim(), enabled: form.enabled.checked });
+          password: form.password.value, from_email: form.from_email.value.trim(), from_name: form.from_name.value.trim(), enabled: form.enabled.checked,
+          auth_mode: form.auth_mode.value, tenant_id: form.tenant_id.value.trim(), client_id: form.client_id.value.trim(), client_secret: form.client_secret.value });
         A().toast('Configuração salva. Envie um e-mail de teste.'); await A().route();
       } catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; }
     });

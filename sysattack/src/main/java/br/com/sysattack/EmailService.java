@@ -57,8 +57,19 @@ final class EmailService {
                 if (!Auth.isEmail(from)) throw new ApiException(400, "Informe um e-mail de saída válido.");
                 String fromName = ApiServlet.str(b, "from_name", "Nome do remetente", 120, false);
                 boolean enabled = !b.has("enabled") || ApiServlet.bool(b, "enabled");
+                String authMode = ApiServlet.str(b, "auth_mode", "Autenticação", 10, false).toUpperCase();
+                if (authMode.isEmpty()) authMode = "BASICO";
+                if (!authMode.equals("BASICO") && !authMode.equals("OAUTH2")) throw new ApiException(400, "Tipo de autenticação inválido.");
+                String tenantId = ApiServlet.str(b, "tenant_id", "ID do diretório (locatário)", 100, false);
+                String clientId = ApiServlet.str(b, "client_id", "ID do aplicativo (cliente)", 100, false);
+                String clientSecret = ApiServlet.str(b, "client_secret", "Segredo do cliente", 400, false);
+                if (authMode.equals("OAUTH2")) {
+                    if (!tenantId.matches("[A-Za-z0-9.\\-]*")) throw new ApiException(400, "ID do diretório (locatário) inválido.");
+                    if (!clientId.matches("[A-Za-z0-9\\-]*")) throw new ApiException(400, "ID do aplicativo (cliente) inválido.");
+                }
                 return EmailConfig.save(host, (int) port, security, username, password, from,
-                        fromName.isEmpty() ? "SysAttack" : fromName.replaceAll("[\\r\\n]+", " "), enabled, (String) user.get("name"));
+                        fromName.isEmpty() ? "SysAttack" : fromName.replaceAll("[\\r\\n]+", " "), enabled,
+                        authMode, tenantId, clientId, clientSecret, (String) user.get("name"));
             }
         } else if (s.size() == 3 && s.get(2).equals("test-logs") && m.equals("GET")) {
             return Db.query("SELECT id, created_at, created_by, recipient, ok, summary, file_name FROM email_test_log ORDER BY id DESC LIMIT 50");

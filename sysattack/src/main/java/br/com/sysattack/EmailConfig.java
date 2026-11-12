@@ -13,7 +13,8 @@ final class EmailConfig {
     private EmailConfig() {}
 
     private static final String COLS = "host, port, security, username, from_email, from_name, enabled, updated_by, updated_at,"
-            + " last_test_at, last_test_ok, last_test_msg, (password_enc <> '') has_password";
+            + " last_test_at, last_test_ok, last_test_msg, (password_enc <> '') has_password,"
+            + " auth_mode, tenant_id, client_id, (client_secret_enc <> '') has_secret";
 
     static Map<String, Object> status() throws SQLException {
         Map<String, Object> row = Db.one("SELECT " + COLS + " FROM email_settings WHERE id = 1");
@@ -24,6 +25,7 @@ final class EmailConfig {
             out.put("file_fallback", !f.getProperty("smtp.host", "").isBlank());
             out.put("host", ""); out.put("port", 587); out.put("security", "starttls"); out.put("username", "");
             out.put("from_email", ""); out.put("from_name", "SysAttack"); out.put("enabled", true); out.put("has_password", false);
+            out.put("auth_mode", "BASICO"); out.put("tenant_id", ""); out.put("client_id", ""); out.put("has_secret", false);
             return out;
         }
         out.put("configured", true);
@@ -57,6 +59,12 @@ final class EmailConfig {
         p.setProperty("smtp.user", (String) r.get("username"));
         String enc = (String) r.get("password_enc");
         p.setProperty("smtp.password", enc == null || enc.isEmpty() ? "" : AiConfig.decrypt(enc));
+        String mode = (String) r.getOrDefault("auth_mode", "BASICO");
+        p.setProperty("smtp.authmode", mode == null || mode.isBlank() ? "BASICO" : mode);
+        p.setProperty("smtp.tenant", str(r.get("tenant_id")));
+        p.setProperty("smtp.clientid", str(r.get("client_id")));
+        String sec = (String) r.get("client_secret_enc");
+        p.setProperty("smtp.clientsecret", sec == null || sec.isEmpty() ? "" : AiConfig.decrypt(sec));
         String user = (String) r.get("username");
         String from = (String) r.get("from_email");
         p.setProperty("smtp.from", from == null || from.isBlank() ? user : from);
@@ -64,16 +72,32 @@ final class EmailConfig {
         return p;
     }
 
-    /** Salva (cria ou atualiza). Senha em branco mantém a já guardada. */
+    private static String str(Object o) { return o == null ? "" : String.valueOf(o); }
+
+    /** Salva (cria ou atualiza). Senha e segredo em branco mantêm os já guardados. */
     static Map<String, Object> save(String host, int port, String security, String username, String password,
-                                    String fromEmail, String fromName, boolean enabled, String by) throws Exception {
-        Map<String, Object> old = Db.one("SELECT password_enc FROM email_settings WHERE id = 1");
+                                    String fromEmail, String fromName, boolean enabled, String authMode,
+                                    String tenantId, String clientId, String clientSecret, String by) throws Exception {
+        Map<String, Object> old = Db.one("SELECT password_enc, client_secret_enc FROM email_settings WHERE id = 1");
         String enc = old == null ? "" : (String) old.get("password_enc");
         if (password != null && !password.isEmpty()) enc = AiConfig.encrypt(password);
         else if (username.isEmpty()) enc = "";
+        String secEnc = old == null ? "" : str(old.get("client_secret_enc"));
+        if (clientSecret != null && !clientSecret.isEmpty()) secEnc = AiConfig.encrypt(clientSecret);
+        boolean oauth = "OAUTH2".equals(authMode);
+        if (oauth) {
+            if (tenantId.isEmpty() || clientId.isEmpty()) throw new ApiServlet.ApiException(400, "Informe o locatário e o ID do aplicativo.");
+            if (secEnc.isEmpty()) throw new ApiServlet.ApiException(400, "Informe o segredo do cliente.");
+            if (username.isEmpty()) throw new ApiServlet.ApiException(400, "Informe a caixa remetente no campo Usuário: é ela que o aplicativo representa.");
+            enc = ""; // no OAuth não existe senha
+        } else {
+            tenantId = ""; clientId = ""; secEnc = "";
+        }
+        MailOAuth.forget(tenantId, clientId); // configuração nova, token antigo não vale mais
         Db.update("DELETE FROM email_settings WHERE id = 1");
-        Db.update("INSERT INTO email_settings(id,host,port,security,username,password_enc,from_email,from_name,enabled,updated_by)"
-                + " VALUES(1,?,?,?,?,?,?,?,?,?)", host, port, security, username, enc, fromEmail, fromName, enabled, by);
+        Db.update("INSERT INTO email_settings(id,host,port,security,username,password_enc,from_email,from_name,enabled,updated_by,"
+                + "auth_mode,tenant_id,client_id,client_secret_enc) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? "OAUTH2" : "BASICO", tenantId, clientId, secEnc);
         return status();
     }
 
@@ -92,8 +116,10 @@ final class EmailConfig {
         java.time.ZonedDateTime started = java.time.ZonedDateTime.now();
         long t0 = System.nanoTime();
         java.io.ByteArrayOutputStream dialog = new java.io.ByteArrayOutputStream();
+        StringBuilder oauthTrace = new StringBuilder();
         Throwable error = null;
         try {
+            MailOAuth.TRACE.set(oauthTrace);
             Mailer.DEBUG_OUT.set(new java.io.PrintStream(dialog, true, "UTF-8"));
             boolean sent = Mailer.sendHtml(toProps(r), List.of(to), subject,
                     "<p style=\"font-family:Arial,sans-serif\">Este é um e-mail de teste do <b>SysAttack</b>, enviado por " + EmailTriggers.h(by)
@@ -103,15 +129,17 @@ final class EmailConfig {
         } catch (Exception e) {
             ok = false;
             error = e;
-            msg = shorten(rootMessage(e));
+            String hint = MailOAuth.smtpHint(rootMessage(e));
+            msg = shorten(rootMessage(e) + (hint == null ? "" : " " + hint));
             LOG.warning("Teste de e-mail falhou: " + e);
         } finally {
             Mailer.DEBUG_OUT.remove();
+            MailOAuth.TRACE.remove();
         }
         long ms = (System.nanoTime() - t0) / 1_000_000;
         Db.update("UPDATE email_settings SET last_test_at = CURRENT_TIMESTAMP, last_test_ok = ?, last_test_msg = ? WHERE id = 1", ok, msg);
         try {
-            saveTestLog(r, to, by, subject, started, ms, ok, msg, error, dialog.toString("UTF-8"));
+            saveTestLog(r, to, by, subject, started, ms, ok, msg, error, dialog.toString("UTF-8"), oauthTrace.toString());
         } catch (Exception e) {
             LOG.warning("Não foi possível gravar o log do teste de e-mail: " + e); // o log nunca pode derrubar o teste
         }
@@ -120,7 +148,7 @@ final class EmailConfig {
 
     /** Monta o texto do log (sem senha), grava no banco e numa pasta de logs para extração. */
     private static void saveTestLog(Map<String, Object> r, String to, String by, String subject, java.time.ZonedDateTime started, long ms,
-                                    boolean ok, String msg, Throwable error, String dialog) throws Exception {
+                                    boolean ok, String msg, Throwable error, String dialog, String oauthTrace) throws Exception {
         String stamp = started.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         StringBuilder b = new StringBuilder();
         b.append("SysAttack · LOG DE TESTE DE E-MAIL\n").append("=".repeat(60)).append('\n');
@@ -136,15 +164,30 @@ final class EmailConfig {
         b.append("Porta          : ").append(r.get("port")).append('\n');
         b.append("Segurança      : ").append(r.get("security")).append('\n');
         b.append("Usuário        : ").append(r.get("username")).append('\n');
-        b.append("Autenticação   : ").append(((String) r.get("username")).isEmpty() ? "não" : "sim").append('\n');
+        boolean oauth = "OAUTH2".equals(str(r.get("auth_mode")));
+        b.append("Autenticação   : ").append(((String) r.get("username")).isEmpty() ? "não"
+                : oauth ? "OAuth 2.0 (Microsoft 365)" : "usuário e senha").append('\n');
+        if (oauth) { // nunca gravamos o segredo nem o token
+            b.append("Locatário      : ").append(str(r.get("tenant_id"))).append('\n');
+            b.append("Aplicativo     : ").append(str(r.get("client_id"))).append('\n');
+            b.append("Segredo        : ").append(str(r.get("client_secret_enc")).isEmpty() ? "NÃO informado" : "guardado (não é gravado no log)").append('\n');
+            b.append("Escopo         : https://outlook.office365.com/.default\n");
+        }
         b.append("Remetente      : ").append(r.get("from_name")).append(" <").append(r.get("from_email")).append(">\n");
         b.append("Envio ativo    : ").append(Boolean.TRUE.equals(r.get("enabled")) ? "sim" : "não").append("\n\n");
         b.append("[Ambiente]\n");
         b.append("Java           : ").append(System.getProperty("java.version")).append('\n');
         b.append("Servidor de app: ").append(System.getProperty("catalina.base", "—")).append("\n\n");
+        if (oauth) {
+            b.append("[OAuth 2.0 — obtenção do token]\n");
+            b.append(oauthTrace == null || oauthTrace.isBlank() ? "(sem registro: o token não chegou a ser pedido)\n" : oauthTrace);
+            b.append('\n');
+        }
         b.append("[Conversa com o servidor SMTP]\n");
         b.append(dialog.isBlank() ? "(sem registro: a conexão não chegou a ser aberta)\n" : dialog.trim() + "\n").append('\n');
         if (error != null) {
+            String hint = MailOAuth.smtpHint(rootMessage(error));
+            if (hint != null) b.append("[O que costuma resolver]\n").append(hint).append("\n\n");
             b.append("[Erro]\n");
             int depth = 0;
             for (Throwable t = error; t != null && depth < 8; t = t.getCause() == t ? null : t.getCause(), depth++) {
@@ -170,6 +213,7 @@ final class EmailConfig {
         while (t.getCause() != null && t.getCause() != t) t = t.getCause();
         String m = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
         if (e instanceof Mailer.NotConfigured) return "SMTP não configurado.";
+        if (e instanceof MailOAuth.OAuthException) return e.getMessage();
         return m;
     }
 

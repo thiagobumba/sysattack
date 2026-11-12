@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 56;
+    private static final int SCHEMA_VERSION = 57;
 
     private Db() {}
 
@@ -259,6 +259,11 @@ public final class Db {
             s.execute("ALTER TABLE spot_features ADD COLUMN IF NOT EXISTS effort_hours DECIMAL(8,2)");
             // maior número de feature já usado no projeto: número excluído nunca é reaproveitado
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS feature_seq INT DEFAULT 0 NOT NULL");
+            // e-mail de saída com OAuth 2.0 (Microsoft 365): fluxo client credentials
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS auth_mode VARCHAR(10) DEFAULT 'BASICO' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_id VARCHAR(100) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_secret_enc VARCHAR(2000) DEFAULT '' NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS spot_feature_files ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "feature_id BIGINT NOT NULL REFERENCES spot_features(id) ON DELETE CASCADE,"

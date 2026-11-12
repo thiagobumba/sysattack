@@ -66,6 +66,24 @@ Modelo comentado: `sysattack/config.exemplo.properties`. Linhas com `#` são com
 | `app.url` | Endereço do sistema nos e-mails (sem `/` no fim). Também aceito: `-Dsysattack.url=` ou `SYSATTACK_URL`. Se for `localhost`, convites não são enviados |
 | `smtp.host`, `smtp.port`, `smtp.security` (`starttls`), `smtp.user`, `smtp.password`, `smtp.from` | Envio de e-mail (também configurável pela tela, que tem prioridade quando salva) |
 | `smtp.dev=true` | **Só para teste**: nada é enviado; link/código aparece no log do Tomcat |
+
+### E-mail do Microsoft 365 com OAuth 2.0
+
+Para não depender de senha (e sobreviver ao fim da autenticação básica no SMTP), configure **Autenticação: OAuth 2.0 (Microsoft 365)** na tela de E-mail. Antes, no locatário:
+
+1. **Entra ID → Registros de aplicativo → Novo registro**. Anote o **ID do aplicativo (cliente)** e o **ID do diretório (locatário)**.
+2. **Permissões de API → APIs usadas pela organização → Office 365 Exchange Online → Permissões de aplicativo → `SMTP.SendAsApp`**, e **Conceder consentimento do administrador**.
+3. **Certificados e segredos → Novo segredo do cliente** (o valor só aparece uma vez).
+4. No PowerShell do Exchange Online:
+   ```powershell
+   New-ServicePrincipal -AppId <ID do aplicativo> -ObjectId <ID do objeto da Aplicação Empresarial>
+   Add-MailboxPermission -Identity <caixa> -User <ID do aplicativo> -AccessRights FullAccess
+   Set-CASMailbox -Identity <caixa> -SmtpClientAuthenticationDisabled $false
+   ```
+   O `ObjectId` é o da **Aplicação Empresarial**, não o do Registro de aplicativo. Trocar os dois causa `535 5.7.3`.
+5. Na tela, o **Usuário** tem de ser a caixa remetente que recebeu a permissão. O servidor precisa de saída para `login.microsoftonline.com:443` além do SMTP.
+
+A caixa precisa existir e ter licença com Exchange Online; sem caixa, nem senha nem token autenticam.
 | `backup.dir` | Pasta de backup em **outro disco** (ou `-Dsysattack.backup=`) |
 | `backup.mirror` | Segunda cópia em outra máquina/rede (ou `-Dsysattack.backup.mirror=`) |
 

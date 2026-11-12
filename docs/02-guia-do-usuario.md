@@ -146,5 +146,5 @@ Menu **Projetos Spot**. A lista tem guias **Contrato** (recorrentes), **Escopo f
 
 - **Usuários:** cadastrar (nome, e-mail, perfil, **cargo**), bloquear/ativar, exigir 2FA. O novo usuário recebe e-mail de boas-vindas com link para criar a senha.
 - **IA Agent:** cole a chave de API do Claude, escolha o modelo, *Conectar*, *Testar conexão* ou *Desconectar*.
-- **E-mail:** configure o SMTP pela tela (com *Enviar teste*, que gera um arquivo de log), crie **gatilhos** e consulte o **histórico** de envios (90 dias).
+- **E-mail:** configure o SMTP pela tela, com **Autenticação** por usuário e senha ou por **OAuth 2.0 (Microsoft 365)** — neste caso informe locatário, ID do aplicativo e segredo, e use a caixa remetente no campo Usuário (com *Enviar teste*, que gera um arquivo de log; no modo OAuth o log mostra também a obtenção do token e o que costuma resolver cada erro), crie **gatilhos** e consulte o **histórico** de envios (90 dias).
 - **Segurança e dados:** pasta de dados em uso, endereço (`app.url`), backups (fazer agora, verificar, histórico) e trilha de auditoria.
