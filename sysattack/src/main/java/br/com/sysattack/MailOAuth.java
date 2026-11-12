@@ -120,6 +120,14 @@ final class MailOAuth {
             return "O token foi aceito pelo Entra, mas o Exchange recusou o login. Em geral falta registrar o aplicativo no Exchange"
                  + " (New-ServicePrincipal, usando o ID do objeto da Aplicação Empresarial, não o do Registro de aplicativo),"
                  + " dar permissão na caixa (Add-MailboxPermission) ou liberar o SMTP autenticado nela (Set-CASMailbox).";
+        if (message.contains("5.7.139") && message.contains("Tenant"))
+            return "O token foi aceito, mas o SMTP autenticado está desligado no locatário. No PowerShell do Exchange, libere só a caixa"
+                 + " (Set-CASMailbox -Identity <caixa> -SmtpClientAuthenticationDisabled $false), que sobrepõe a trava do locatário; se ainda assim falhar,"
+                 + " libere o locatário (Set-TransportConfig -SmtpClientAuthenticationDisabled $false) e confira os Padrões de Segurança no Entra ID."
+                 + " A mudança pode levar até uma hora para valer.";
+        if (message.contains("5.7.139") && message.contains("Mailbox"))
+            return "O SMTP autenticado está desligado nesta caixa. No Centro de administração, abra o usuário em E-mail → Gerenciar aplicativos de e-mail"
+                 + " e marque SMTP autenticado, ou rode Set-CASMailbox -Identity <caixa> -SmtpClientAuthenticationDisabled $false.";
         if (message.contains("550") && message.contains("5.7.60"))
             return "O aplicativo não tem permissão para enviar como esta caixa. Confira o Add-MailboxPermission para o ID do aplicativo.";
         return null;

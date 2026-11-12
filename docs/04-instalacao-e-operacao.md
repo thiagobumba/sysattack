@@ -81,6 +81,7 @@ Para não depender de senha (e sobreviver ao fim da autenticação básica no SM
    Set-CASMailbox -Identity <caixa> -SmtpClientAuthenticationDisabled $false
    ```
    O `ObjectId` é o da **Aplicação Empresarial**, não o do Registro de aplicativo. Trocar os dois causa `535 5.7.3`.
+   O SMTP autenticado precisa estar ligado mesmo com OAuth: se o teste falhar com `535 5.7.139 ... disabled for the Tenant`, rode `Set-CASMailbox` (libera só a caixa e sobrepõe o locatário) ou, se necessário, `Set-TransportConfig -SmtpClientAuthenticationDisabled $false`. A mudança pode levar até uma hora.
 5. Na tela, o **Usuário** tem de ser a caixa remetente que recebeu a permissão. O servidor precisa de saída para `login.microsoftonline.com:443` além do SMTP.
 
 A caixa precisa existir e ter licença com Exchange Online; sem caixa, nem senha nem token autenticam.
