@@ -102,7 +102,9 @@ final class MailOAuth {
     /** Traduz os erros mais comuns do Entra para algo acionável. */
     private static String hint(String code, String desc) {
         String d = desc == null ? "" : desc;
-        if (d.contains("AADSTS7000215")) return "o segredo do cliente está errado ou foi digitado com espaço. Gere um novo em Certificados e segredos.";
+        if (d.contains("AADSTS7000215")) return "o segredo do cliente não confere. O engano mais comum é colar o \"ID secreto\""
+                + " em vez do \"Valor\" do segredo: em Certificados e segredos, copie a coluna Valor (o botão de copiar traz o texto inteiro, mesmo aparecendo cortado)."
+                + " Se o valor não estiver mais visível, crie um novo segredo e copie na hora.";
         if (d.contains("AADSTS7000222")) return "o segredo do cliente expirou. Gere um novo em Certificados e segredos.";
         if (d.contains("AADSTS700016")) return "o ID do aplicativo não existe neste locatário. Confira o ID do aplicativo (cliente).";
         if (d.contains("AADSTS90002")) return "o locatário informado não existe. Confira o ID do diretório (locatário).";
