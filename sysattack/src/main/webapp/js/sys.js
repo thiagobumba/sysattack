@@ -65,7 +65,7 @@ const Sys = (() => {
         </div>
         <dl class="kv" style="margin:16px 0 4px;display:grid;grid-template-columns:max-content 1fr;gap:8px 16px">
           <dt>Pasta de dados</dt><dd><code>${esc(st.data_dir)}</code> <span class="small" style="display:inline">(${esc(st.data_source)})</span></dd>
-          <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>${st.app_url_source ? ` <span class="small" style="display:inline">(${esc(st.app_url_source)})</span>` : ''}` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}
+          <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>${st.app_url_source ? ` <span class="small" style="display:inline">(${esc(st.app_url_source)})</span>` : ''}` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : st.app_url ? '<span class="badge b-red">Só abre na máquina do servidor</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}
             <button class="btn btn-sm" data-action="sys-addr-test" style="margin-left:8px">Testar</button><span id="sy-addr-res" class="small" style="display:inline"></span></dd>
           <dt>Você está acessando por</dt><dd><code>${esc(st.browser_url || '—')}</code></dd>
           <dt>Pasta dos backups</dt><dd><code>${esc(st.backup_dir)}</code></dd>
