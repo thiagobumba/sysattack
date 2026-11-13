@@ -117,7 +117,7 @@ final class EmailConfig {
     static Map<String, Object> saveSignature(boolean on, String text, int width) throws Exception {
         if (Db.one("SELECT id FROM email_settings WHERE id = 1") == null)
             throw new ApiServlet.ApiException(400, "Salve a configuração de envio antes da assinatura.");
-        if (width < 0 || width > 600) throw new ApiServlet.ApiException(400, "A largura precisa estar entre 1 e 600 pixels.");
+        if (width < 0 || width > 1000) throw new ApiServlet.ApiException(400, "A largura precisa estar entre 1 e 1000 pixels.");
         Db.update("UPDATE email_settings SET sign_on = ?, sign_text = ?, sign_img_w = ? WHERE id = 1", on, text, width);
         return status();
     }

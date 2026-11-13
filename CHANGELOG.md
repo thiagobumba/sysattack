@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- **Assinatura: largura até 1000 px.** O limite subiu de 600 para 1000 px, para assinaturas em faixa ocuparem a largura do relatório. A imagem continua sem passar da largura da mensagem: em relatórios mais estreitos ela encolhe junto.
 - **Assinatura virou aba dentro de "E-mail de saída".** O painel ganhou as abas **Envio** e **Assinatura**, e uma caixinha **Assinatura** ao lado de "Envio ativo". A aba só aparece quando a caixinha está marcada; marcar revela a aba sem tirar você do formulário de envio, e desmarcar esconde. O painel separado de assinatura deixou de existir.
 - **Correção: salvar o envio apagava a assinatura.** A gravação da configuração recriava a linha no banco e levava junto o texto e a imagem da assinatura. Agora eles são preservados.
 - **Correção: assinatura com imagem impedia o envio.** Ao ligar a assinatura com imagem, todo envio falhava com `ClassCastException`. A leitura genérica do banco converte para texto tudo que não é número, booleano ou texto, e os bytes da imagem viravam uma cadeia de caracteres. Agora a imagem é lida por consulta direta, como os demais anexos. Além disso, qualquer falha ao montar a assinatura passa a ser ignorada: o e-mail sai sem ela, em vez de não sair.

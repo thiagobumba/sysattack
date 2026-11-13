@@ -10,7 +10,7 @@ import java.util.Map;
  */
 final class MailSignature {
     static final String CID = "sysattack-assinatura";
-    private static final int MAX_W = 600; // largura máxima no corpo do e-mail
+    private static final int MAX_W = 1000; // largura máxima; a imagem nunca passa da largura da mensagem
 
     private MailSignature() {}
 
