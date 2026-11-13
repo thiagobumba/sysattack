@@ -187,6 +187,7 @@ Para todos os usuários; projetos Spot não entram. Sempre **um projeto por vez*
 
 ## 11. E-mail e gatilhos
 
+- **Assinatura** (administrador): texto e imagem guardados em `email_settings`, embutidos por `cid:` no fim dos e-mails (relatórios e gatilhos; o código de senha não leva). Largura até 600 px; imagem até 2 MB.
 - **SMTP pela tela** (administrador): servidor, porta, segurança, usuário, **autenticação por senha, por OAuth 2.0 no SMTP (XOAUTH2, permissão `SMTP.SendAsApp`) ou pelo Microsoft Graph (`sendMail` com MIME em base64, permissão `Mail.Send`, sem SMTP), todas pelo fluxo client credentials com locatário, aplicativo e segredo**, senha e segredo criptografados com a `ai.key`, remetente; botão **Enviar teste**, que gera um `.log` completo (conversa SMTP, resultado, erros; sem a senha). Se nada estiver salvo na tela, vale o `config.properties`.
 - **Gatilhos** ("quando X → enviar para Y"), globais ou por projeto: projeto criado, situação do projeto alterada, tarefa criada, tarefa concluída, marco concluído, **tarefa atrasada** (verificada a cada 30 minutos; um aviso por tarefa), lançamento financeiro criado, documento adicionado.
 - **Destinatários:** lista de e-mails e, opcionalmente, o responsável (quando o nome dele coincide com o de um usuário ativo). **Assunto** aceita `{evento}`, `{projeto}`, `{item}`.

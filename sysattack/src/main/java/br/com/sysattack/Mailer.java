@@ -75,6 +75,20 @@ public final class Mailer {
         deliver(c, m);
     }
 
+    /** Parte de imagem embutida (base64 pronta: não depende do javax.activation). */
+    private static javax.mail.internet.MimeBodyPart inline(byte[] bytes, String type, String name, String cid) throws Exception {
+        javax.mail.internet.InternetHeaders ih = new javax.mail.internet.InternetHeaders();
+        ih.addHeader("Content-Type", type + "; name=\"" + name + "\"");
+        ih.addHeader("Content-Transfer-Encoding", "base64");
+        ih.addHeader("Content-ID", "<" + cid + ">");
+        ih.addHeader("Content-Disposition", "inline; filename=\"" + name + "\"");
+        return new javax.mail.internet.MimeBodyPart(ih, java.util.Base64.getMimeEncoder(76, new byte[] {'\r', '\n'}).encode(bytes));
+    }
+
+    private static String ext(String mime) {
+        return mime.contains("jpeg") || mime.contains("jpg") ? ".jpg" : mime.contains("gif") ? ".gif" : mime.contains("webp") ? ".webp" : ".png";
+    }
+
     /** Quando preenchido (na thread atual), a conversa SMTP é gravada aqui (sem credenciais) para o log do teste. */
     static final ThreadLocal<java.io.PrintStream> DEBUG_OUT = new ThreadLocal<>();
 
@@ -177,20 +191,17 @@ public final class Mailer {
         if (!bcc.isEmpty()) m.setRecipients(Message.RecipientType.BCC, InternetAddress.parse(String.join(",", bcc)));
         if (replyTo != null && !replyTo.isBlank()) m.setReplyTo(InternetAddress.parse(replyTo));
         m.setSubject(subject.replaceAll("[\\r\\n]+", " "), "UTF-8");
+        MailSignature.Data sig = MailSignature.current();
+        html = MailSignature.append(html, sig); // assinatura no fim, antes do fecho do corpo
         byte[] logo = html.contains("cid:" + ReportLogo.CID) ? ReportLogo.png() : null;
-        if (logo != null) { // logo da Momesso embutida (aparece mesmo com imagens externas bloqueadas)
+        boolean signImg = sig != null && sig.image != null && sig.image.length > 0;
+        if (logo != null || signImg) { // imagens embutidas: aparecem mesmo com imagens externas bloqueadas
             javax.mail.internet.MimeMultipart rel = new javax.mail.internet.MimeMultipart("related");
             javax.mail.internet.MimeBodyPart body = new javax.mail.internet.MimeBodyPart();
             body.setContent(html, "text/html; charset=UTF-8");
             rel.addBodyPart(body);
-            javax.mail.internet.InternetHeaders ih = new javax.mail.internet.InternetHeaders();
-            ih.addHeader("Content-Type", "image/png; name=\"momesso.png\"");
-            ih.addHeader("Content-Transfer-Encoding", "base64");
-            ih.addHeader("Content-ID", "<" + ReportLogo.CID + ">");
-            ih.addHeader("Content-Disposition", "inline; filename=\"momesso.png\"");
-            javax.mail.internet.MimeBodyPart img = new javax.mail.internet.MimeBodyPart(ih,
-                    java.util.Base64.getMimeEncoder(76, new byte[] {'\r', '\n'}).encode(logo)); // já codificada: sem depender de javax.activation
-            rel.addBodyPart(img);
+            if (logo != null) rel.addBodyPart(inline(logo, "image/png", "momesso.png", ReportLogo.CID));
+            if (signImg) rel.addBodyPart(inline(sig.image, sig.type, "assinatura" + ext(sig.type), MailSignature.CID));
             m.setContent(rel);
         } else {
             m.setContent(html, "text/html; charset=UTF-8");

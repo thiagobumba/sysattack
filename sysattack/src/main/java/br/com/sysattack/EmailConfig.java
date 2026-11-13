@@ -14,7 +14,8 @@ final class EmailConfig {
 
     private static final String COLS = "host, port, security, username, from_email, from_name, enabled, updated_by, updated_at,"
             + " last_test_at, last_test_ok, last_test_msg, (password_enc <> '') has_password,"
-            + " auth_mode, tenant_id, client_id, (client_secret_enc <> '') has_secret";
+            + " auth_mode, tenant_id, client_id, (client_secret_enc <> '') has_secret,"
+            + " sign_on, sign_text, sign_img_name, sign_img_size, sign_img_w";
 
     static Map<String, Object> status() throws SQLException {
         Map<String, Object> row = Db.one("SELECT " + COLS + " FROM email_settings WHERE id = 1");
@@ -26,6 +27,7 @@ final class EmailConfig {
             out.put("host", ""); out.put("port", 587); out.put("security", "starttls"); out.put("username", "");
             out.put("from_email", ""); out.put("from_name", "SysAttack"); out.put("enabled", true); out.put("has_password", false);
             out.put("auth_mode", "BASICO"); out.put("tenant_id", ""); out.put("client_id", ""); out.put("has_secret", false);
+            out.put("sign_on", false); out.put("sign_text", ""); out.put("sign_img_name", ""); out.put("sign_img_size", 0L); out.put("sign_img_w", 0);
             return out;
         }
         out.put("configured", true);
@@ -100,6 +102,33 @@ final class EmailConfig {
                 + "auth_mode,tenant_id,client_id,client_secret_enc) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? authMode : "BASICO", tenantId, clientId, secEnc);
         return status();
+    }
+
+    /** Assinatura: texto, ligar/desligar e largura da imagem. A imagem entra pela rota de upload. */
+    static Map<String, Object> saveSignature(boolean on, String text, int width) throws Exception {
+        if (Db.one("SELECT id FROM email_settings WHERE id = 1") == null)
+            throw new ApiServlet.ApiException(400, "Salve a configuração de envio antes da assinatura.");
+        if (width < 0 || width > 600) throw new ApiServlet.ApiException(400, "A largura precisa estar entre 1 e 600 pixels.");
+        Db.update("UPDATE email_settings SET sign_on = ?, sign_text = ?, sign_img_w = ? WHERE id = 1", on, text, width);
+        return status();
+    }
+
+    /** Troca a imagem da assinatura (bytes crus no corpo). */
+    static Map<String, Object> saveSignatureImage(String fileName, byte[] bytes) throws Exception {
+        if (Db.one("SELECT id FROM email_settings WHERE id = 1") == null)
+            throw new ApiServlet.ApiException(400, "Salve a configuração de envio antes da assinatura.");
+        Db.update("UPDATE email_settings SET sign_img = ?, sign_img_name = ?, sign_img_size = ? WHERE id = 1", bytes, fileName, (long) bytes.length);
+        return status();
+    }
+
+    static Map<String, Object> removeSignatureImage() throws Exception {
+        Db.update("UPDATE email_settings SET sign_img = NULL, sign_img_name = '', sign_img_size = 0 WHERE id = 1");
+        return status();
+    }
+
+    /** Imagem da assinatura para a prévia na tela. */
+    static Map<String, Object> signatureImage() throws SQLException {
+        return Db.one("SELECT sign_img, sign_img_name FROM email_settings WHERE id = 1");
     }
 
     static Map<String, Object> remove() throws SQLException {

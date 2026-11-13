@@ -27,7 +27,7 @@ public final class Db {
     private static String dataId = "";
     private static String h2Version = "";
     /** Versão do esquema: ao mudar, o arquivo do banco é copiado (pre-update) antes de qualquer migração. */
-    private static final int SCHEMA_VERSION = 57;
+    private static final int SCHEMA_VERSION = 58;
 
     private Db() {}
 
@@ -264,6 +264,13 @@ public final class Db {
             s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT '' NOT NULL");
             s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_id VARCHAR(100) DEFAULT '' NOT NULL");
             s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_secret_enc VARCHAR(2000) DEFAULT '' NOT NULL");
+            // assinatura do e-mail: imagem embutida (cid) e/ou texto, no fim de cada mensagem
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_on BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_text VARCHAR(4000) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_name VARCHAR(200) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_size BIGINT DEFAULT 0 NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img BLOB");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_w INT DEFAULT 0 NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS spot_feature_files ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "feature_id BIGINT NOT NULL REFERENCES spot_features(id) ON DELETE CASCADE,"

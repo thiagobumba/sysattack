@@ -72,6 +72,19 @@ const Mail = (() => {
             <button class="btn btn-sm btn-primary" data-action="em-test">Enviar teste</button></div></div>
           <p style="margin:16px 0 0"><b>Último teste:</b> ${test}${tlogs.length ? ` <a class="btn btn-sm" href="api/email/settings/test-logs/${tlogs[0].id}/download" download>Baixar log</a>` : ''}</p>
           ${testLogsTable(tlogs, st.log_dir)}` : ''}</section>
+      ${st.configured ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Assinatura</h2>
+        <span class="ai-status ${st.sign_on && (st.sign_img_size || (st.sign_text || '').trim()) ? 'on' : ''}"><i></i>${st.sign_on && (st.sign_img_size || (st.sign_text || '').trim()) ? 'Em uso' : 'Desligada'}</span></div>
+        <p class="hint" style="margin:0 0 16px">Vai no fim dos relatórios e dos avisos dos gatilhos. A imagem é <b>embutida</b> na mensagem, então aparece mesmo com o bloqueio de imagens do Outlook. O e-mail do código de troca de senha não leva assinatura.</p>
+        <form id="sg-form" class="fgrid" novalidate>
+          <div class="field full"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" name="sign_on" ${st.sign_on ? 'checked' : ''} style="width:auto;min-height:0"> Usar assinatura nos e-mails</label></div>
+          <div class="field full"><label for="sg-t">Texto antes da imagem <span class="opt">(opcional)</span></label><textarea id="sg-t" name="sign_text" maxlength="4000" rows="3" placeholder="Ex.: Atenciosamente,&#10;Thiago Porto · Analista de Projetos TI">${esc(st.sign_text || '')}</textarea></div>
+          <div class="field"><label for="sg-w">Largura da imagem <span class="opt">(px, até 600)</span></label><input id="sg-w" name="sign_img_w" type="number" min="100" max="600" step="10" value="${esc(st.sign_img_w || 600)}"></div>
+          <div class="field"><label for="sg-f">Imagem da assinatura <span class="opt">(PNG, JPG, GIF ou WEBP; até 2 MB)</span></label><input id="sg-f" type="file" accept=".png,.jpg,.jpeg,.gif,.webp"></div>
+          <div class="full" id="sg-prev">${st.sign_img_size ? `<p class="hint" style="margin:0 0 8px">Imagem atual: <b>${esc(st.sign_img_name)}</b> (${Math.round(st.sign_img_size / 1024)} KB) <button type="button" class="btn btn-sm btn-danger" data-action="em-sign-del">Remover imagem</button></p>
+            <img src="api/email/settings/signature?t=${Date.now()}" alt="Assinatura" style="display:block;max-width:min(100%,${esc(st.sign_img_w || 600)}px);height:auto;border:1px solid var(--line)">` : '<p class="hint" style="margin:0">Nenhuma imagem enviada.</p>'}</div>
+          <div class="form-error" hidden role="alert" style="grid-column:1/-1"></div>
+          <div class="form-actions" style="grid-column:1/-1;justify-content:flex-start"><button type="submit" class="btn btn-primary">Salvar assinatura</button></div>
+        </form></section>` : ''}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Gatilhos de e-mail (todos os projetos)</h2>
         <button class="btn btn-primary btn-sm" data-action="em-new-rule" data-global="1">+ Novo gatilho</button></div>${rulesTable(rules, true)}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Histórico de envios</h2></div>${logTable(log, true)}</section>`;
@@ -100,6 +113,28 @@ const Mail = (() => {
         A().toast('Configuração salva. Envie um e-mail de teste.'); await A().route();
       } catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; }
     });
+    const sg = document.getElementById('sg-form');
+    if (sg) {
+      const serr = sg.querySelector('.form-error');
+      sg.addEventListener('submit', async e => {
+        e.preventDefault();
+        const b = sg.querySelector('[type=submit]');
+        b.disabled = true; serr.hidden = true;
+        try {
+          const file = document.getElementById('sg-f').files[0];
+          if (file) {
+            if (file.size > 2 * 1024 * 1024) throw new Error('A imagem passa de 2 MB.');
+            const r = await fetch('api/email/settings/signature', { method: 'POST', credentials: 'same-origin', body: file,
+              headers: { 'X-Requested-With': 'SysAttack', 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) } });
+            const data = await r.json().catch(() => null);
+            if (r.status === 401) { location.replace('login.html'); return; }
+            if (!r.ok) throw new Error((data && data.error) || 'Falha ao enviar a imagem.');
+          }
+          await api('PUT', 'email/settings/signature', { sign_on: sg.sign_on.checked, sign_text: sg.sign_text.value, sign_img_w: Number(sg.sign_img_w.value) || 0 });
+          A().toast('Assinatura salva.'); await A().route();
+        } catch (ex) { serr.textContent = ex.message; serr.hidden = false; b.disabled = false; }
+      });
+    }
   }
 
   // ------------------------------------------------------------------ aba do projeto
@@ -146,6 +181,7 @@ const Mail = (() => {
         finally { el.disabled = false; }
         break;
       }
+      case 'em-sign-del': if (confirm('Remover a imagem da assinatura?')) { await api('DELETE', 'email/settings/signature'); A().toast('Imagem removida.'); await A().route(); } break;
       case 'em-remove': if (confirm('Remover a configuração de e-mail do banco? (o config.properties, se existir, volta a ser usado)')) { await api('DELETE', 'email/settings'); A().toast('Configuração removida.'); await A().route(); } break;
     }
   }

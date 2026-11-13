@@ -74,6 +74,47 @@ final class EmailService {
                         fromName.isEmpty() ? "SysAttack" : fromName.replaceAll("[\\r\\n]+", " "), enabled,
                         authMode, tenantId, clientId, clientSecret, (String) user.get("name"));
             }
+        } else if (s.size() == 3 && s.get(2).equals("signature")) {
+            if (m.equals("PUT")) {
+                JsonObject b = ApiServlet.body(req);
+                boolean on = ApiServlet.bool(b, "sign_on");
+                String text = ApiServlet.str(b, "sign_text", "Texto da assinatura", 4000, false);
+                long w = b.has("sign_img_w") && !b.get("sign_img_w").getAsString().isBlank() ? ApiServlet.longOf(b, "sign_img_w", "Largura") : 0;
+                return EmailConfig.saveSignature(on, text, (int) w);
+            }
+            if (m.equals("DELETE")) return EmailConfig.removeSignatureImage();
+            if (m.equals("GET")) { // prévia na tela
+                Map<String, Object> r = EmailConfig.signatureImage();
+                byte[] img = r == null ? null : (byte[]) r.get("sign_img");
+                if (img == null || img.length == 0) throw new ApiException(404, "Sem imagem de assinatura.");
+                String name = (String) r.get("sign_img_name");
+                resp.setContentType(ApiServlet.MIME.getOrDefault(ApiServlet.extOf(name), "image/png"));
+                resp.setHeader("X-Content-Type-Options", "nosniff");
+                resp.setHeader("Cache-Control", "no-store");
+                resp.setContentLengthLong(img.length);
+                resp.getOutputStream().write(img);
+                return ApiServlet.FILE_SENT;
+            }
+            if (m.equals("POST")) { // bytes crus, como nos demais anexos
+                String fileName = ApiServlet.header(req, "X-File-Name").replace('\\', '/');
+                fileName = fileName.substring(fileName.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "");
+                if (fileName.length() > 200) fileName = fileName.substring(fileName.length() - 200);
+                String ext = ApiServlet.extOf(fileName);
+                if (!Set.of("png", "jpg", "jpeg", "gif", "webp").contains(ext))
+                    throw new ApiException(400, "A assinatura precisa ser uma imagem PNG, JPG, GIF ou WEBP.");
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                try (java.io.InputStream in = req.getInputStream()) {
+                    byte[] chunk = new byte[16384];
+                    int n;
+                    while ((n = in.read(chunk)) > 0) {
+                        if (buf.size() + n > 2 * 1024 * 1024) throw new ApiException(413, "A imagem da assinatura passa de 2 MB.");
+                        buf.write(chunk, 0, n);
+                    }
+                }
+                if (buf.size() == 0) throw new ApiException(400, "O arquivo está vazio.");
+                return EmailConfig.saveSignatureImage(fileName, buf.toByteArray());
+            }
+            throw new ApiException(405, "Operação não suportada.");
         } else if (s.size() == 3 && s.get(2).equals("test-logs") && m.equals("GET")) {
             return Db.query("SELECT id, created_at, created_by, recipient, ok, summary, file_name FROM email_test_log ORDER BY id DESC LIMIT 50");
         } else if (s.size() == 5 && s.get(2).equals("test-logs") && s.get(4).equals("download") && m.equals("GET")) {
