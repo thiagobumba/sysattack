@@ -66,10 +66,96 @@ final class Invites {
 
     /** Para a tela Segurança e dados: o endereço que vai nos e-mails e se ele é utilizável por outras máquinas. */
     static Map<String, Object> addressInfo() {
+        return addressInfo(null);
+    }
+
+    /**
+     * Com a requisição do administrador, compara o endereço configurado com o que o navegador está usando:
+     * é assim que se percebe que o app.url ficou para trás depois de uma troca de endereço.
+     */
+    static Map<String, Object> addressInfo(HttpServletRequest req) {
         String u = configuredUrl();
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("app_url", u);
         o.put("app_url_ok", !u.isEmpty() && !LOCAL.matcher(u).matches());
+        o.put("app_url_source", source());
+        if (req != null) {
+            String now = baseUrl(req);
+            o.put("browser_url", now);
+            o.put("app_url_matches", u.isEmpty() || u.equalsIgnoreCase(now));
+        }
+        return o;
+    }
+
+    /** De onde veio o endereço configurado, para a tela dizer onde mexer. */
+    private static String source() {
+        String v = System.getProperty("sysattack.url");
+        if (v != null && !v.isBlank()) return "-Dsysattack.url";
+        v = System.getenv("SYSATTACK_URL");
+        if (v != null && !v.isBlank()) return "SYSATTACK_URL";
+        v = AppConfig.load().getProperty("app.url");
+        return v != null && !v.isBlank() ? "config.properties" : "";
+    }
+
+    /**
+     * Confere o endereço configurado em três passos: o nome resolve, a porta responde e o HTTPS completa.
+     * Nunca aceita endereço vindo da requisição: testa só o que está configurado no servidor.
+     */
+    static Map<String, Object> testAddress() {
+        Map<String, Object> o = new LinkedHashMap<>();
+        String u = configuredUrl();
+        o.put("url", u);
+        if (u.isEmpty()) {
+            o.put("ok", false);
+            o.put("step", "config");
+            o.put("message", "Nenhum endereço configurado: os e-mails usam o endereço de quem disparou a ação.");
+            return o;
+        }
+        java.net.URI uri;
+        try {
+            uri = java.net.URI.create(u);
+        } catch (Exception e) {
+            o.put("ok", false); o.put("step", "config"); o.put("message", "O endereço configurado não é uma URL válida.");
+            return o;
+        }
+        String host = uri.getHost();
+        int port = uri.getPort() > 0 ? uri.getPort() : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+        try {
+            java.net.InetAddress addr = java.net.InetAddress.getByName(host);
+            o.put("resolved", addr.getHostAddress());
+        } catch (Exception e) {
+            o.put("ok", false); o.put("step", "dns");
+            o.put("message", "O nome " + host + " não resolve a partir do servidor. Confira o DNS ou o arquivo hosts.");
+            return o;
+        }
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress(host, port), 5000);
+        } catch (Exception e) {
+            o.put("ok", false); o.put("step", "porta");
+            o.put("message", "O nome resolve, mas a porta " + port + " não respondeu. Confira o Tomcat e o firewall.");
+            return o;
+        }
+        try {
+            java.net.http.HttpClient c = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(5))
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build();
+            java.net.http.HttpResponse<Void> r = c.send(
+                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(u + "/version.json"))
+                            .timeout(java.time.Duration.ofSeconds(8)).GET().build(),
+                    java.net.http.HttpResponse.BodyHandlers.discarding());
+            o.put("ok", r.statusCode() == 200);
+            o.put("step", "http");
+            o.put("status", r.statusCode());
+            o.put("message", r.statusCode() == 200 ? "O endereço responde e o certificado é confiável."
+                    : "O endereço respondeu com HTTP " + r.statusCode() + ". Confira se o caminho do sistema está correto.");
+        } catch (javax.net.ssl.SSLException e) {
+            o.put("ok", false); o.put("step", "certificado");
+            o.put("message", "O endereço responde, mas o certificado não é confiável para este nome."
+                    + " É o esperado com certificado autoassinado; os links do e-mail vão abrir com aviso de segurança.");
+        } catch (Exception e) {
+            o.put("ok", false); o.put("step", "http");
+            o.put("message", "O endereço não respondeu: " + e.getClass().getSimpleName() + ".");
+        }
         return o;
     }
 

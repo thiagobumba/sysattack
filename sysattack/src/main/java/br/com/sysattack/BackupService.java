@@ -380,7 +380,8 @@ final class BackupService {
     // ------------------------------------------------------------------ API (administrador)
     static Object handle(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
         String what = s.size() > 1 ? s.get(1) : "";
-        if (m.equals("GET") && what.isEmpty()) return status();
+        if (m.equals("GET") && what.isEmpty()) return status(req);
+        if (m.equals("GET") && what.equals("address-test")) { ApiServlet.requireAdmin(user); return Invites.testAddress(); }
         if (m.equals("POST") && what.equals("run")) return run("manual");
         if (s.size() == 3 && what.equals("verify") && m.equals("POST")) return verify(file(s.get(2)));
         if (s.size() == 3 && what.equals("download") && m.equals("GET")) {
@@ -403,11 +404,15 @@ final class BackupService {
     }
 
     static Map<String, Object> status() throws SQLException {
+        return status(null);
+    }
+
+    static Map<String, Object> status(HttpServletRequest req) throws SQLException {
         Map<String, Object> o = new LinkedHashMap<>();
         File data = new File(Db.dataDir()), bdir = backupDir(), mdir = mirrorDir();
         o.put("data_dir", data.getAbsolutePath());
         o.put("data_source", Db.dataSource());
-        o.putAll(Invites.addressInfo());
+        o.putAll(Invites.addressInfo(req));
         o.put("backup_dir", bdir.getAbsolutePath());
         o.put("mirror_dir", mdir == null ? null : mdir.getAbsolutePath());
         o.put("data_id", Db.dataId());

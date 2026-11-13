@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- **Segurança e dados avisa quando o endereço do sistema ficou para trás.** A tela passou a mostrar, lado a lado, o **endereço configurado** (com a origem: `config.properties`, `-Dsysattack.url` ou `SYSATTACK_URL`) e o **endereço pelo qual você está acessando**. Quando os dois diferem, aparece um aviso explicando que os links dos e-mails apontam para o endereço antigo, já com a linha pronta para colar no `config.properties`. Novo botão **Testar**, que confere o endereço configurado em três etapas — o nome resolve, a porta responde e o HTTPS completa —, distinguindo falha de DNS, de porta, de certificado e de resposta. O teste usa só o endereço configurado no servidor, nunca um endereço vindo da tela.
 - **Assinatura: largura até 1000 px.** O limite subiu de 600 para 1000 px, para assinaturas em faixa ocuparem a largura do relatório. A imagem continua sem passar da largura da mensagem: em relatórios mais estreitos ela encolhe junto.
 - **Assinatura virou aba dentro de "E-mail de saída".** O painel ganhou as abas **Envio** e **Assinatura**, e uma caixinha **Assinatura** ao lado de "Envio ativo". A aba só aparece quando a caixinha está marcada; marcar revela a aba sem tirar você do formulário de envio, e desmarcar esconde. O painel separado de assinatura deixou de existir.
 - **Correção: salvar o envio apagava a assinatura.** A gravação da configuração recriava a linha no banco e levava junto o texto e a imagem da assinatura. Agora eles são preservados.

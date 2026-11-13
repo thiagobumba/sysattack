@@ -65,11 +65,14 @@ const Sys = (() => {
         </div>
         <dl class="kv" style="margin:16px 0 4px;display:grid;grid-template-columns:max-content 1fr;gap:8px 16px">
           <dt>Pasta de dados</dt><dd><code>${esc(st.data_dir)}</code> <span class="small" style="display:inline">(${esc(st.data_source)})</span></dd>
-          <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}</dd>
+          <dt>Endereço nos e-mails</dt><dd>${st.app_url ? `<code>${esc(st.app_url)}</code>${st.app_url_source ? ` <span class="small" style="display:inline">(${esc(st.app_url_source)})</span>` : ''}` : '<span class="small" style="display:inline">não definido (usa o endereço do navegador)</span>'} ${st.app_url_ok ? '<span class="badge b-green">Acessível por outras máquinas</span>' : '<span class="badge b-red">Defina app.url no config.properties</span>'}
+            <button class="btn btn-sm" data-action="sys-addr-test" style="margin-left:8px">Testar</button><span id="sy-addr-res" class="small" style="display:inline"></span></dd>
+          <dt>Você está acessando por</dt><dd><code>${esc(st.browser_url || '—')}</code></dd>
           <dt>Pasta dos backups</dt><dd><code>${esc(st.backup_dir)}</code></dd>
           <dt>Segunda cópia</dt><dd>${st.mirror_dir ? `<code>${esc(st.mirror_dir)}</code>` : '<span class="badge b-red">Não configurada</span>'}</dd>
           <dt>Banco</dt><dd>H2 ${esc(st.h2_version)} · id <code>${esc(st.data_id)}</code></dd>
         </dl>
+        ${st.browser_url && st.app_url_matches === false ? `<p class="hint late-txt" style="margin:12px 0 0"><b>Os dois endereços estão diferentes.</b> Os links dos e-mails (convite, troca de senha e relatórios) apontam para <code>${esc(st.app_url)}</code>, não para o endereço que você está usando. Se o certo agora é <code>${esc(st.browser_url)}</code>, ajuste a linha abaixo no <code>config.properties</code> da pasta de dados — vale na hora, sem reiniciar o Tomcat:<br><code>app.url=${esc(st.browser_url)}</code></p>` : ''}
         <p class="hint" style="margin:8px 0 0">Cada backup é um único arquivo com o banco (cópia física e script SQL), os documentos, a chave <code>ai.key</code> e o <code>config.properties</code>. É verificado ao terminar. Retenção: 1 por dia (14 dias), 1 por semana (8 semanas), 1 por mês (12 meses). Como o arquivo contém a chave de criptografia, guarde-o como informação confidencial. Para restaurar, use <code>restaurar-backup.ps1</code> (veja o README).</p>
       </section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Backups disponíveis</h2></div>${backupsTable(st.backups)}</section>
@@ -78,6 +81,16 @@ const Sys = (() => {
   }
 
   async function action(el) {
+    if (el.dataset.action === 'sys-addr-test') {
+      const out = document.getElementById('sy-addr-res');
+      out.textContent = ' testando…'; el.disabled = true;
+      try {
+        const r = await api('GET', 'backup/address-test');
+        out.innerHTML = ` <span class="badge ${r.ok ? 'b-green' : 'b-red'}">${r.ok ? 'OK' : esc(String(r.step || 'falha'))}</span> ${esc(r.message || '')}${r.resolved ? ` <span class="small" style="display:inline">(resolve para ${esc(r.resolved)})</span>` : ''}`;
+      } catch (e) { out.innerHTML = ` <span class="badge b-red">erro</span> ${esc(e.message)}`; }
+      el.disabled = false;
+      return;
+    }
     switch (el.dataset.action) {
       case 'sys-run': {
         el.disabled = true; el.textContent = 'Gerando…';

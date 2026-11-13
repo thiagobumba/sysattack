@@ -64,6 +64,7 @@ Modelo comentado: `sysattack/config.exemplo.properties`. Linhas com `#` são com
 | Chave | Para quê |
 |---|---|
 | `app.url` | Endereço do sistema nos e-mails (sem `/` no fim). Também aceito: `-Dsysattack.url=` ou `SYSATTACK_URL`. Se for `localhost`, convites não são enviados |
+| `app.url` | Endereço público usado nos links dos e-mails. Em **Segurança e dados** dá para conferir se ele bate com o endereço em uso e testar se responde |
 | `smtp.host`, `smtp.port`, `smtp.security` (`starttls`), `smtp.user`, `smtp.password`, `smtp.from` | Envio de e-mail (também configurável pela tela, que tem prioridade quando salva) |
 | `smtp.dev=true` | **Só para teste**: nada é enviado; link/código aparece no log do Tomcat |
 
