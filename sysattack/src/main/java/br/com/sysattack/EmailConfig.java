@@ -43,7 +43,8 @@ final class EmailConfig {
     static Properties effective() {
         try {
             Map<String, Object> r = Db.one("SELECT * FROM email_settings WHERE id = 1");
-            if (r == null || !Boolean.TRUE.equals(r.get("enabled")) || ((String) r.get("host")).isBlank()) return null;
+            if (r == null || !Boolean.TRUE.equals(r.get("enabled"))) return null;
+            if (((String) r.get("host")).isBlank() && !"GRAPH".equals(r.get("auth_mode"))) return null; // o Graph não usa servidor SMTP
             return toProps(r);
         } catch (Exception e) {
             LOG.warning("Não foi possível ler a configuração de e-mail do banco: " + e.getMessage());
@@ -84,7 +85,7 @@ final class EmailConfig {
         else if (username.isEmpty()) enc = "";
         String secEnc = old == null ? "" : str(old.get("client_secret_enc"));
         if (clientSecret != null && !clientSecret.isEmpty()) secEnc = AiConfig.encrypt(clientSecret);
-        boolean oauth = "OAUTH2".equals(authMode);
+        boolean oauth = "OAUTH2".equals(authMode) || "GRAPH".equals(authMode);
         if (oauth) {
             if (tenantId.isEmpty() || clientId.isEmpty()) throw new ApiServlet.ApiException(400, "Informe o locatário e o ID do aplicativo.");
             if (secEnc.isEmpty()) throw new ApiServlet.ApiException(400, "Informe o segredo do cliente.");
@@ -97,7 +98,7 @@ final class EmailConfig {
         Db.update("DELETE FROM email_settings WHERE id = 1");
         Db.update("INSERT INTO email_settings(id,host,port,security,username,password_enc,from_email,from_name,enabled,updated_by,"
                 + "auth_mode,tenant_id,client_id,client_secret_enc) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? "OAUTH2" : "BASICO", tenantId, clientId, secEnc);
+                host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? authMode : "BASICO", tenantId, clientId, secEnc);
         return status();
     }
 
@@ -159,19 +160,24 @@ final class EmailConfig {
         b.append("[Mensagem]\n");
         b.append("Para           : ").append(to).append('\n');
         b.append("Assunto        : ").append(subject).append("\n\n");
-        b.append("[Configuração SMTP usada] (a senha nunca é gravada)\n");
-        b.append("Servidor       : ").append(r.get("host")).append('\n');
-        b.append("Porta          : ").append(r.get("port")).append('\n');
-        b.append("Segurança      : ").append(r.get("security")).append('\n');
+        boolean isGraph = "GRAPH".equals(str(r.get("auth_mode")));
+        b.append(isGraph ? "[Configuração usada] (o segredo nunca é gravado)\n" : "[Configuração SMTP usada] (a senha nunca é gravada)\n");
+        if (!isGraph) {
+            b.append("Servidor       : ").append(r.get("host")).append('\n');
+            b.append("Porta          : ").append(r.get("port")).append('\n');
+            b.append("Segurança      : ").append(r.get("security")).append('\n');
+        }
         b.append("Usuário        : ").append(r.get("username")).append('\n');
-        boolean oauth = "OAUTH2".equals(str(r.get("auth_mode")));
+        String mode = str(r.get("auth_mode"));
+        boolean graph = "GRAPH".equals(mode), oauth = graph || "OAUTH2".equals(mode);
         b.append("Autenticação   : ").append(((String) r.get("username")).isEmpty() ? "não"
-                : oauth ? "OAuth 2.0 (Microsoft 365)" : "usuário e senha").append('\n');
+                : graph ? "OAuth 2.0 · Microsoft Graph (sem SMTP)" : oauth ? "OAuth 2.0 · SMTP (XOAUTH2)" : "usuário e senha").append('\n');
         if (oauth) { // nunca gravamos o segredo nem o token
             b.append("Locatário      : ").append(str(r.get("tenant_id"))).append('\n');
             b.append("Aplicativo     : ").append(str(r.get("client_id"))).append('\n');
             b.append("Segredo        : ").append(str(r.get("client_secret_enc")).isEmpty() ? "NÃO informado" : "guardado (não é gravado no log)").append('\n');
-            b.append("Escopo         : https://outlook.office365.com/.default\n");
+            b.append("Escopo         : ").append(graph ? "https://graph.microsoft.com/.default" : "https://outlook.office365.com/.default").append('\n');
+            if (graph) b.append("Caminho        : POST https://graph.microsoft.com/v1.0/users/{caixa}/sendMail\n");
         }
         b.append("Remetente      : ").append(r.get("from_name")).append(" <").append(r.get("from_email")).append(">\n");
         b.append("Envio ativo    : ").append(Boolean.TRUE.equals(r.get("enabled")) ? "sim" : "não").append("\n\n");
@@ -179,12 +185,14 @@ final class EmailConfig {
         b.append("Java           : ").append(System.getProperty("java.version")).append('\n');
         b.append("Servidor de app: ").append(System.getProperty("catalina.base", "—")).append("\n\n");
         if (oauth) {
-            b.append("[OAuth 2.0 — obtenção do token]\n");
+            b.append(graph ? "[OAuth 2.0 e Microsoft Graph]\n" : "[OAuth 2.0 — obtenção do token]\n");
             b.append(oauthTrace == null || oauthTrace.isBlank() ? "(sem registro: o token não chegou a ser pedido)\n" : oauthTrace);
             b.append('\n');
         }
-        b.append("[Conversa com o servidor SMTP]\n");
-        b.append(dialog.isBlank() ? "(sem registro: a conexão não chegou a ser aberta)\n" : dialog.trim() + "\n").append('\n');
+        if (!graph) {
+            b.append("[Conversa com o servidor SMTP]\n");
+            b.append(dialog.isBlank() ? "(sem registro: a conexão não chegou a ser aberta)\n" : dialog.trim() + "\n").append('\n');
+        }
         if (error != null) {
             String hint = MailOAuth.smtpHint(rootMessage(error));
             if (hint != null) b.append("[O que costuma resolver]\n").append(hint).append("\n\n");
@@ -213,7 +221,7 @@ final class EmailConfig {
         while (t.getCause() != null && t.getCause() != t) t = t.getCause();
         String m = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
         if (e instanceof Mailer.NotConfigured) return "SMTP não configurado.";
-        if (e instanceof MailOAuth.OAuthException) return e.getMessage();
+        if (e instanceof MailOAuth.OAuthException || e instanceof MailGraph.GraphException) return e.getMessage();
         return m;
     }
 

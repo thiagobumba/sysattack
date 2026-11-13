@@ -44,9 +44,11 @@ final class EmailService {
             if (m.equals("DELETE")) return EmailConfig.remove();
             if (m.equals("PUT")) {
                 JsonObject b = ApiServlet.body(req);
-                String host = ApiServlet.str(b, "host", "Servidor SMTP", 200, true);
-                if (!host.matches("[A-Za-z0-9.\\-]+")) throw new ApiException(400, "Servidor SMTP inválido.");
-                long port = ApiServlet.longOf(b, "port", "Porta");
+                String mode0 = ApiServlet.str(b, "auth_mode", "Autenticação", 10, false).toUpperCase();
+                boolean viaGraph = mode0.equals("GRAPH"); // o Graph não usa servidor SMTP
+                String host = ApiServlet.str(b, "host", "Servidor SMTP", 200, !viaGraph);
+                if (!host.isEmpty() && !host.matches("[A-Za-z0-9.\\-]+")) throw new ApiException(400, "Servidor SMTP inválido.");
+                long port = b.has("port") && !b.get("port").getAsString().isBlank() ? ApiServlet.longOf(b, "port", "Porta") : 587;
                 if (port < 1 || port > 65535) throw new ApiException(400, "Porta inválida.");
                 String security = ApiServlet.str(b, "security", "Segurança", 10, true);
                 if (!SECURITY.contains(security)) throw new ApiException(400, "Segurança inválida.");
@@ -59,11 +61,12 @@ final class EmailService {
                 boolean enabled = !b.has("enabled") || ApiServlet.bool(b, "enabled");
                 String authMode = ApiServlet.str(b, "auth_mode", "Autenticação", 10, false).toUpperCase();
                 if (authMode.isEmpty()) authMode = "BASICO";
-                if (!authMode.equals("BASICO") && !authMode.equals("OAUTH2")) throw new ApiException(400, "Tipo de autenticação inválido.");
+                if (!authMode.equals("BASICO") && !authMode.equals("OAUTH2") && !authMode.equals("GRAPH"))
+                    throw new ApiException(400, "Tipo de autenticação inválido.");
                 String tenantId = ApiServlet.str(b, "tenant_id", "ID do diretório (locatário)", 100, false);
                 String clientId = ApiServlet.str(b, "client_id", "ID do aplicativo (cliente)", 100, false);
                 String clientSecret = ApiServlet.str(b, "client_secret", "Segredo do cliente", 400, false);
-                if (authMode.equals("OAUTH2")) {
+                if (!authMode.equals("BASICO")) {
                     if (!tenantId.matches("[A-Za-z0-9.\\-]*")) throw new ApiException(400, "ID do diretório (locatário) inválido.");
                     if (!clientId.matches("[A-Za-z0-9\\-]*")) throw new ApiException(400, "ID do aplicativo (cliente) inválido.");
                 }

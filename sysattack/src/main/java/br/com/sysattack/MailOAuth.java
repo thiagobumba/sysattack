@@ -23,7 +23,7 @@ import java.util.logging.Logger;
 final class MailOAuth {
     private static final Logger LOG = Logger.getLogger("sysattack");
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-    private static final String SCOPE = "https://outlook.office365.com/.default";
+    static final String SMTP_SCOPE = "https://outlook.office365.com/.default";
     private static final Map<String, Token> CACHE = new ConcurrentHashMap<>();
 
     private MailOAuth() {}
@@ -42,34 +42,39 @@ final class MailOAuth {
     /** Mensagens do que aconteceu (sem segredo nem token) para o log do teste de e-mail. */
     static final ThreadLocal<StringBuilder> TRACE = new ThreadLocal<>();
 
-    private static void trace(String s) {
+    static void trace(String s) {
         StringBuilder b = TRACE.get();
         if (b != null) b.append(java.time.LocalTime.now().withNano(0)).append("  ").append(s).append('\n');
     }
 
     static void forget(String tenant, String clientId) {
-        CACHE.remove(tenant + '|' + clientId);
+        CACHE.keySet().removeIf(k -> k.startsWith(tenant + '|' + clientId + '|'));
     }
 
-    /** Devolve um token válido, do cache ou novo. */
+    /** Devolve um token válido para o SMTP (do cache ou novo). */
     static String token(String tenant, String clientId, String secret) throws OAuthException {
+        return token(tenant, clientId, secret, SMTP_SCOPE);
+    }
+
+    /** Devolve um token válido para o escopo pedido (SMTP ou Graph), do cache ou novo. */
+    static String token(String tenant, String clientId, String secret, String scope) throws OAuthException {
         if (tenant.isEmpty() || clientId.isEmpty() || secret.isEmpty())
             throw new OAuthException("Informe o locatário, o ID do aplicativo e o segredo do cliente.");
-        String key = tenant + '|' + clientId;
+        String key = tenant + '|' + clientId + '|' + scope;
         Token t = CACHE.get(key);
         if (t != null && t.valid()) {
             trace("Token OAuth reaproveitado do cache (expira em " + t.expires + ").");
             return t.value;
         }
-        trace("Pedindo token OAuth ao Microsoft Entra (locatário " + tenant + ", aplicativo " + clientId + ").");
-        Token novo = request(tenant, clientId, secret);
+        trace("Pedindo token OAuth ao Microsoft Entra (locatário " + tenant + ", aplicativo " + clientId + ", escopo " + scope + ").");
+        Token novo = request(tenant, clientId, secret, scope);
         CACHE.put(key, novo);
         trace("Token OAuth obtido; vale até " + novo.expires + ".");
         return novo.value;
     }
 
-    private static Token request(String tenant, String clientId, String secret) throws OAuthException {
-        String body = "client_id=" + enc(clientId) + "&scope=" + enc(SCOPE) + "&client_secret=" + enc(secret) + "&grant_type=client_credentials";
+    private static Token request(String tenant, String clientId, String secret, String scope) throws OAuthException {
+        String body = "client_id=" + enc(clientId) + "&scope=" + enc(scope) + "&client_secret=" + enc(secret) + "&grant_type=client_credentials";
         HttpRequest rq = HttpRequest.newBuilder(URI.create("https://login.microsoftonline.com/" + enc(tenant) + "/oauth2/v2.0/token"))
                 .timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/x-www-form-urlencoded")

@@ -67,7 +67,18 @@ Modelo comentado: `sysattack/config.exemplo.properties`. Linhas com `#` são com
 | `smtp.host`, `smtp.port`, `smtp.security` (`starttls`), `smtp.user`, `smtp.password`, `smtp.from` | Envio de e-mail (também configurável pela tela, que tem prioridade quando salva) |
 | `smtp.dev=true` | **Só para teste**: nada é enviado; link/código aparece no log do Tomcat |
 
-### E-mail do Microsoft 365 com OAuth 2.0
+### E-mail do Microsoft 365 pelo Microsoft Graph (mais simples)
+
+Escolha **Autenticação: OAuth 2.0 · Microsoft Graph (sem SMTP)** na tela de E-mail. Só é preciso, no registro do aplicativo:
+
+1. **Entra ID → Registros de aplicativo → Novo registro** (se ainda não existir). Anote o **ID do aplicativo (cliente)** e o **ID do diretório (locatário)**.
+2. **Permissões de API → Microsoft Graph → Permissões de aplicativo → `Mail.Send`**, e **Conceder consentimento do administrador**.
+3. **Certificados e segredos → Novo segredo do cliente** e copie a coluna **Valor** (não o ID secreto).
+4. Na tela, o **Usuário** é a caixa remetente. O servidor precisa de saída para `login.microsoftonline.com:443` e `graph.microsoft.com:443`.
+
+Não há comando de PowerShell, nem dependência do SMTP autenticado ou dos Padrões de Segurança. A permissão `Mail.Send` permite enviar como qualquer caixa do locatário; para restringir a uma só, aplique uma política de acesso a aplicativos (`New-ApplicationAccessPolicy`).
+
+### E-mail do Microsoft 365 com OAuth 2.0 no SMTP
 
 Para não depender de senha (e sobreviver ao fim da autenticação básica no SMTP), configure **Autenticação: OAuth 2.0 (Microsoft 365)** na tela de E-mail. Antes, no locatário:
 

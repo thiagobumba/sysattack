@@ -48,13 +48,13 @@ const Mail = (() => {
     const [st, rules, log, tlogs] = await Promise.all([api('GET', 'email/settings'), api('GET', 'email/rules'), api('GET', 'email/log'), api('GET', 'email/settings/test-logs')]);
     const test = st.last_test_at ? `${st.last_test_ok ? '<span class="badge b-green">OK</span>' : '<span class="badge b-red">Falhou</span>'} <span class="small" style="display:inline">${esc(String(st.last_test_at).slice(0, 16).replace('T', ' '))} · ${esc(st.last_test_msg || '')}</span>` : '<span class="small" style="display:inline">Ainda não testado</span>';
     A().main.innerHTML = A().pageHead(['SysAttack', 'Configurações de E-mail'], 'Configurações de E-mail', 'E-mail de saída do SysAttack e gatilhos que avisam pessoas sobre o andamento dos projetos.') + `
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">E-mail de saída (SMTP)</h2>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">E-mail de saída</h2>
         <span class="ai-status ${st.configured && st.enabled ? 'on' : ''}"><i></i>${st.configured ? (st.enabled ? 'Ativo' : 'Pausado') : (st.file_fallback ? 'Usando config.properties' : 'Não configurado')}</span></div>
         <form id="em-form" class="fgrid" novalidate autocomplete="off">
-          <div class="field"><label for="em-h">Servidor SMTP</label><input id="em-h" name="host" maxlength="200" value="${esc(st.host)}" placeholder="smtp.office365.com" required></div>
-          <div class="field"><label for="em-p">Porta</label><input id="em-p" name="port" type="number" min="1" max="65535" value="${esc(st.port)}" required></div>
-          <div class="field"><label for="em-s">Segurança</label><select id="em-s" name="security">${Object.entries(SEC).map(([k, v]) => `<option value="${k}"${k === st.security ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
-          <div class="field"><label for="em-a">Autenticação</label><select id="em-a" name="auth_mode"><option value="BASICO"${st.auth_mode === 'OAUTH2' ? '' : ' selected'}>Usuário e senha</option><option value="OAUTH2"${st.auth_mode === 'OAUTH2' ? ' selected' : ''}>OAuth 2.0 (Microsoft 365)</option></select></div>
+          <div class="field sm"><label for="em-h">Servidor SMTP</label><input id="em-h" name="host" maxlength="200" value="${esc(st.host)}" placeholder="smtp.office365.com" required></div>
+          <div class="field sm"><label for="em-p">Porta</label><input id="em-p" name="port" type="number" min="1" max="65535" value="${esc(st.port)}" required></div>
+          <div class="field sm"><label for="em-s">Segurança</label><select id="em-s" name="security">${Object.entries(SEC).map(([k, v]) => `<option value="${k}"${k === st.security ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+          <div class="field"><label for="em-a">Autenticação</label><select id="em-a" name="auth_mode">${[['BASICO', 'Usuário e senha'], ['OAUTH2', 'OAuth 2.0 · SMTP (Microsoft 365)'], ['GRAPH', 'OAuth 2.0 · Microsoft Graph (sem SMTP)']].map(([k, l]) => `<option value="${k}"${(st.auth_mode || 'BASICO') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
           <div class="field"><label for="em-u">Usuário<span class="opt" id="em-u-h"></span></label><input id="em-u" name="username" maxlength="200" value="${esc(st.username)}" placeholder="sysattack@empresa.com.br" autocomplete="off"></div>
           <div class="field" id="em-w-f"><label for="em-w">Senha${st.has_password ? ' (guardada — deixe em branco para manter)' : ''}</label><input id="em-w" name="password" type="password" maxlength="400" autocomplete="new-password" placeholder="${st.has_password ? '••••••••' : ''}"></div>
           <div class="field oa" id="em-ti-f"><label for="em-ti">ID do diretório (locatário)</label><input id="em-ti" name="tenant_id" maxlength="100" value="${esc(st.tenant_id || '')}" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"></div>
@@ -78,12 +78,15 @@ const Mail = (() => {
     const form = document.getElementById('em-form'), err = form.querySelector('.form-error');
     const BASICO = 'Office 365: <code>smtp.office365.com</code>, 587, STARTTLS. Gmail/Workspace: <code>smtp.gmail.com</code>, 587, STARTTLS, com <b>senha de app</b>. A senha é guardada <b>criptografada</b> e nunca é exibida de novo.';
     const OAUTH = 'No <b>Microsoft Entra ID</b>, registre um aplicativo, dê a ele a permissão <b>SMTP.SendAsApp</b> (Office 365 Exchange Online) com consentimento do administrador e gere um segredo do cliente — copie a coluna <b>Valor</b>, não o <b>ID secreto</b>. No PowerShell do Exchange: <code>New-ServicePrincipal</code> (use o <b>ID do objeto da Aplicação Empresarial</b>), <code>Add-MailboxPermission</code> na caixa remetente e <code>Set-CASMailbox -SmtpClientAuthenticationDisabled $false</code>. O <b>Usuário</b> tem de ser a caixa remetente. O segredo é guardado <b>criptografado</b> e nunca é exibido de novo.';
+    const GRAPH = 'Envia pelo <b>Microsoft Graph</b>, sem SMTP: não depende do SMTP autenticado do locatário nem da caixa, nem dos Padrões de Segurança, e <b>não precisa de PowerShell</b>. No registro do aplicativo, em <b>Permissões de API</b>, adicione a permissão de aplicativo <b>Mail.Send</b> do <b>Microsoft Graph</b> e clique em <b>Conceder consentimento do administrador</b>. O <b>Usuário</b> tem de ser a caixa remetente. Atenção: <b>Mail.Send</b> permite enviar como qualquer caixa do locatário; para restringir a uma só, a TI aplica uma política de acesso (<code>New-ApplicationAccessPolicy</code>). O servidor precisa de saída para <code>graph.microsoft.com</code>.';
     const amSync = () => {
-      const oauth = form.auth_mode.value === 'OAUTH2';
+      const mode = form.auth_mode.value, graph = mode === 'GRAPH', oauth = graph || mode === 'OAUTH2';
       document.getElementById('em-w-f').style.display = oauth ? 'none' : '';
       form.querySelectorAll('.oa').forEach(e => { e.style.display = oauth ? '' : 'none'; });
+      form.querySelectorAll('.sm').forEach(e => { e.style.display = graph ? 'none' : ''; });
+      form.host.required = !graph;
       document.getElementById('em-u-h').textContent = oauth ? ' (caixa remetente)' : '';
-      document.getElementById('em-help').innerHTML = oauth ? OAUTH : BASICO;
+      document.getElementById('em-help').innerHTML = graph ? GRAPH : oauth ? OAUTH : BASICO;
     };
     form.auth_mode.addEventListener('change', amSync); amSync();
     form.addEventListener('submit', async e => {
@@ -91,7 +94,7 @@ const Mail = (() => {
       const b = form.querySelector('[type=submit]');
       b.disabled = true; err.hidden = true;
       try {
-        await api('PUT', 'email/settings', { host: form.host.value.trim(), port: Number(form.port.value), security: form.security.value, username: form.username.value.trim(),
+        await api('PUT', 'email/settings', { host: form.host.value.trim(), port: Number(form.port.value) || 587, security: form.security.value, username: form.username.value.trim(),
           password: form.password.value, from_email: form.from_email.value.trim(), from_name: form.from_name.value.trim(), enabled: form.enabled.checked,
           auth_mode: form.auth_mode.value, tenant_id: form.tenant_id.value.trim(), client_id: form.client_id.value.trim(), client_secret: form.client_secret.value });
         A().toast('Configuração salva. Envie um e-mail de teste.'); await A().route();

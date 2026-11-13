@@ -27,7 +27,7 @@ Banco **H2** embutido (arquivo `sysattack.mv.db` na pasta de dados). O esquema �
 | `spot_actions` | `id`, `spot_id`, `kind`, `description`, `responsible`, `status`, `note`, `updated_at` |
 | `spot_audit` | `id`, `spot_id`, `spot_name`, `user_name`, `action`, `justification`, `created_at` |
 | `spot_reports` | `id`, `spot_id`, `title`, `ref_date`, `snapshot`, `narrative`, `model`, `created_by`, `created_at`, `sent_at`, `sent_to`, `sent_by` |
-| `ai_settings` | `id`, `api_key_enc`, `key_hint`, `model`, `workspace_id`, `connected_by`, `connected_by_id`, `connected_at`, `auth_mode` (BASICO/OAUTH2), `tenant_id`, `client_id`, `client_secret_enc`, `last_test_at`, `last_test_ok`, `last_test_msg`, `extra`, `in_use` (uma linha por IA: 1 = Claude, 2 = ChatGPT, 3 = Copilot/Azure; `extra` guarda endereço e versão da API do Azure) |
+| `ai_settings` | `id`, `api_key_enc`, `key_hint`, `model`, `workspace_id`, `connected_by`, `connected_by_id`, `connected_at`, `auth_mode` (BASICO/OAUTH2/GRAPH), `tenant_id`, `client_id`, `client_secret_enc`, `last_test_at`, `last_test_ok`, `last_test_msg`, `extra`, `in_use` (uma linha por IA: 1 = Claude, 2 = ChatGPT, 3 = Copilot/Azure; `extra` guarda endereço e versão da API do Azure) |
 | `email_settings` | `id`, `host`, `port`, `security`, `username`, `password_enc`, `from_email`, `from_name`, `enabled`, `updated_by`, `updated_at`, `last_test_at`, `last_test_ok`, `last_test_msg` |
 | `email_rules` | `id`, `project_id`, `event`, `recipients`, `include_responsible`, `subject`, `message`, `enabled`, `created_by`, `created_at` |
 | `email_log` | `id`, `rule_id`, `project_id`, `event`, `ref_key`, `recipients`, `subject`, `status`, `error`, `created_at` |

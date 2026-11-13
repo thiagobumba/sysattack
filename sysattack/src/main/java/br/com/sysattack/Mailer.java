@@ -28,7 +28,8 @@ import javax.mail.internet.MimeMessage;
  *   smtp.dev=true                 (somente testes: não envia, escreve o código no log do Tomcat)
  *
  * Microsoft 365 com OAuth 2.0 (sem senha), configurado pela tela:
- *   smtp.authmode=OAUTH2
+ *   smtp.authmode=OAUTH2          (token XOAUTH2 no SMTP; permissão SMTP.SendAsApp)
+ *   smtp.authmode=GRAPH           (POST no Microsoft Graph, sem SMTP; permissão Mail.Send)
  *   smtp.tenant=<ID do diretório>   smtp.clientid=<ID do aplicativo>   smtp.clientsecret=<segredo>
  */
 public final class Mailer {
@@ -50,7 +51,7 @@ public final class Mailer {
     public static void sendCode(String to, String name, String code) throws Exception {
         Properties c = config();
         String host = c.getProperty("smtp.host", "").trim();
-        if (host.isEmpty()) {
+        if (host.isEmpty() && !isGraph(c)) {
             if ("true".equalsIgnoreCase(c.getProperty("smtp.dev", "").trim())) {
                 LOG.warning("[SysAttack][MODO TESTE] Código de confirmação para " + to + ": " + code);
                 return;
@@ -71,17 +72,38 @@ public final class Mailer {
                 + "    " + code + "\n\n"
                 + "O código vale por 15 minutos. Se você não pediu a troca, ignore este e-mail "
                 + "e avise o administrador.\n\n— SysAttack", "UTF-8");
-        Transport.send(m);
+        deliver(c, m);
     }
 
     /** Quando preenchido (na thread atual), a conversa SMTP é gravada aqui (sem credenciais) para o log do teste. */
     static final ThreadLocal<java.io.PrintStream> DEBUG_OUT = new ThreadLocal<>();
 
-    /** Monta a sessão SMTP a partir do config.properties; null se o servidor não estiver configurado. */
+    /** Envio pelo Microsoft Graph, sem SMTP. */
+    private static boolean isGraph(Properties c) {
+        return "GRAPH".equalsIgnoreCase(c.getProperty("smtp.authmode", "BASICO").trim());
+    }
+
+    /** Caixa que envia: no Graph é o dono da mensagem; no SMTP é quem autentica. */
+    private static String mailbox(Properties c) {
+        String user = c.getProperty("smtp.user", "").trim();
+        return user.isEmpty() ? c.getProperty("smtp.from", "").trim() : user;
+    }
+
+    /** Entrega a mensagem pronta pelo caminho configurado. */
+    private static void deliver(Properties c, MimeMessage m) throws Exception {
+        if (isGraph(c)) MailGraph.send(c, m, mailbox(c));
+        else Transport.send(m);
+    }
+
+    /** Monta a sessão de envio; null se o envio não estiver configurado. */
     private static Session session(Properties c) throws Exception {
+        String user = c.getProperty("smtp.user", "").trim();
+        if (isGraph(c)) { // o Graph não usa servidor SMTP: só a caixa remetente e o aplicativo
+            if (user.isEmpty()) return null;
+            return Session.getInstance(new Properties());
+        }
         String host = c.getProperty("smtp.host", "").trim();
         if (host.isEmpty()) return null;
-        String user = c.getProperty("smtp.user", "").trim();
         boolean oauth = "OAUTH2".equalsIgnoreCase(c.getProperty("smtp.authmode", "BASICO").trim());
         String pass = oauth
                 ? MailOAuth.token(c.getProperty("smtp.tenant", "").trim(), c.getProperty("smtp.clientid", "").trim(), c.getProperty("smtp.clientsecret", ""))
@@ -173,7 +195,7 @@ public final class Mailer {
         } else {
             m.setContent(html, "text/html; charset=UTF-8");
         }
-        Transport.send(m);
+        deliver(c, m);
         return true;
     }
 }
