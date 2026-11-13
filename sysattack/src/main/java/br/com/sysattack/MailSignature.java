@@ -20,11 +20,10 @@ final class MailSignature {
     }
 
     /** Monta a assinatura a partir da configuração; null quando não há nada a acrescentar. */
-    static Data of(Map<String, Object> r) {
+    static Data of(Map<String, Object> r, byte[] img) {
         if (r == null || !Boolean.TRUE.equals(r.get("sign_on"))) return null;
-        String text = r.get("sign_text") == null ? "" : ((String) r.get("sign_text")).trim();
-        byte[] img = (byte[]) r.get("sign_img");
-        String name = r.get("sign_img_name") == null ? "" : (String) r.get("sign_img_name");
+        String text = r.get("sign_text") == null ? "" : String.valueOf(r.get("sign_text")).trim();
+        String name = r.get("sign_img_name") == null ? "" : String.valueOf(r.get("sign_img_name"));
         if (text.isEmpty() && (img == null || img.length == 0)) return null;
         int w = r.get("sign_img_w") == null ? 0 : ((Number) r.get("sign_img_w")).intValue();
         if (w <= 0 || w > MAX_W) w = MAX_W;
@@ -43,9 +42,24 @@ final class MailSignature {
     /** Lê a configuração ativa; null se não houver. */
     static Data current() {
         try {
-            return of(Db.one("SELECT sign_on, sign_text, sign_img, sign_img_name, sign_img_w FROM email_settings WHERE id = 1"));
-        } catch (SQLException e) {
-            return null;
+            Map<String, Object> r = Db.one("SELECT sign_on, sign_text, sign_img_name, sign_img_w, sign_img_size FROM email_settings WHERE id = 1");
+            if (r == null || !Boolean.TRUE.equals(r.get("sign_on"))) return null;
+            long size = r.get("sign_img_size") == null ? 0 : ((Number) r.get("sign_img_size")).longValue();
+            return of(r, size > 0 ? image() : null);
+        } catch (Exception e) {
+            return null; // assinatura nunca pode impedir o envio
+        }
+    }
+
+    /**
+     * Bytes da imagem. Precisa de consulta direta: o Db.query converte para texto tudo que não é
+     * número, booleano ou String, e um byte[] viraria "[B@...".
+     */
+    static byte[] image() throws SQLException {
+        try (java.sql.Connection c = Db.get();
+             java.sql.PreparedStatement ps = c.prepareStatement("SELECT sign_img FROM email_settings WHERE id = 1");
+             java.sql.ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getBytes(1) : null;
         }
     }
 

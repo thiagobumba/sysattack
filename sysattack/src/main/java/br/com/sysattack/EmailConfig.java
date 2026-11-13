@@ -126,9 +126,10 @@ final class EmailConfig {
         return status();
     }
 
-    /** Imagem da assinatura para a prévia na tela. */
-    static Map<String, Object> signatureImage() throws SQLException {
-        return Db.one("SELECT sign_img, sign_img_name FROM email_settings WHERE id = 1");
+    /** Nome do arquivo da assinatura (os bytes vêm de MailSignature.image()). */
+    static String signatureName() throws SQLException {
+        Map<String, Object> r = Db.one("SELECT sign_img_name FROM email_settings WHERE id = 1");
+        return r == null ? "" : str(r.get("sign_img_name"));
     }
 
     static Map<String, Object> remove() throws SQLException {

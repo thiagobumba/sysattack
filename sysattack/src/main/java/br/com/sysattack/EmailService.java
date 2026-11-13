@@ -84,10 +84,9 @@ final class EmailService {
             }
             if (m.equals("DELETE")) return EmailConfig.removeSignatureImage();
             if (m.equals("GET")) { // prévia na tela
-                Map<String, Object> r = EmailConfig.signatureImage();
-                byte[] img = r == null ? null : (byte[]) r.get("sign_img");
+                byte[] img = MailSignature.image();
                 if (img == null || img.length == 0) throw new ApiException(404, "Sem imagem de assinatura.");
-                String name = (String) r.get("sign_img_name");
+                String name = EmailConfig.signatureName();
                 resp.setContentType(ApiServlet.MIME.getOrDefault(ApiServlet.extOf(name), "image/png"));
                 resp.setHeader("X-Content-Type-Options", "nosniff");
                 resp.setHeader("Cache-Control", "no-store");
