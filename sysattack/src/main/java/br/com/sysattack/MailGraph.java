@@ -38,7 +38,10 @@ final class MailGraph {
             throw new GraphException("A mensagem tem " + (mime.length / 1024) + " KB e passa do limite de 4 MB do Microsoft Graph.");
         String body = Base64.getEncoder().encodeToString(mime);
         String url = "https://graph.microsoft.com/v1.0/users/" + URLEncoder.encode(mailbox, StandardCharsets.UTF_8) + "/sendMail";
-        MailOAuth.trace("Enviando pelo Microsoft Graph (" + mime.length / 1024 + " KB) como " + mailbox + ".");
+        MailOAuth.trace("POST " + url);
+        MailOAuth.trace("Cabeçalhos: Authorization: Bearer <token omitido> | Content-Type: text/plain");
+        MailOAuth.trace("Corpo: mensagem MIME em base64 — " + mime.length + " bytes (" + mime.length / 1024 + " KB), limite de 4 MB.");
+        long t0 = System.nanoTime();
         HttpRequest rq = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(60))
                 .header("Authorization", "Bearer " + token)
@@ -52,11 +55,19 @@ final class MailGraph {
             throw new GraphException("Não foi possível falar com o Microsoft Graph: " + e.getMessage()
                     + ". Verifique se o servidor tem saída para graph.microsoft.com na porta 443.");
         }
+        long ms = (System.nanoTime() - t0) / 1_000_000;
         String reqId = rs.headers().firstValue("request-id").orElse("");
+        StringBuilder h = new StringBuilder();
+        for (String k : new String[] {"request-id", "client-request-id", "x-ms-ags-diagnostic", "date", "retry-after"})
+            rs.headers().firstValue(k).ifPresent(v -> h.append(h.length() == 0 ? "" : " | ").append(k).append(": ").append(v.length() > 200 ? v.substring(0, 200) + "…" : v));
+        MailOAuth.trace("Resposta: HTTP " + rs.statusCode() + " em " + ms + " ms" + (h.length() == 0 ? "" : " · " + h));
         if (rs.statusCode() == 202) {
-            MailOAuth.trace("Graph aceitou a mensagem (HTTP 202" + (reqId.isEmpty() ? "" : ", request-id " + reqId) + ").");
+            MailOAuth.trace("Graph aceitou a mensagem para entrega (202 Accepted"
+                    + (reqId.isEmpty() ? "" : ", request-id " + reqId) + "). Guarde o request-id para consultar a Microsoft, se precisar.");
             return;
         }
+        if (!rs.body().isBlank())
+            MailOAuth.trace("Corpo da resposta: " + (rs.body().length() > 1500 ? rs.body().substring(0, 1500) + "…(cortado)" : rs.body()).replaceAll("[\\r\\n]+", " "));
         String code = "", msg = "";
         try {
             com.google.gson.JsonObject j = com.google.gson.JsonParser.parseString(rs.body()).getAsJsonObject();
@@ -66,7 +77,7 @@ final class MailGraph {
                 msg = e.has("message") ? e.get("message").getAsString().split("\\r?\\n")[0] : "";
             }
         } catch (Exception ignored) { }
-        MailOAuth.trace("Graph recusou (HTTP " + rs.statusCode() + (code.isEmpty() ? "" : ", " + code) + (reqId.isEmpty() ? "" : ", request-id " + reqId) + "): " + msg);
+        MailOAuth.trace("Graph recusou o envio (HTTP " + rs.statusCode() + (code.isEmpty() ? "" : ", " + code) + "): " + msg);
         throw new GraphException("O Microsoft Graph recusou o envio (HTTP " + rs.statusCode()
                 + (code.isEmpty() ? "" : " · " + code) + "): " + hint(rs.statusCode(), code, msg));
     }

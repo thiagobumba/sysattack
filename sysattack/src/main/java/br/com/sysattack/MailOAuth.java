@@ -29,8 +29,8 @@ final class MailOAuth {
     private MailOAuth() {}
 
     static final class Token {
-        final String value; final Instant expires;
-        Token(String v, Instant e) { value = v; expires = e; }
+        final String value; final Instant expires; final String claims;
+        Token(String v, Instant e, String c) { value = v; expires = e; claims = c; }
         boolean valid() { return Instant.now().isBefore(expires.minusSeconds(120)); } // renova 2 min antes
     }
 
@@ -64,12 +64,14 @@ final class MailOAuth {
         Token t = CACHE.get(key);
         if (t != null && t.valid()) {
             trace("Token OAuth reaproveitado do cache (expira em " + t.expires + ").");
+            trace(t.claims);
             return t.value;
         }
         trace("Pedindo token OAuth ao Microsoft Entra (locatário " + tenant + ", aplicativo " + clientId + ", escopo " + scope + ").");
         Token novo = request(tenant, clientId, secret, scope);
         CACHE.put(key, novo);
         trace("Token OAuth obtido; vale até " + novo.expires + ".");
+        trace(novo.claims);
         return novo.value;
     }
 
@@ -101,7 +103,38 @@ final class MailOAuth {
             throw new OAuthException("O Microsoft Entra recusou o pedido de token (" + code + "): " + hint(code, desc));
         }
         long exp = j.has("expires_in") ? j.get("expires_in").getAsLong() : 3600;
-        return new Token(j.get("access_token").getAsString(), Instant.now().plusSeconds(exp));
+        String tk = j.get("access_token").getAsString();
+        return new Token(tk, Instant.now().plusSeconds(exp), claims(tk, scope));
+    }
+
+    /**
+     * Lê o conteúdo público do token (sem a assinatura) só para o log: a quem ele serve, de qual aplicativo é
+     * e <b>quais permissões o administrador concedeu</b>. É aqui que se vê na hora se o consentimento está faltando.
+     * O token em si nunca é gravado.
+     */
+    private static String claims(String token, String scope) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return "Token: não foi possível ler o conteúdo (formato inesperado).";
+            String json = new String(java.util.Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+            JsonObject j = JsonParser.parseString(json).getAsJsonObject();
+            String roles = j.has("roles") && j.get("roles").isJsonArray() ? j.getAsJsonArray("roles").toString().replace("\"", "") : "(nenhuma)";
+            String need = scope.contains("graph.microsoft.com") ? "Mail.Send" : "SMTP.SendAsApp";
+            StringBuilder b = new StringBuilder();
+            b.append("Token: destino=").append(get(j, "aud")).append(", aplicativo=").append(get(j, "appid"))
+             .append(", locatário=").append(get(j, "tid")).append(", permissões=").append(roles);
+            if (!roles.contains(need))
+                b.append('\n').append("          ATENÇÃO: o token NÃO traz a permissão ").append(need)
+                 .append(". No registro do aplicativo, em Permissões de API, adicione a permissão de aplicativo ")
+                 .append(need).append(" e clique em Conceder consentimento do administrador.");
+            return b.toString();
+        } catch (Exception e) {
+            return "Token: não foi possível ler o conteúdo para conferir as permissões.";
+        }
+    }
+
+    private static String get(JsonObject j, String k) {
+        return j.has(k) && j.get(k).isJsonPrimitive() ? j.get(k).getAsString() : "—";
     }
 
     /** Traduz os erros mais comuns do Entra para algo acionável. */
