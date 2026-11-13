@@ -80,8 +80,8 @@ final class EmailConfig {
     /** Salva (cria ou atualiza). Senha e segredo em branco mantêm os já guardados. */
     static Map<String, Object> save(String host, int port, String security, String username, String password,
                                     String fromEmail, String fromName, boolean enabled, String authMode,
-                                    String tenantId, String clientId, String clientSecret, String by) throws Exception {
-        Map<String, Object> old = Db.one("SELECT password_enc, client_secret_enc FROM email_settings WHERE id = 1");
+                                    String tenantId, String clientId, String clientSecret, Boolean signOn, String by) throws Exception {
+        Map<String, Object> old = Db.one("SELECT password_enc, client_secret_enc, sign_on, sign_text, sign_img_name, sign_img_size, sign_img_w FROM email_settings WHERE id = 1");
         String enc = old == null ? "" : (String) old.get("password_enc");
         if (password != null && !password.isEmpty()) enc = AiConfig.encrypt(password);
         else if (username.isEmpty()) enc = "";
@@ -97,10 +97,19 @@ final class EmailConfig {
             tenantId = ""; clientId = ""; secEnc = "";
         }
         MailOAuth.forget(tenantId, clientId); // configuração nova, token antigo não vale mais
+        // a assinatura (inclusive a imagem) é preservada: só os campos de envio são regravados
+        byte[] img = old == null ? null : MailSignature.image();
+        boolean sOn = signOn != null ? signOn : old != null && Boolean.TRUE.equals(old.get("sign_on"));
+        String sText = old == null ? "" : str(old.get("sign_text"));
+        String sName = old == null ? "" : str(old.get("sign_img_name"));
+        long sSize = old == null || old.get("sign_img_size") == null ? 0 : ((Number) old.get("sign_img_size")).longValue();
+        int sW = old == null || old.get("sign_img_w") == null ? 0 : ((Number) old.get("sign_img_w")).intValue();
         Db.update("DELETE FROM email_settings WHERE id = 1");
         Db.update("INSERT INTO email_settings(id,host,port,security,username,password_enc,from_email,from_name,enabled,updated_by,"
-                + "auth_mode,tenant_id,client_id,client_secret_enc) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? authMode : "BASICO", tenantId, clientId, secEnc);
+                + "auth_mode,tenant_id,client_id,client_secret_enc,sign_on,sign_text,sign_img_name,sign_img_size,sign_img_w,sign_img)"
+                + " VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                host, port, security, username, enc, fromEmail, fromName, enabled, by, oauth ? authMode : "BASICO", tenantId, clientId, secEnc,
+                sOn, sText, sName, sSize, sW, img);
         return status();
     }
 

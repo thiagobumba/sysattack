@@ -70,9 +70,10 @@ final class EmailService {
                     if (!tenantId.matches("[A-Za-z0-9.\\-]*")) throw new ApiException(400, "ID do diretório (locatário) inválido.");
                     if (!clientId.matches("[A-Za-z0-9\\-]*")) throw new ApiException(400, "ID do aplicativo (cliente) inválido.");
                 }
+                Boolean signOn = b.has("sign_on") ? ApiServlet.bool(b, "sign_on") : null;
                 return EmailConfig.save(host, (int) port, security, username, password, from,
                         fromName.isEmpty() ? "SysAttack" : fromName.replaceAll("[\\r\\n]+", " "), enabled,
-                        authMode, tenantId, clientId, clientSecret, (String) user.get("name"));
+                        authMode, tenantId, clientId, clientSecret, signOn, (String) user.get("name"));
             }
         } else if (s.size() == 3 && s.get(2).equals("signature")) {
             if (m.equals("PUT")) {
