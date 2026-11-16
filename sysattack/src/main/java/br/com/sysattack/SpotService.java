@@ -556,7 +556,7 @@ final class SpotService {
         return h;
     }
 
-    /** Economia do projeto evolutivo: estimativa da Beecloud (h) das demandas entregues x esforço do time interno (h) das features. */
+    /** Economia do projeto evolutivo: estimativa do time externo (h) das demandas entregues x esforço do time interno (h) das features. */
     private static Map<String, Object> evoEconomy(long spotId) throws SQLException {
         Map<String, Object> out = new java.util.LinkedHashMap<>();
         BigDecimal rate = (BigDecimal) Db.one("SELECT external_rate FROM spot_projects WHERE id = ?", spotId).get("external_rate");
@@ -571,7 +571,7 @@ final class SpotService {
                 + " (SELECT COALESCE(SUM(r.estimate_hours), 0) FROM spot_requests r WHERE r.feature_id = f.id AND r.status = 'ENTREGUE') est"
                 + " FROM spot_features f WHERE f.spot_id = ? AND f.effort_hours IS NOT NULL ORDER BY f.number DESC", spotId)) {
             BigDecimal e = (BigDecimal) f.get("est"), x = (BigDecimal) f.get("effort_hours");
-            if (e.signum() <= 0) continue; // sem estimativa da Beecloud não há o que comparar
+            if (e.signum() <= 0) continue; // sem estimativa do time externo não há o que comparar
             est = est.add(e); exec = exec.add(x);
             nDem += ((Number) f.get("nd")).longValue();
             String mo = f.get("dt") == null ? "" : String.valueOf(f.get("dt")).substring(0, 7);
@@ -611,7 +611,14 @@ final class SpotService {
         return String.join("; ", out);
     }
 
+    /** Nome do time externo que estima, conforme o tipo do projeto evolutivo. */
+    private static String extName(long spotId) throws SQLException {
+        Map<String, Object> p = Db.one("SELECT kind FROM spot_projects WHERE id = ?", spotId);
+        return p != null && "EVOL_PT".equals(p.get("kind")) ? "Fornecedor Protheus" : "Beecloud";
+    }
+
     private static Object saveRequest(Long id, long spotId, JsonObject b) throws SQLException {
+        String ext = extName(spotId);
         String title = ApiServlet.str(b, "title", "Pedido", 200, true);
         String channel = ApiServlet.str(b, "channel", "Canal", 10, true);
         String ticket = ApiServlet.str(b, "ticket_no", "Nº do chamado", 40, false);
@@ -622,11 +629,12 @@ final class SpotService {
         String assignee = ApiServlet.str(b, "assignee", "Responsável do TI", 120, false);
         String solution = ApiServlet.str(b, "solution", "Solução do TI", 2000, false);
         LocalDate delivered = ApiServlet.optDate(b, "delivered_at", "Entregue em");
-        BigDecimal estimate = optHours(b, "estimate_hours", "Estimativa Beecloud (horas)");
+        BigDecimal estimate = optHours(b, "estimate_hours", "Estimativa " + ext + " (horas)");
         String validatedBy = normalizeValidators(ApiServlet.str(b, "validated_by", "Validado por", 1000, false));
         if (!REQ_CHANNEL.contains(channel)) throw new ApiException(400, "Canal inválido.");
         if (!REQ_STATUS.contains(status)) throw new ApiException(400, "Situação inválida.");
-        if (status.equals("ESTIMADO") && (estimate == null || estimate.signum() <= 0)) throw new ApiException(400, "Informe a estimativa da Beecloud (horas).");
+        if (status.equals("ESTIMADO") && (estimate == null || estimate.signum() <= 0))
+            throw new ApiException(400, "Informe a estimativa d" + ("Beecloud".equals(ext) ? "a " : "o ") + ext + " (horas).");
         if (status.equals("ENTREGUE")) {
             if (solution.isEmpty()) throw new ApiException(400, "Para entregar, informe o que o TI fez para resolver.");
             if (assignee.isEmpty()) throw new ApiException(400, "Para entregar, informe o responsável do TI.");

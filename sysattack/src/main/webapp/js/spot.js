@@ -70,6 +70,8 @@ const Spot = (() => {
   const R_STATUS = { TRIAGEM: ['Triagem', 'b-grey'], EM_ESTIMATIVA: ['Em estimativa', 'b-orange'], ESTIMADO: ['Estimado', 'b-dark'], EM_DESENVOLVIMENTO: ['Em desenvolvimento', 'b-orange'], EM_HOMOLOGACAO: ['Em homologação', 'b-dark'], ENTREGUE: ['Entregue', 'b-green'], RECUSADA: ['Recusada', 'b-red'] };
   const R_CHANNEL = { TIFLUX: 'TIFlux', EMAIL: 'E-mail' };
   const P_KIND = { PADRAO: 'Spot padrão', EVOL_SF: 'Evolutivas Salesforce', EVOL_PT: 'Evolutivas Protheus' };
+  /** Nome do time externo que estima, conforme o tipo do projeto evolutivo. */
+  const extName = k => k === 'EVOL_PT' ? 'Fornecedor Protheus' : 'Beecloud';
   const isEvo = p => !!p && !!p.kind && p.kind !== 'PADRAO';
   const evoMode = () => isEvo(st.data);
   /** Link do chamado: troca {n} no endereço-base pelo número; sem {n}, o número vai ao final. */
@@ -294,17 +296,18 @@ const Spot = (() => {
   }
 
   const hh = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' h';
-  /** Placar de economia: o que a Beecloud estimou x o que o time interno gastou. */
+  /** Placar de economia: o que o time externo estimou x o que o time interno gastou. */
   function ecoPanel(p) {
     const c = p.evo.eco;
     if (!c) return '';
-    const miss = c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa da Beecloud ficaram fora do cálculo.</p>` : '';
-    if (!c.features.length) return `<div class="eco"><h3 class="evo-h">Economia com o time interno</h3><p class="hint" style="margin:0">Ainda sem dados. Informe a <b>Estimativa Beecloud (h)</b> nas demandas e o <b>Esforço (h)</b> do time interno na feature entregue para ver quanto deixamos de gastar.</p>${miss}</div>`;
+    const EX = extName(p.kind);
+    const miss = c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa d${EX === 'Beecloud' ? 'a' : 'o'} ${EX} ficaram fora do cálculo.</p>` : '';
+    if (!c.features.length) return `<div class="eco"><h3 class="evo-h">Economia com o time interno</h3><p class="hint" style="margin:0">Ainda sem dados. Informe a <b>Estimativa ${EX} (h)</b> nas demandas e o <b>Esforço (h)</b> do time interno na feature entregue para ver quanto deixamos de gastar.</p>${miss}</div>`;
     const mx = Math.max(...c.features.map(f => Math.max(f.estimated, f.executed)), 1);
     const rate = Number(c.rate) > 0;
     return `<div class="eco"><h3 class="evo-h">Economia com o time interno</h3>
       <div class="eco-cards">
-        <div class="eco-c"><span>Estimado pela Beecloud</span><b>${hh(c.estimated)}</b>${rate ? `<small>${brl(c.avoided)} se fosse externo</small>` : ''}</div>
+        <div class="eco-c"><span>Estimado pel${EX === 'Beecloud' ? 'a' : 'o'} ${EX}</span><b>${hh(c.estimated)}</b>${rate ? `<small>${brl(c.avoided)} se fosse externo</small>` : ''}</div>
         <div class="eco-c"><span>Executado pelo time interno</span><b>${hh(c.executed)}</b></div>
         <div class="eco-c"><span>Horas a menos</span><b class="${c.saved_hours >= 0 ? 'pos' : 'neg'}">${hh(c.saved_hours)}</b><small>${c.saved_pct}% da estimativa</small></div>
         <div class="eco-c eco-main"><span>Deixamos de gastar</span><b>${rate ? brl(c.avoided) : '—'}</b>${rate ? `<small>${hh(c.estimated)} × ${brl(c.rate)}/h</small>` : '<small>Informe o valor da hora do time externo em Editar projeto</small>'}</div>
@@ -346,7 +349,8 @@ const Spot = (() => {
   /** Aba Economia: o que o time interno devolveu à empresa, mês a mês e por feature (para mostrar à diretoria). */
   function ecoTab(p) {
     const c = p.evo.eco, rate = Number(c.rate) || 0, est = Number(c.estimated), exe = Number(c.executed);
-    if (!c.features.length) return `<p class="hint">Ainda sem dados de economia.</p>${empty('Sem economia calculada', 'Informe a Estimativa Beecloud (h) nas demandas e o Esforço (h) do time interno na feature entregue. Em Editar projeto, informe o valor da hora do time externo.')}${c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa.</p>` : ''}`;
+    const EX = extName(p.kind);
+    if (!c.features.length) return `<p class="hint">Ainda sem dados de economia.</p>${empty('Sem economia calculada', `Informe a Estimativa ${EX} (h) nas demandas e o Esforço (h) do time interno na feature entregue. Em Editar projeto, informe o valor da hora do time externo.`)}${c.no_estimate ? `<p class="hint eco-warn">${c.no_estimate} demanda(s) entregue(s) sem estimativa.</p>` : ''}`;
     const money = rate > 0, unit = v => money ? brl(v * rate) : hh(v);
     // eixo = do início ao fim do projeto (sem data final, até hoje). Período de até 4 meses: por dia; maior: por mês. O acumulado só avança até hoje.
     const today = todayIso(), s0 = String(p.start_date || '').slice(0, 10) || (c.dates[0] ? c.dates[0].date : today);
@@ -376,11 +380,11 @@ const Spot = (() => {
     const eff = est > 0 ? Math.round(exe / est * 100) : 0, saved = est - exe;
     return `<div class="eco-tab">
       <div class="eco-top"><div><span class="eco-k">${money ? 'Deixamos de gastar' : 'Horas estimadas pelo time externo'}</span><b class="eco-big">${money ? brl(c.avoided) : hh(est)}</b>
-        <p class="eco-p">Com o time interno entregamos <b>${c.demands} demanda(s) em ${hh(exe)}</b>. O time externo (Beecloud) estimou <b>${hh(est)}</b>${money ? ` a <b>${brl(rate)}/h</b>` : ''}. Foram <b class="${saved >= 0 ? 'pos' : 'neg'}">${hh(Math.abs(saved))} ${saved >= 0 ? 'a menos' : 'a mais'}</b> (${Math.abs(100 - eff)}%).</p>
+        <p class="eco-p">Com o time interno entregamos <b>${c.demands} demanda(s) em ${hh(exe)}</b>. O time externo (${EX}) estimou <b>${hh(est)}</b>${money ? ` a <b>${brl(rate)}/h</b>` : ''}. Foram <b class="${saved >= 0 ? 'pos' : 'neg'}">${hh(Math.abs(saved))} ${saved >= 0 ? 'a menos' : 'a mais'}</b> (${Math.abs(100 - eff)}%).</p>
         ${money ? '' : '<p class="hint">Informe o valor da hora do time externo em Editar projeto para ver o valor em reais.</p>'}</div>
         <div><span class="eco-k">${money ? 'R$ que deixamos de gastar, acumulado' + (daily ? ' (por dia)' : ' (por mês)') : 'Horas estimadas, acumuladas' + (daily ? ' (por dia)' : ' (por mês)')}</span>${chart}</div></div>
       <div class="eco-cards">
-        <div class="eco-c"><span>Estimado Beecloud</span><b>${hh(est)}</b></div>
+        <div class="eco-c"><span>Estimado ${EX}</span><b>${hh(est)}</b></div>
         <div class="eco-c"><span>Executado interno</span><b>${hh(exe)}</b></div>
         <div class="eco-c"><span>Eficiência (executado ÷ estimado)</span><b>${eff}%</b></div>
         <div class="eco-c"><span>Demandas sem estimativa</span><b class="${c.no_estimate ? 'neg' : ''}">${c.no_estimate}</b><small>não entram no cálculo</small></div></div>
@@ -388,13 +392,14 @@ const Spot = (() => {
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Feature</th><th class="num">Estimado</th><th class="num">Executado</th><th class="num">${money ? 'Deixamos de gastar' : 'Horas a menos'}</th></tr></thead><tbody>
       ${items.map(f => { const d = Number(f.estimated) - Number(f.executed); return `<tr><td><span class="badge b-dark">${fmtNo(f.number)}</span> <b>${esc(f.name)}</b><span class="eco-b" style="margin-top:8px"><i class="${d >= 0 ? 'exe' : 'bad'}" style="width:${(Number(f.estimated) / mxf * 100).toFixed(1)}%"></i></span></td>
         <td class="num">${hh(f.estimated)}</td><td class="num ${d < 0 ? 'neg' : ''}">${hh(f.executed)}</td><td class="num strong ${d < 0 ? 'neg' : 'pos'}">${money ? brl(Number(f.estimated) * rate) : (d >= 0 ? '' : '− ') + hh(Math.abs(d))}${money && d < 0 ? `<span class="small neg">${hh(Math.abs(d))} acima da estimativa</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="hint" style="margin-top:8px">Como é calculado: R$ = estimativa Beecloud (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
+      <p class="hint" style="margin-top:8px">Como é calculado: R$ = estimativa ${EX} (h) × valor/hora do time externo. Só entram demandas entregues que tiveram estimativa e features com esforço informado; o mês é o da entrega.</p></div>`;
   }
 
   /** HTML do relatório do projeto evolutivo. Só tabelas e estilos inline (Outlook), classes só para o ajuste em telas estreitas. */
   const T0 = ' role="presentation" cellpadding="0" cellspacing="0" border="0"';
   function evoReportHtml(p, rows, feats, o) {
     const INK = '#1a1a1a', MUTED = '#5f5f66', LINE = '#dddde0', ORANGE = '#f45200', SOFT = '#f6f6f4';
+    const EXN = extName(p.kind), EXP = EXN === 'Beecloud' ? 'pela' : 'pelo';
     const inP = d => d && (!o.from || String(d).slice(0, 10) >= o.from) && (!o.to || String(d).slice(0, 10) <= o.to);
     const rq = rows.filter(r => !o.from && !o.to ? true : inP(r.received_at) || inP(r.delivered_at));
     const fs = feats.filter(f => !o.from && !o.to ? true : rows.some(r => r.feature_id === f.id && inP(r.delivered_at)));
@@ -417,9 +422,9 @@ const Spot = (() => {
       const c = p.evo.eco, rate = Number(c.rate) > 0, items = c.features.filter(f => fs.some(x => x.id === f.id));
       const est = items.reduce((s, f) => s + Number(f.estimated), 0), ex = items.reduce((s, f) => s + Number(f.executed), 0);
       b += sec('Economia com o time interno');
-      b += items.length ? cells([['Estimado pela Beecloud', hh(est)], ['Executado pelo time interno', hh(ex)], ['Horas a menos', hh(est - ex)], ['Deixamos de gastar', rate ? brl(est * Number(c.rate)) : '—']]) + gap(10)
+      b += items.length ? cells([[`Estimado ${EXP} ${EXN}`, hh(est)], ['Executado pelo time interno', hh(ex)], ['Horas a menos', hh(est - ex)], ['Deixamos de gastar', rate ? brl(est * Number(c.rate)) : '—']]) + gap(10)
         + `<table${T0} width="100%"><tr>${th('Feature')}${th('Estimado', 'right')}${th('Executado', 'right')}</tr>${items.map(f => `<tr>${td(`<b>${fmtNo(f.number)}</b> ${esc(f.name)}`)}${td(hh(f.estimated), 'right')}${td(hh(f.executed), 'right')}</tr>`).join('')}</table>`
-        + (rate ? note(`Valor evitado = horas estimadas pela Beecloud × ${brl(c.rate)}/h.`) : '')
+        + (rate ? note(`Valor evitado = horas estimadas ${EXP} ${EXN} × ${brl(c.rate)}/h.`) : '')
         : note('Sem features com estimativa e esforço informados no período.');
     }
     if (o.feat) {
@@ -494,7 +499,7 @@ const Spot = (() => {
     } else if (st.tab === 'demandas') {
       const f = st.reqFilter || 'ABERTAS', q0 = st.reqQ || '';
       const chip = (k, l) => `<button class="btn btn-sm${f === k ? ' btn-primary' : ''}" data-action="sp-req-filter" data-f="${k}">${l}</button>`;
-      host.innerHTML = `<div class="ev-tools"><div class="ev-chips">${chip('ABERTAS', 'Em aberto')}${chip('EM_ESTIMATIVA', 'Aguardando Beecloud')}${chip('ENTREGUE', 'Entregues')}${chip('RECUSADA', 'Recusadas')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>
+      host.innerHTML = `<div class="ev-tools"><div class="ev-chips">${chip('ABERTAS', 'Em aberto')}${chip('EM_ESTIMATIVA', `Aguardando ${extName(p.kind)}`)}${chip('ENTREGUE', 'Entregues')}${chip('RECUSADA', 'Recusadas')}${chip('TODAS', 'Todas')}${chip('TIFLUX', 'TIFlux')}${chip('EMAIL', 'E-mail')}</div>
         <input type="search" id="rq-q" class="ev-search" placeholder="Buscar por pedido, solicitante, chamado ou feature" aria-label="Buscar demandas" value="${esc(q0)}"></div><div id="rq-list"></div>`;
       const draw = () => {
         const q = (st.reqQ || '').trim().toLowerCase();
@@ -505,7 +510,7 @@ const Spot = (() => {
         document.getElementById('rq-list').innerHTML = shown.length
           ? `<div class="rq-list">${shown.map(r => `<article class="rq-card st-${r.status}">
               <header><div class="rq-id">${ticketCell(p, r)}<span class="small">${esc(R_CHANNEL[r.channel])}</span></div><h4>${esc(r.title)}</h4><div class="rq-st">${stageBadge(r)}${acts(r)}</div></header>
-              <dl class="rq-facts">${fact('Recebido', fmt(String(r.received_at).slice(0, 10)))}${fact('Solicitante', esc(r.requester || '—'))}${fact('Responsável do TI', esc(r.assignee || '—'))}${r.delivered_at ? fact('Entregue em', fmt(String(r.delivered_at).slice(0, 10))) : ''}${r.validated_by ? fact('Validado por', esc(r.validated_by)) : ''}${Number(r.estimate_hours) > 0 ? fact('Estimativa Beecloud', hh(r.estimate_hours)) : ''}${r.feature_id ? fact('Feature', `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}${r.feature_module ? ` <span class="small" style="display:inline">· ${esc(r.feature_module)}</span>` : ''}`) : ''}</dl>
+              <dl class="rq-facts">${fact('Recebido', fmt(String(r.received_at).slice(0, 10)))}${fact('Solicitante', esc(r.requester || '—'))}${fact('Responsável do TI', esc(r.assignee || '—'))}${r.delivered_at ? fact('Entregue em', fmt(String(r.delivered_at).slice(0, 10))) : ''}${r.validated_by ? fact('Validado por', esc(r.validated_by)) : ''}${Number(r.estimate_hours) > 0 ? fact(`Estimativa ${extName(p.kind)}`, hh(r.estimate_hours)) : ''}${r.feature_id ? fact('Feature', `<span class="badge b-dark">${fmtNo(r.feature_no)}</span> ${esc(r.feature_name)}${r.feature_module ? ` <span class="small" style="display:inline">· ${esc(r.feature_module)}</span>` : ''}`) : ''}</dl>
               ${r.description || r.solution || clipsFor(r) ? `<div class="rq-txt">${r.description ? `<p><b>Pedido:</b> ${cut(r.description, 220)}</p>` : ''}${r.solution ? `<p><b>O que o TI fez:</b> ${cut(r.solution, 220)}</p>` : ''}${clipsFor(r)}</div>` : ''}</article>`).join('')}</div><p class="hint" style="margin-top:8px">${shown.length} de ${rows.length} pedido(s)</p>`
           : empty('Nenhum pedido neste filtro', rows.length ? 'Troque o filtro ou a busca para ver os demais.' : 'Use “+ Nova demanda” para registrar o que foi pedido por e-mail ou chamado TIFlux.');
       };
@@ -674,7 +679,7 @@ const Spot = (() => {
         <div data-std class="field" id="pr-f"><label for="phr">Hora desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('phr', 'partner_hour_rate', p.partner_hour_rate || '')}<small class="fhint">Valor da hora/homem negociado para o trabalho <b>dentro da franquia</b>. Franquia em R$ = horas fixadas × este valor. <b>Informe o valor sem impostos.</b></small></div>
         <div data-std class="field" id="po-f"><label for="pho">Hora excedente desenvolvimento parceiro (R$/h) <span class="opt">(valor hora/homem negociado)</span></label>${SA.moneyInput('pho', 'partner_overage_rate', p.partner_overage_rate || '')}<small class="fhint" id="pho-h">Valor da hora/homem negociado para o que passar da franquia. <b>Fatura excedente = horas consumidas acima das horas fixadas × este valor.</b> <b>Informe o valor sem impostos.</b></small></div>
         <div data-std class="field" id="sv-f"><label for="sv">Valor do projeto (R$)</label>${SA.moneyInput('sv', 'project_value', p.project_value || '')}</div>
-        <div class="field" id="er-f"><label for="er">Valor da hora do time externo (R$/h) <span class="opt">(Beecloud)</span></label>${SA.moneyInput('er', 'external_rate', Number(p.external_rate) ? p.external_rate : '')}<small class="fhint">Usado para calcular quanto deixamos de gastar: horas estimadas pela Beecloud × este valor.</small></div>
+        <div class="field" id="er-f"><label for="er">Valor da hora do time externo (R$/h) <span class="opt" id="er-h">(${extName(p.kind || 'EVOL_SF')})</span></label>${SA.moneyInput('er', 'external_rate', Number(p.external_rate) ? p.external_rate : '')}<small class="fhint">Usado para calcular quanto deixamos de gastar: horas estimadas pela Beecloud × este valor.</small></div>
         <div class="field"><label for="sd">Início</label><input id="sd" name="start_date" type="date" value="${p.start_date}" required></div>
         <div class="field"><label for="se">Data final <span class="opt">(opcional)</span></label><input id="se" name="end_date" type="date" value="${p.end_date || ''}"></div>
         <div class="field"><label for="ss">Situação</label><select id="ss" name="status">${opts(S_STATUS, p.status)}</select></div>
@@ -696,6 +701,7 @@ const Spot = (() => {
         document.getElementById('sk-h').textContent = evo ? 'Reúne os pedidos que chegam por e-mail ou chamado TIFlux, o que o TI fez e a feature entregue. Não controla horas.' : '';
         f.querySelectorAll('[data-std]').forEach(e => { e.style.display = evo ? 'none' : ''; });
         document.getElementById('er-f').style.display = evo ? '' : 'none'; f.elements.external_rate.disabled = !evo;
+        document.getElementById('er-h').textContent = '(' + extName(kd.value) + ')';
         if (evo) { cs.checked = false; rc.checked = false; }
         for (const n of ['hours_model', 'contracted_hours', 'partner_hour_rate', 'partner_overage_rate', 'project_value']) { f.elements[n].disabled = evo || f.elements[n].disabled; }
         if (!evo) sync();
@@ -789,7 +795,7 @@ const Spot = (() => {
       <div class="field full"><label for="rx">O que foi pedido</label><textarea id="rx" name="description" maxlength="2000">${esc(x.description)}</textarea></div>
       <div class="field"><label for="rs">Situação</label><select id="rs" name="status">${opts(R_STATUS, x.status)}</select></div>
       <div class="field"><label for="ra">Responsável do TI <span class="opt" id="ra-req" hidden>(obrigatório ao entregar)</span></label><input id="ra" name="assignee" maxlength="120" value="${esc(x.assignee)}"></div>
-      <div class="field" id="es-f"><label for="re2">Estimativa Beecloud (h) <span class="opt" id="es-req" hidden>(obrigatório)</span></label><input id="re2" name="estimate_hours" type="number" min="0" step="0.25" value="${Number(x.estimate_hours) > 0 ? x.estimate_hours : ''}" placeholder="Ex.: 16"><small class="fhint" id="es-h"></small></div>
+      <div class="field" id="es-f"><label for="re2">Estimativa ${extName(st.data.kind)} (h) <span class="opt" id="es-req" hidden>(obrigatório)</span></label><input id="re2" name="estimate_hours" type="number" min="0" step="0.25" value="${Number(x.estimate_hours) > 0 ? x.estimate_hours : ''}" placeholder="Ex.: 16"><small class="fhint" id="es-h"></small></div>
       <div class="field full" id="vb-f"><label for="rv">Validado por <span class="opt">(e-mails; separe vários com ;)</span></label><input id="rv" name="validated_by" maxlength="1000" value="${esc(x.validated_by || '')}" placeholder="maria@empresa.com; joao@empresa.com"></div>
       <div class="field full" id="ro-f"><label for="ro">O que o TI fez para resolver <span class="opt">(obrigatório)</span></label><textarea id="ro" name="solution" maxlength="2000">${esc(x.solution)}</textarea></div>
       <div class="field full"><label for="rfl">Anexos do pedido <span class="opt">(prints, corpo do e-mail, chamado do TIFlux)</span></label>
@@ -815,7 +821,7 @@ const Spot = (() => {
           if (!d.feature_id && !String(d.feature_name || '').trim()) throw new Error('Informe o nome da feature entregue.');
           if (!(Number(d.feature_effort) > 0)) throw new Error('Informe o esforço (horas) do time interno na feature.');
         }
-        if (d.status === 'ESTIMADO' && !(Number(d.estimate_hours) > 0)) throw new Error('Informe a estimativa da Beecloud (horas).');
+        if (d.status === 'ESTIMADO' && !(Number(d.estimate_hours) > 0)) throw new Error(`Informe a estimativa d${extName(st.data.kind) === 'Beecloud' ? 'a' : 'o'} ${extName(st.data.kind)} (horas).`);
         const files = [...f.elements.files.files], ffiles = d.status === 'ENTREGUE' ? [...f.elements.ffiles.files] : [];
         const h0 = await uploadHeaders(files.concat(ffiles));
         const { files: _a, ffiles: _b, ...body } = d;
