@@ -26,28 +26,62 @@ const Logo = (() => {
       <div class="logo-row"><span class="logo-prev" data-logo-prev>${has ? `<img src="${src(kind, p)}" alt="Imagem atual do projeto">` : '<i>Sem imagem</i>'}</span>
         <div class="logo-ctl"><span class="logo-btns"><label class="btn btn-sm logo-pick">Escolher imagem<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-logo-file hidden></label>
           <button type="button" class="btn btn-sm" data-logo-remove${has ? '' : ' hidden'}>Remover imagem</button></span>
-          <small class="fhint">PNG, JPG, WEBP ou GIF. A imagem é reduzida automaticamente para até ${MAX_PX} px. Funciona melhor com logo quadrada ou fundo transparente.</small>
+          <small class="fhint">PNG, JPG, WEBP ou GIF. A imagem é reduzida para até ${MAX_PX} px e ajustada ao avatar redondo: a moldura vazia é recortada e o fundo de cor única preenche o círculo.</small>
           <small class="fhint logo-msg" data-logo-msg hidden></small></div></div></div>`;
   }
 
   function toBlob(cv, type, q) { return new Promise(res => cv.toBlob(res, type, q)); }
 
-  /** Reduz a imagem para caber em MAX_PX e em menos de ~900 KB. */
+  /**
+   * Recorta a moldura vazia da imagem (margem transparente ou de cor única) e descobre a cor de fundo.
+   * É isso que faz uma logo com respiro embutido deixar de aparecer pequena dentro do avatar redondo.
+   */
+  function analyze(bmp) {
+    const w = bmp.width, h = bmp.height;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0);
+    let d;
+    try { d = g.getImageData(0, 0, w, h).data; } catch (e) { return { x: 0, y: 0, w, h, bg: null }; }
+    const at = (x, y) => { const i = (y * w + x) * 4; return [d[i], d[i + 1], d[i + 2], d[i + 3]]; };
+    const corners = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+    const near = (a, b) => Math.abs(a[3] - b[3]) < 12 && (a[3] < 16 || (Math.abs(a[0] - b[0]) < 12 && Math.abs(a[1] - b[1]) < 12 && Math.abs(a[2] - b[2]) < 12));
+    const uniform = corners.every(c => near(c, corners[0]));
+    if (!uniform) return { x: 0, y: 0, w, h, bg: null };
+    const ref = corners[0];
+    const bg = ref[3] < 16 ? null : `rgb(${ref[0]},${ref[1]},${ref[2]})`;
+    const isBg = (x, y) => near(at(x, y), ref);
+    let x0 = 0, y0 = 0, x1 = w - 1, y1 = h - 1;
+    const rowBg = y => { for (let x = x0; x <= x1; x++) if (!isBg(x, y)) return false; return true; };
+    const colBg = x => { for (let y = y0; y <= y1; y++) if (!isBg(x, y)) return false; return true; };
+    while (y0 < y1 && rowBg(y0)) y0++;
+    while (y1 > y0 && rowBg(y1)) y1--;
+    while (x0 < x1 && colBg(x0)) x0++;
+    while (x1 > x0 && colBg(x1)) x1--;
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+    if (cw < 8 || ch < 8) return { x: 0, y: 0, w, h, bg }; // imagem quase toda vazia: não recorta
+    return { x: x0, y: y0, w: cw, h: ch, bg };
+  }
+
+  /** Reduz a imagem para caber em MAX_PX e em menos de ~900 KB, já ajustada ao avatar redondo. */
   async function shrink(file) {
     if (!TYPES.includes(file.type)) throw new Error('Formato não aceito. Use PNG, JPG, WEBP ou GIF.');
     let bmp;
     try { bmp = await createImageBitmap(file); } catch (e) { throw new Error('Não foi possível ler essa imagem.'); }
-    // sempre quadrada: o avatar é redondo. Imagem já quase quadrada (ex.: selo redondo) ocupa tudo; as demais ganham uma margem
-    const ratio = bmp.width / bmp.height, squareish = ratio > 0.9 && ratio < 1.1;
-    let side = Math.min(MAX_PX, Math.max(bmp.width, bmp.height));
+    // sempre quadrada, porque o avatar é redondo: a moldura vazia sai fora, o fundo de cor única preenche
+    // o círculo inteiro e a logo ocupa o máximo que cabe sem a borda cortar o desenho.
+    const a = analyze(bmp);
+    const ratio = a.w / a.h, squareish = ratio > 0.9 && ratio < 1.1;
+    let side = Math.min(MAX_PX, Math.max(a.w, a.h));
     for (let i = 0; i < 4; i++, side = Math.round(side * 0.75)) {
       const cv = document.createElement('canvas'); cv.width = cv.height = Math.max(8, side);
       const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
-      if (squareish) g.drawImage(bmp, 0, 0, cv.width, cv.height);
-      else {
-        const box = cv.width * 0.84, sc = Math.min(box / bmp.width, box / bmp.height), w = bmp.width * sc, h = bmp.height * sc;
-        g.drawImage(bmp, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
-      }
+      if (a.bg) { g.fillStyle = a.bg; g.fillRect(0, 0, cv.width, cv.height); }
+      // com fundo de cor única o círculo já fica preenchido, então a logo respira; sem fundo, ela cresce
+      const box = cv.width * (a.bg ? 0.84 : squareish ? 0.98 : 0.92);
+      const sc = Math.min(box / a.w, box / a.h), w = a.w * sc, h = a.h * sc;
+      g.drawImage(bmp, a.x, a.y, a.w, a.h, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
       const blob = await toBlob(cv, 'image/png'); // PNG mantém a transparência
       if (blob && blob.size <= 900 * 1024) return blob;
     }
