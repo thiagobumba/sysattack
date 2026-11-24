@@ -62,7 +62,7 @@ Pontos de projeto que valem saber:
       └─ webapp/                  front-end (index.html, login.html, css/, js/, img/)
 ```
 
-Classes principais do servidor: `ApiServlet` (rotas de projetos, tarefas, financeiro, documentos, usuários, 2FA), `Db` (esquema e acesso), `TaskRules` (tarefas pai/filha), `HealthCalc` (saúde e EVM), `ChangeService`, `IshikawaService`, `SpotService`/`SpotCalc`, `EmailService`/`EmailTriggers`/`Mailer`, `AiConfig`, `BackupService`, `Auth`/`Totp`/`Invites`, `Audit`, `SecurityFilter`, `ProjectFileReader` (importação) e os geradores de relatório HTML (`ScopeReportHtml`, `SpotReportHtml`, `ImportedReportHtml`).
+Classes principais do servidor: `ApiServlet` (rotas de projetos, tarefas, financeiro, documentos, usuários, 2FA), `Db` (esquema e acesso), `TaskRules` (tarefas pai/filha), `HealthCalc` (saúde e EVM), `ChangeService`, `IshikawaService`, `SpotService`/`SpotCalc`, `EmailService`/`EmailTriggers`/`Mailer`, `AiConfig`, `BackupService`/`BackupRestore` (backup e importação), `Auth`/`Totp`/`Invites`, `Audit`, `SecurityFilter`, `ProjectFileReader` (importação) e os geradores de relatório HTML (`ScopeReportHtml`, `SpotReportHtml`, `ImportedReportHtml`).
 
 Módulos do front-end (`webapp/js`): `core` (utilitários, `SA`), `app` (roteamento e telas principais), `tips` (balões de explicação), `gantt`, `burndown`, `pert`, `ishikawa`, `prioridades` (Eisenhower), `reports`, `spot`, `mail`, `sys`, `mpp` (importação), `qr`, `login`, `definir-senha`, `privacidade`.
 

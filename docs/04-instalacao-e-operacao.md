@@ -50,7 +50,9 @@ Defina um caminho fixo, fora do perfil do usuário: `-Dsysattack.data=C:\dados\s
 | `ai.key` | Chave que criptografa a chave do Claude, a senha do SMTP e os segredos do 2FA. **Faça backup junto do banco** |
 | `config.properties` | Ajustes locais e senhas (tem prioridade sobre o embutido no `.war`) |
 | `.initialized` | Marcador de que o primeiro acesso já foi feito |
-| `backup-history.jsonl`, `pre-update-*.mv.db` | Histórico de backups e cópias antes de atualizar o esquema |
+| `backup-history.jsonl`, `restore-history.jsonl`, `pre-update-*.mv.db` | Histórico de backups e de importações e cópias antes de atualizar o esquema (ficam na pasta de backups) |
+| `restore-pending.zip` / `.json` | Importação enviada e ainda não aplicada (sai no próximo início do Tomcat) |
+| `antes-da-restauracao-<data>/` | O que existia antes de uma importação. Nada é apagado automaticamente: confira e remova quando não precisar mais |
 
 ## Configuração (`config.properties`)
 
@@ -125,7 +127,16 @@ Cada backup é um arquivo `sysattack-AAAAMMDD-HHMMSS-<tipo>.zip` com `manifest.j
 3. O backup contém a `ai.key`: trate-o como confidencial (acesso restrito, disco criptografado).
 4. Teste a restauração de vez em quando.
 
-**Restaurar** (Tomcat parado):
+**Importar um backup pela aplicação** (é assim que se instala o SysAttack em outro local). Em *Segurança e dados* → **Importar backup**:
+
+1. Suba o `.war` no servidor novo, abra o sistema e crie um administrador provisório (primeiro acesso).
+2. Envie o `.zip` do backup. Ele é conferido na hora — CRC do zip, SHA-256 e abertura do banco da cópia — e só é aceito se passar. Marque *trazer também o `config.properties`* apenas se quiser levar endereço, SMTP e pastas do servidor antigo.
+3. **Reinicie o Tomcat.** Antes de abrir o banco, o SysAttack troca `sysattack.mv.db`, `docs/` e `ai.key` pelos do arquivo, move o que existia para `antes-da-restauracao-<data>` dentro da pasta de dados e segue a inicialização normal (migrações de esquema inclusive, se o backup for de uma versão anterior).
+4. Entre com um **usuário do backup**: o administrador provisório deixou de existir. Confira o endereço em *Segurança e dados* e ajuste o `app.url` se for o caso.
+
+Se a troca falhar no meio, ela é desfeita e o sistema sobe como estava; o motivo aparece na tela depois do reinício e fica em `restore-history.jsonl`. O limite do envio é 1 GB. Enquanto não reiniciar, dá para cancelar a importação na própria tela.
+
+**Restaurar com o Tomcat parado** (alternativa, sem passar pela aplicação):
 
 ```powershell
 .\restaurar-backup.ps1 -Backup D:\backups\sysattack\sysattack-20261106-020000-auto.zip -Dados C:\dados\sysattack

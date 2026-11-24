@@ -204,9 +204,10 @@ A Anthropic não permite login de contas Claude.ai em sistemas de terceiros; a c
 - **Backup automático:** todo dia às 02:00 (e logo após subir, se o último tem mais de 26 h) mais "Fazer backup agora". Um `.zip` por backup (banco físico + script SQL, documentos, configuração), **verificado** (CRC + abertura do banco) e com `.sha256`. Retenção: 1 por dia (14 dias), 1 por semana (8), 1 por mês (12), manuais por 90 dias; os 3 mais novos nunca são apagados.
 - **Cópia espelho** (`backup.mirror`) e outro disco (`backup.dir`).
 - **Antes de atualizar o esquema** o arquivo do banco é copiado para `pre-update-*.mv.db` (guarda as 5 últimas).
-- **Restauração:** `restaurar-backup.ps1` (confere o SHA-256 e guarda o estado atual antes de restaurar).
-- **Segurança e dados** (tela): pasta em uso, endereço nos e-mails, backups e trilha de auditoria.
-- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 48); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
+- **Importar backup** (tela, só administrador): envia o `.zip`, confere na hora (CRC, SHA-256 e abertura do banco da cópia) e marca a importação; a troca do banco, dos documentos e da `ai.key` acontece no próximo início do Tomcat, com o banco ainda fechado. O `config.properties` é opcional. O estado atual vai para `antes-da-restauracao-<data>` e, se a troca falhar, é desfeita. Histórico em `restore-history.jsonl`.
+- **Restauração fora do ar:** `restaurar-backup.ps1`, com o Tomcat parado (confere o SHA-256 e guarda o estado atual antes de restaurar).
+- **Segurança e dados** (tela): pasta em uso, endereço nos e-mails, backups, importação e trilha de auditoria.
+- **Atualização do esquema:** versão em `Db.SCHEMA_VERSION` (atualmente 58); colunas novas entram com `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, sem perder dados.
 
 ## 14. Interface e usabilidade
 

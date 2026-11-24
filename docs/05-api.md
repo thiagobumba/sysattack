@@ -95,7 +95,7 @@ Visão geral da API JSON do SysAttack. A fonte da verdade é o código: `ApiServ
 | `GET /ai-status` | Disponibilidade da IA (qualquer usuário logado) |
 | `GET/PUT/DELETE /email/settings` · `POST /email/settings/test` · `GET /email/settings/test-logs` | SMTP e testes |
 | `GET /email/events` · `GET/POST /email/rules` · `PUT/DELETE /email/rules/{id}` · `GET /email/log` | Gatilhos e histórico |
-| `/backup/...` | Listar, `run` (fazer agora), verificar, `download` |
+| `/backup/...` | Listar, `run` (fazer agora), verificar, `download`, `import` (`POST` envia o zip no corpo cru, com `X-File-Name` e `X-With-Config: 0\|1`, até 1 GB; `DELETE` cancela a importação marcada) |
 | `GET /security` | Trilha de auditoria (últimos 200 eventos) |
 
 ## Exemplos

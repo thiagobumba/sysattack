@@ -97,6 +97,8 @@ Antes de atualizar o sistema para uma versão com esquema novo, o arquivo do ban
 3. O backup contém a `ai.key`: trate-o como confidencial (acesso restrito à pasta; disco do servidor criptografado, ex.: BitLocker).
 4. Teste a restauração em outra pasta de vez em quando (a tela tem o botão **Verificar** para checar a integridade).
 
+**Importar um backup** (é assim que se instala em outro local): em *Segurança e dados* → **Importar backup**, envie o `.zip`. Ele é conferido na hora e, se passar, a troca do banco, dos documentos e da `ai.key` acontece no **próximo início do Tomcat**, antes de o banco abrir. O `config.properties` é opcional. O que existia vai para `antes-da-restauracao-<data>` na pasta de dados; se a troca falhar, é desfeita. Depois do reinício, entre com um usuário do backup.
+
 **Restaurar** (Tomcat parado): `.\restaurar-backup.ps1 -Backup D:\backups\sysattack\sysattack-20261106-020000-auto.zip -Dados C:\dados\sysattack`.
 O script confere o SHA-256, guarda o que existe hoje em `<dados>.antes-da-restauracao-<data>` e restaura banco, documentos e configuração.
 Alternativa manual: extraia `database/script.sql.zip` e rode `java -cp h2-2.2.224.jar org.h2.tools.RunScript -url jdbc:h2:file:<pasta>/sysattack -user sa -script script.sql -options compression zip`.

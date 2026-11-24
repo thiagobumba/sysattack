@@ -53,6 +53,7 @@ public final class Db {
         dataDir = dir;
         restrict(new File(dir));
         java.util.logging.Logger.getLogger("sysattack").info("Pasta de dados: " + dir + " [" + dataSource + "]");
+        BackupRestore.applyPending(); // importação marcada: a troca do arquivo do banco só vale com ele ainda fechado
         preUpdateCopy();
         url = "jdbc:h2:file:" + new File(dir, "sysattack").getAbsolutePath() + ";DB_CLOSE_DELAY=-1";
 

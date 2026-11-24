@@ -383,6 +383,8 @@ final class BackupService {
         if (m.equals("GET") && what.isEmpty()) return status(req);
         if (m.equals("GET") && what.equals("address-test")) { ApiServlet.requireAdmin(user); return Invites.testAddress(); }
         if (m.equals("POST") && what.equals("run")) return run("manual");
+        if (m.equals("POST") && what.equals("import")) return BackupRestore.stage(req, user);
+        if (m.equals("DELETE") && what.equals("import")) return BackupRestore.cancel(req, user);
         if (s.size() == 3 && what.equals("verify") && m.equals("POST")) return verify(file(s.get(2)));
         if (s.size() == 3 && what.equals("download") && m.equals("GET")) {
             File f = file(s.get(2));
@@ -441,6 +443,8 @@ final class BackupService {
             }
         }
         o.put("backups", list);
+        o.put("restore_pending", BackupRestore.pending());
+        o.put("restore_last", BackupRestore.last());
         List<Map<String, Object>> hist = history(30);
         o.put("history", hist);
         Map<String, Object> ok = lastOk();
