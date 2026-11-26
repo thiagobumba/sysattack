@@ -483,12 +483,27 @@ final class SpotService {
                 + " FROM spot_features f WHERE f.spot_id = ? ORDER BY f.number DESC", spotId);
     }
 
+    /** Próximo número só para exibir (não reserva). */
     private static long nextFeatureNumber(long spotId) throws SQLException {
         return ((Number) Db.one("SELECT GREATEST(COALESCE((SELECT MAX(number) FROM spot_features WHERE spot_id = ?), 0), (SELECT feature_seq FROM spot_projects WHERE id = ?)) + 1 n", spotId, spotId).get("n")).longValue();
     }
 
+    /**
+     * Reserva o número da feature que vai ser criada. O UPDATE trava a linha do projeto até o fim da transação: duas
+     * entregas ao mesmo tempo esperam uma pela outra e nunca recebem o mesmo FT-nnn. feature_seq continua sendo o maior número já usado.
+     */
+    private static long reserveFeatureNumber(long spotId) throws SQLException {
+        Db.update("UPDATE spot_projects SET feature_seq = GREATEST(feature_seq, COALESCE((SELECT MAX(f.number) FROM spot_features f WHERE f.spot_id = ?), 0)) + 1 WHERE id = ?", spotId, spotId);
+        return ((Number) Db.one("SELECT feature_seq n FROM spot_projects WHERE id = ?", spotId).get("n")).longValue();
+    }
+
     /** Pedidos entregues antes dos números de feature (só com o nome em texto) ganham a feature numerada, em ordem de entrega. */
-    private static void backfillFeatures(long spotId) throws SQLException {
+    private static void backfillFeatures(long spotId) throws Exception {
+        if (Db.one("SELECT id FROM spot_requests WHERE spot_id = ? AND status = 'ENTREGUE' AND feature_id IS NULL AND feature <> '' LIMIT 1", spotId) == null) return;
+        Db.tx(() -> { backfillFeaturesTx(spotId); return null; }); // roda numa leitura (GET): precisa da própria transação
+    }
+
+    private static void backfillFeaturesTx(long spotId) throws SQLException {
         List<Map<String, Object>> old = Db.query("SELECT id, feature, module FROM spot_requests WHERE spot_id = ? AND status = 'ENTREGUE' AND feature_id IS NULL AND feature <> '' ORDER BY delivered_at, id", spotId);
         if (old.isEmpty()) return;
         Map<String, Long> byName = new java.util.HashMap<>();
@@ -497,7 +512,7 @@ final class SpotService {
             String name = String.valueOf(r.get("feature")).trim(), key = name.toLowerCase();
             Long fid = byName.get(key);
             if (fid == null) {
-                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,created_by) VALUES(?,?,?,?,?)", spotId, nextFeatureNumber(spotId), name, r.get("module"), "migração");
+                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,created_by) VALUES(?,?,?,?,?)", spotId, reserveFeatureNumber(spotId), name, r.get("module"), "migração");
                 byName.put(key, fid);
             }
             Db.update("UPDATE spot_requests SET feature_id = ? WHERE id = ?", fid, r.get("id"));
@@ -657,7 +672,7 @@ final class SpotService {
                 if (b.has("feature_doc")) Db.update("UPDATE spot_features SET documentation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", fDoc, fid);
             } else {
                 if (fName.isEmpty()) throw new ApiException(400, "Para marcar como entregue, informe o nome da feature entregue.");
-                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,documentation,effort_hours,created_by) VALUES(?,?,?,?,?,?,?)", spotId, nextFeatureNumber(spotId), fName, fModule, fDoc, fEffort, "");
+                fid = Db.insert("INSERT INTO spot_features(spot_id,number,name,module,documentation,effort_hours,created_by) VALUES(?,?,?,?,?,?,?)", spotId, reserveFeatureNumber(spotId), fName, fModule, fDoc, fEffort, "");
             }
             Map<String, Object> f = Db.one("SELECT name, module, effort_hours FROM spot_features WHERE id = ?", fid);
             if (f.get("effort_hours") == null || ((BigDecimal) f.get("effort_hours")).signum() <= 0) throw new ApiException(400, "Para entregar, informe o esforço (horas) do time interno na feature.");
@@ -718,7 +733,7 @@ final class SpotService {
     private static Object itemRoute(String m, List<String> s, HttpServletRequest req, String table, Map<String, Object> user) throws Exception {
         if (s.size() != 3) throw new ApiException(405, "Operação não suportada.");
         long id = Long.parseLong(s.get(2));
-        Map<String, Object> row = Db.one("SELECT * FROM " + table + " WHERE id = ?", id); // 'table' vem só das constantes acima
+        Map<String, Object> row = Db.one("SELECT spot_id FROM " + table + " WHERE id = ?", id); // 'table' vem só das constantes acima; sem SELECT * (spot_invoices tem BLOB)
         if (row == null) throw new ApiException(404, "Registro não encontrado.");
         long spotId = ((Number) row.get("spot_id")).longValue();
         if (m.equals("DELETE")) {

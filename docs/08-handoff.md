@@ -188,6 +188,9 @@ infraestrutura (`app_meta`, `audit_log`).
 
 - Tudo em `Db.init()`, na ordem, **idempotente**: `CREATE TABLE IF NOT EXISTS` e
   `ALTER TABLE … ADD COLUMN IF NOT EXISTS`. Subir um `.war` nunca apaga dados.
+- O `ALTER TABLE` de uma tabela vem **depois** do `CREATE TABLE` dela. Num banco vazio a
+  tabela ainda não existe; as colunas de `email_settings` chegaram a ficar antes da criação
+  e a instalação nova não subia (corrigido na revisão de 26/11).
 - Aumente `SCHEMA_VERSION`. Quando ela muda, `preUpdateCopy()` guarda uma cópia do
   arquivo do banco em `pre-update-*.mv.db` (as 5 últimas) **antes** de migrar.
 - Migrações recentes: **55** `external_rate`/`estimate_hours`/`effort_hours` ·
@@ -429,6 +432,8 @@ numa cópia e confira o `pre-update-*.mv.db`.
 | **Servidor estático morto** | `ERR_CONNECTION_REFUSED` no meio dos testes. | Confira/suba o `http.server` antes de cada lote. |
 | **GitHub 503** | `git push` falhou com "credential service temporarily unavailable". | Tente de novo; costuma passar na segunda. |
 | **Logo: ele queria o PNG, não o código** | A v121 (recorte/preenchimento do avatar) foi implementada e **revertida a pedido** (`git revert`, commit `05b3380`). O que ele queria era o arquivo `horus-avatar-400.png` para baixar. | Quando o pedido for "me manda a imagem", mande o arquivo — não mexa no código. |
+| **ALTER antes do CREATE** | As colunas de OAuth e assinatura de `email_settings` eram acrescentadas antes do `CREATE TABLE` dela. Em banco existente passava; em instalação nova o Tomcat não subia. | Teste `Db.init()` com uma pasta de dados **vazia** (`-Dsysattack.data=<pasta nova>`) sempre que mexer no esquema. |
+| **Auditoria antes da validação** | `Audit.log` grava em conexão própria e não é desfeito no rollback; registrado antes da validação, deixava na trilha uma "senha redefinida" que não aconteceu. | Chame `Audit.log` só depois de todas as validações que podem lançar erro. |
 
 Outras regras de comportamento que nasceram da prática:
 

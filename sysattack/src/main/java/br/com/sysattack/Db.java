@@ -260,18 +260,7 @@ public final class Db {
             s.execute("ALTER TABLE spot_features ADD COLUMN IF NOT EXISTS effort_hours DECIMAL(8,2)");
             // maior número de feature já usado no projeto: número excluído nunca é reaproveitado
             s.execute("ALTER TABLE spot_projects ADD COLUMN IF NOT EXISTS feature_seq INT DEFAULT 0 NOT NULL");
-            // e-mail de saída com OAuth 2.0 (Microsoft 365): fluxo client credentials
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS auth_mode VARCHAR(10) DEFAULT 'BASICO' NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT '' NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_id VARCHAR(100) DEFAULT '' NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_secret_enc VARCHAR(2000) DEFAULT '' NOT NULL");
-            // assinatura do e-mail: imagem embutida (cid) e/ou texto, no fim de cada mensagem
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_on BOOLEAN DEFAULT FALSE NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_text VARCHAR(4000) DEFAULT '' NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_name VARCHAR(200) DEFAULT '' NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_size BIGINT DEFAULT 0 NOT NULL");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img BLOB");
-            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_w INT DEFAULT 0 NOT NULL");
+            // (as colunas novas de email_settings ficam logo depois do CREATE TABLE dela, mais abaixo: num banco novo a tabela ainda não existe aqui)
             s.execute("CREATE TABLE IF NOT EXISTS spot_feature_files ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "feature_id BIGINT NOT NULL REFERENCES spot_features(id) ON DELETE CASCADE,"
@@ -355,6 +344,18 @@ public final class Db {
                     + "last_test_at TIMESTAMP,"
                     + "last_test_ok BOOLEAN,"
                     + "last_test_msg VARCHAR(300))");
+            // e-mail de saída com OAuth 2.0 (Microsoft 365): fluxo client credentials
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS auth_mode VARCHAR(10) DEFAULT 'BASICO' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_id VARCHAR(100) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS client_secret_enc VARCHAR(2000) DEFAULT '' NOT NULL");
+            // assinatura do e-mail: imagem embutida (cid) e/ou texto, no fim de cada mensagem
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_on BOOLEAN DEFAULT FALSE NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_text VARCHAR(4000) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_name VARCHAR(200) DEFAULT '' NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_size BIGINT DEFAULT 0 NOT NULL");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img BLOB");
+            s.execute("ALTER TABLE email_settings ADD COLUMN IF NOT EXISTS sign_img_w INT DEFAULT 0 NOT NULL");
             s.execute("CREATE TABLE IF NOT EXISTS email_rules ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
                     + "project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,"

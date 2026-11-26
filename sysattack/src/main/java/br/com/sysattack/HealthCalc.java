@@ -33,11 +33,14 @@ final class HealthCalc {
     static void attach(List<Map<String, Object>> projects) throws SQLException {
         if (projects.isEmpty()) return;
         LocalDate today = LocalDate.now();
+        // um projeto só (abrir, salvar, financeiro): lê só as linhas dele em vez de varrer o banco inteiro
+        Object[] one = projects.size() == 1 ? new Object[] {projects.get(0).get("id")} : new Object[0];
+        String onlyT = one.length == 1 ? " AND t.project_id = ?" : "", only = one.length == 1 ? " WHERE project_id = ?" : "";
         Map<Long, List<Map<String, Object>>> tasks = group(Db.query("SELECT t.project_id, t.start_date, t.end_date, t.progress, t.status, t.is_milestone"
-                + " FROM tasks t WHERE t.status <> 'CANCELADA' AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)"));
-        Map<Long, List<Map<String, Object>>> changes = group(Db.query("SELECT project_id, status, change_date, impact_days FROM project_changes"));
+                + " FROM tasks t WHERE t.status <> 'CANCELADA' AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)" + onlyT, one));
+        Map<Long, List<Map<String, Object>>> changes = group(Db.query("SELECT project_id, status, change_date, impact_days FROM project_changes" + only, one));
         Map<Long, BigDecimal> cost = new HashMap<>();
-        for (Map<String, Object> r : Db.query("SELECT project_id, COALESCE(SUM(amount), 0) total FROM finance_entries GROUP BY project_id")) {
+        for (Map<String, Object> r : Db.query("SELECT project_id, COALESCE(SUM(amount), 0) total FROM finance_entries" + only + " GROUP BY project_id", one)) {
             cost.put(((Number) r.get("project_id")).longValue(), new BigDecimal(String.valueOf(r.get("total"))));
         }
         for (Map<String, Object> p : projects) {

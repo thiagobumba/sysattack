@@ -42,7 +42,7 @@ Toda a tela segue a grade de 8. O cabeçalho do `css/style.css` tem as regras co
 1. **CSP: nada de script ou manipulador inline.** A política só aceita `script-src 'self'`. Use `data-action="..."` nos elementos e trate o clique em `app.js` (ou no módulo, pelo prefixo `rp-`, `mpp-`, `ish-`, `prio-`). `style="..."` inline é permitido.
 2. **SQL sempre parametrizado** (`Db.query/one/insert/update` com `?`). Nunca concatene entrada do usuário.
 3. **Escritas dentro de `Db.tx`** (o `ApiServlet` já faz isso). Efeitos externos (e-mail, apagar arquivo) via `Db.afterCommit`.
-4. **Esquema:** mude em `Db.java`, com `ALTER TABLE … ADD COLUMN IF NOT EXISTS` e aumente `SCHEMA_VERSION`. Nunca apague nem renomeie colunas em uso.
+4. **Esquema:** mude em `Db.java`, com `ALTER TABLE … ADD COLUMN IF NOT EXISTS` e aumente `SCHEMA_VERSION`. Nunca apague nem renomeie colunas em uso. O `ALTER` de uma tabela vem sempre depois do `CREATE TABLE` dela (num banco novo ela ainda não existe).
 5. **Validação no servidor:** `str(...)`, `bool(...)`, conjuntos como `TASK_STATUS`; mensagens em português via `ApiException(status, msg)`.
 6. **Segredos nunca no git:** senhas ficam só no `config.properties` da pasta de dados. Não registre credenciais em logs.
 7. **Cálculos de negócio no servidor** (`HealthCalc`, `SpotCalc`, `TaskRules`); a IA não calcula.

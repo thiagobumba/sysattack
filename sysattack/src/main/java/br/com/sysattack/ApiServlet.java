@@ -632,29 +632,32 @@ public class ApiServlet extends HttpServlet {
             long id = Long.parseLong(s.get(1));
             Map<String, Object> target = Db.one(USER_SQL + " WHERE id = ?", id);
             if (target == null) throw new ApiException(404, "Usuário não encontrado.");
-            boolean lastAdmin = "ADMIN".equals(target.get("role"))
-                    && ((Number) Db.one("SELECT COUNT(*) c FROM users WHERE role = 'ADMIN'").get("c")).longValue() <= 1;
+            // conta só administradores ATIVOS: um administrador bloqueado não consegue desbloquear ninguém
+            boolean lastAdmin = "ADMIN".equals(target.get("role")) && Boolean.TRUE.equals(target.get("active"))
+                    && ((Number) Db.one("SELECT COUNT(*) c FROM users WHERE role = 'ADMIN' AND active = TRUE").get("c")).longValue() <= 1;
             if (m.equals("PUT")) {
                 JsonObject b = body(req);
                 String name = str(b, "name", "Nome", 120, true);
                 String role = str(b, "role", "Perfil", 10, true);
                 if (!role.equals("ADMIN") && !role.equals("USER")) throw new ApiException(400, "Perfil inválido.");
-                if (lastAdmin && !role.equals("ADMIN")) throw new ApiException(400, "Deve existir ao menos um administrador.");
+                if (lastAdmin && !role.equals("ADMIN")) throw new ApiException(400, "Deve existir ao menos um administrador ativo.");
                 String pw = str(b, "password", "Senha", 200, false);
                 String job = str(b, "job_title", "Cargo", 80, false);
-                Db.update("UPDATE users SET name = ?, role = ?, job_title = ?, totp_required = ? WHERE id = ?", name, role, job, bool(b, "totp_required"), id);
-                Audit.log(req, (String) me.get("email"), "USUARIO_ALTERADO", target.get("email") + " perfil=" + role + (pwSet(b) ? ", senha redefinida" : ""), true);
-                if (!pw.isEmpty()) {
+                if (!pw.isEmpty()) { // valida antes de gravar e de auditar: a auditoria usa conexão própria e não é desfeita
                     String bad = Auth.checkPassword(pw, (String) target.get("email"));
                     if (bad != null) throw new ApiException(400, bad);
+                }
+                Db.update("UPDATE users SET name = ?, role = ?, job_title = ?, totp_required = ? WHERE id = ?", name, role, job, bool(b, "totp_required"), id);
+                if (!pw.isEmpty()) {
                     String salt = Auth.newSalt();
                     Db.update("UPDATE users SET password_hash = ?, salt = ?, invite_pending = FALSE, must_change = TRUE WHERE id = ?", Auth.hash(pw, salt), salt, id);
                 }
+                Audit.log(req, (String) me.get("email"), "USUARIO_ALTERADO", target.get("email") + " perfil=" + role + (pwSet(b) ? ", senha redefinida" : ""), true);
                 return Db.one(USER_SQL + " WHERE id = ?", id);
             }
             if (m.equals("DELETE")) {
                 if (id == ((Number) me.get("id")).longValue()) throw new ApiException(400, "Você não pode excluir o seu próprio usuário.");
-                if (lastAdmin) throw new ApiException(400, "Deve existir ao menos um administrador.");
+                if (lastAdmin) throw new ApiException(400, "Deve existir ao menos um administrador ativo.");
                 Db.update("DELETE FROM users WHERE id = ?", id);
                 Audit.log(req, (String) me.get("email"), "USUARIO_EXCLUIDO", String.valueOf(target.get("email")), true);
                 return Map.of("ok", true);
@@ -683,7 +686,6 @@ public class ApiServlet extends HttpServlet {
             JsonElement e = body(req).get("active");
             if (e == null || e.isJsonNull()) throw new ApiException(400, "Informe se o usuário fica ativo ou bloqueado.");
             boolean active = e.getAsBoolean();
-            Audit.log(req, (String) me.get("email"), active ? "USUARIO_DESBLOQUEADO" : "USUARIO_BLOQUEADO", String.valueOf(target.get("email")), true);
             if (!active) {
                 if (id == ((Number) me.get("id")).longValue()) throw new ApiException(400, "Você não pode bloquear o seu próprio usuário.");
                 long activeAdmins = ((Number) Db.one("SELECT COUNT(*) c FROM users WHERE role = 'ADMIN' AND active = TRUE").get("c")).longValue();
@@ -692,6 +694,7 @@ public class ApiServlet extends HttpServlet {
                 }
             }
             Db.update("UPDATE users SET active = ? WHERE id = ?", active, id);
+            Audit.log(req, (String) me.get("email"), active ? "USUARIO_DESBLOQUEADO" : "USUARIO_BLOQUEADO", String.valueOf(target.get("email")), true);
             return Db.one(USER_SQL + " WHERE id = ?", id);
         }
         throw new ApiException(405, "Operação não suportada.");

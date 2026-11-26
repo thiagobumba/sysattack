@@ -17,6 +17,10 @@ final class EmailConfig {
             + " auth_mode, tenant_id, client_id, (client_secret_enc <> '') has_secret,"
             + " sign_on, sign_text, sign_img_name, sign_img_size, sign_img_w";
 
+    /** Colunas do envio e do log de teste. Nunca SELECT *: a imagem da assinatura (BLOB) só se lê por JDBC direto (MailSignature.image). */
+    private static final String SEND_COLS = "host, port, security, username, password_enc, from_email, from_name, enabled,"
+            + " auth_mode, tenant_id, client_id, client_secret_enc";
+
     static Map<String, Object> status() throws SQLException {
         Map<String, Object> row = Db.one("SELECT " + COLS + " FROM email_settings WHERE id = 1");
         Map<String, Object> out = new LinkedHashMap<>();
@@ -44,7 +48,7 @@ final class EmailConfig {
     /** Propriedades smtp.* para o Mailer; null se não há configuração ativa no banco. */
     static Properties effective() {
         try {
-            Map<String, Object> r = Db.one("SELECT * FROM email_settings WHERE id = 1");
+            Map<String, Object> r = Db.one("SELECT " + SEND_COLS + " FROM email_settings WHERE id = 1");
             if (r == null || !Boolean.TRUE.equals(r.get("enabled"))) return null;
             if (((String) r.get("host")).isBlank() && !"GRAPH".equals(r.get("auth_mode"))) return null; // o Graph não usa servidor SMTP
             return toProps(r);
@@ -148,7 +152,7 @@ final class EmailConfig {
 
     /** Envia um e-mail de teste com a configuração salva e registra o resultado. */
     static Map<String, Object> test(String to, String by) throws Exception {
-        Map<String, Object> r = Db.one("SELECT * FROM email_settings WHERE id = 1");
+        Map<String, Object> r = Db.one("SELECT " + SEND_COLS + " FROM email_settings WHERE id = 1");
         if (r == null) throw new ApiServlet.ApiException(400, "Salve a configuração antes de testar.");
         boolean ok;
         String msg;
