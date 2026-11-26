@@ -15,7 +15,9 @@ Versão documentada: **1.1.0 – Alpha** (arquivo `sysattack/src/main/webapp/ver
 | Integrar ou depurar pela API | [05 – API](05-api.md) |
 | Conhecer as tabelas do banco | [06 – Modelo de dados](06-modelo-de-dados.md) |
 | Alterar o código, testar e publicar | [07 – Desenvolvimento](07-desenvolvimento.md) |
+| **Retomar o projeto do zero**: estado atual, decisões, armadilhas e pendências | [08 – Handoff](08-handoff.md) |
 | Revisar segurança e limites conhecidos | [`../SEGURANCA.md`](../SEGURANCA.md) |
+| Trabalhar com o Claude Code neste repositório | [`../CLAUDE.md`](../CLAUDE.md) |
 
 ## Como manter esta documentação
 

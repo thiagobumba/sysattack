@@ -31,7 +31,7 @@ ApiServlet (/api/*)  →  autenticação por sessão → roteamento → regras d
    │                     ├─ TaskRules, HealthCalc, ChangeService, IshikawaService
    │                     ├─ SpotService / SpotCalc (Projetos Spot)
    │                     ├─ EmailService / EmailTriggers / Mailer (SMTP)
-   │                     ├─ AiConfig (chave do Claude) e BackupService
+   │                     ├─ AiConfig (chave do Claude), BackupService e BackupRestore
    │                     └─ Audit (trilha de auditoria)
    ▼
 Pasta de dados:  sysattack.mv.db · docs/ · ai.key · config.properties · backups
@@ -48,6 +48,7 @@ Pontos de projeto que valem saber:
 
 ```
 /
+├─ CLAUDE.md               regras de trabalho para o Claude Code neste repositório
 ├─ CHANGELOG.md            histórico de versões
 ├─ SEGURANCA.md            políticas e limites de segurança
 ├─ atualizar.ps1           atualiza o código e gera o .war (Windows/PowerShell)
