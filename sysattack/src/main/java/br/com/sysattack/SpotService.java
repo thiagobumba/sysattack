@@ -43,8 +43,24 @@ final class SpotService {
     private SpotService() {}
 
     // ------------------------------------------------------------------ roteamento
+    /** POST /spot/{id}/reports/generate: chama a IA (dezenas de segundos), por isso roda fora da transação da requisição. */
+    static boolean isAiGenerate(String m, List<String> s) {
+        return m.equals("POST") && s.size() == 4 && s.get(0).equals("spot") && s.get(2).equals("reports") && s.get(3).equals("generate");
+    }
+
     static Object handle(String m, List<String> s, HttpServletRequest req, HttpServletResponse resp, Map<String, Object> user) throws Exception {
         if (m.equals("GET")) return dispatch(m, s, req, resp, user);
+        if (isAiGenerate(m, s)) {
+            // confere antes (sem gravar) para não gastar a IA à toa; pergunta à IA sem transação aberta; grava tudo de uma vez no fim
+            long id = Long.parseLong(s.get(1));
+            checkClosed(targetSpot(s), req, user);
+            JsonObject b = ApiServlet.body(req);
+            Object[] made = generateText(id, b);
+            return Db.tx(() -> {
+                guardClosed(m, s, req, user);
+                return saveGenerated(id, made, user);
+            });
+        }
         boolean send = s.size() == 4 && s.get(3).equals("send"); // enviar e-mail não altera dados
         // toda alteração é atômica (tudo ou nada); em projeto encerrado exige administrador + justificativa, registrada no histórico
         return Db.tx(() -> {
@@ -68,11 +84,11 @@ final class SpotService {
         return row == null ? null : ((Number) row.get("spot_id")).longValue();
     }
 
-    private static void guardClosed(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws SQLException {
-        Long spotId = targetSpot(s);
-        if (spotId == null) return;
+    /** Projeto encerrado: exige administrador e justificativa. Devolve {projeto, justificativa} ou null se o projeto não está encerrado. Não grava nada. */
+    private static Object[] checkClosed(Long spotId, HttpServletRequest req, Map<String, Object> user) throws SQLException {
+        if (spotId == null) return null;
         Map<String, Object> p = Db.one("SELECT id, name, status FROM spot_projects WHERE id = ?", spotId);
-        if (p == null || !"ENCERRADO".equals(p.get("status"))) return;
+        if (p == null || !"ENCERRADO".equals(p.get("status"))) return null;
         if (!"ADMIN".equals(user.get("role"))) throw new ApiException(403, "Projeto encerrado: somente um administrador pode alterá-lo.");
         String raw = req.getHeader("X-Justification");
         String just = "";
@@ -81,6 +97,16 @@ final class SpotService {
         }
         if (just.length() < 10) throw new ApiException(400, "Projeto encerrado: informe a justificativa da alteração (mínimo de 10 caracteres).");
         if (just.length() > 1000) just = just.substring(0, 1000);
+        return new Object[] {p, just};
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void guardClosed(String m, List<String> s, HttpServletRequest req, Map<String, Object> user) throws SQLException {
+        Long spotId = targetSpot(s);
+        Object[] c = checkClosed(spotId, req, user);
+        if (c == null) return;
+        Map<String, Object> p = (Map<String, Object>) c[0];
+        String just = (String) c[1];
         String action = m + " " + String.join("/", s);
         Db.insert("INSERT INTO spot_audit(spot_id,spot_name,user_name,action,justification) VALUES(?,?,?,?,?)",
                 spotId, p.get("name"), user.get("name"), action.length() > 200 ? action.substring(0, 200) : action, just);
@@ -194,14 +220,20 @@ final class SpotService {
 
     private static Object list() throws SQLException {
         List<Map<String, Object>> rows = Db.query(PROJECT_SQL + " ORDER BY p.start_date, p.end_date, p.name, p.id"); // menor data de início em cima
+        LocalDate today = LocalDate.now();
+        // cada guia da lista lê só os indicadores do seu tipo: calcula apenas esses (antes eram os quatro blocos para todo projeto)
         for (Map<String, Object> p : rows) {
-            Map<String, Object> snap = SpotCalc.snapshot(p, LocalDate.now());
-            p.put("kpi", snap.get("kpi"));
-            p.put("health", snap.get("health"));
-            p.put("period_label", snap.get("period_label"));
-            p.put("scope", scopeSummary(p, LocalDate.now()));
-            p.put("finance", financeSummary(p));
-            p.put("evo", evoSummary(((Number) p.get("id")).longValue()));
+            if (!"PADRAO".equals(p.get("kind"))) { // evolutivo: pedidos, features e economia
+                p.put("evo", evoListSummary(((Number) p.get("id")).longValue()));
+            } else if (Boolean.TRUE.equals(p.get("closed_scope"))) { // escopo fechado: entregas e financeiro
+                p.put("scope", scopeSummary(p, today));
+                p.put("finance", financeSummary(p));
+            } else { // contrato / avulso: horas
+                Map<String, Object> snap = SpotCalc.snapshot(p, today);
+                p.put("kpi", snap.get("kpi"));
+                p.put("health", snap.get("health"));
+                p.put("period_label", snap.get("period_label"));
+            }
         }
         return rows;
     }
@@ -548,6 +580,13 @@ final class SpotService {
 
     /** Projetos evolutivos: total de pedidos, entregues, em andamento e na triagem. */
     private static Map<String, Object> evoSummary(long spotId) throws SQLException {
+        Map<String, Object> r = evoListSummary(spotId);
+        r.put("next_feature", nextFeatureNumber(spotId));
+        return r;
+    }
+
+    /** O que a lista de projetos mostra (sem o próximo número de feature, que só a ficha usa). */
+    private static Map<String, Object> evoListSummary(long spotId) throws SQLException {
         Map<String, Object> r = new java.util.LinkedHashMap<>();
         Map<String, Object> row = Db.one("SELECT COUNT(*) total,"
                 + " SUM(CASE WHEN status = 'ENTREGUE' THEN 1 ELSE 0 END) delivered,"
@@ -558,7 +597,6 @@ final class SpotService {
                 + " FROM spot_requests WHERE spot_id = ?", spotId);
         for (String k : new String[]{"total", "delivered", "doing", "triage", "refused", "features"}) r.put(k, row.get(k) == null ? 0L : ((Number) row.get(k)).longValue());
         r.put("eco", evoEconomy(spotId));
-        r.put("next_feature", nextFeatureNumber(spotId));
         return r;
     }
 
@@ -971,6 +1009,19 @@ final class SpotService {
     }
 
     private static Object generate(long spotId, JsonObject b, Map<String, Object> user) throws SQLException {
+        return saveGenerated(spotId, generateText(spotId, b), user);
+    }
+
+    /** Grava o relatório já redigido pela IA: {título, data de referência, retrato, texto, modelo}. */
+    private static Object saveGenerated(long spotId, Object[] g, Map<String, Object> user) throws SQLException {
+        project(spotId); // pode ter sido excluído enquanto a IA respondia
+        long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
+                spotId, g[0], g[1], g[2], g[3], g[4], user.get("name"));
+        return reportView(id);
+    }
+
+    /** Monta o retrato e pede o texto à IA. Só lê: pode rodar sem transação aberta. */
+    private static Object[] generateText(long spotId, JsonObject b) throws SQLException {
         Map<String, Object> p = project(spotId);
         LocalDate today = LocalDate.now();
         LocalDate ref = ApiServlet.optDate(b, "ref_date", "Data de referência");
@@ -992,9 +1043,8 @@ final class SpotService {
             throw new ApiException(e.status, e.getMessage());
         }
         Map<String, Object> narrative = normalizeNarrative(parseJsonObject(answer), demandIds(JsonParser.parseString(data).getAsJsonObject()));
-        long id = Db.insert("INSERT INTO spot_reports(spot_id,title,ref_date,snapshot,narrative,model,created_by) VALUES(?,?,?,?,?,?,?)",
-                spotId, title, ref, data, GSON.toJson(narrative), AiConfig.availability().get("label").toString().substring(0, Math.min(80, AiConfig.availability().get("label").toString().length())), user.get("name"));
-        return reportView(id);
+        String label = AiConfig.availability().get("label").toString();
+        return new Object[] {title, ref, data, GSON.toJson(narrative), label.substring(0, Math.min(80, label.length()))};
     }
 
     private static Map<String, Object> reportRow(long id) throws SQLException {

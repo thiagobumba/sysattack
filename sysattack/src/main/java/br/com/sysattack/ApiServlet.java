@@ -129,7 +129,8 @@ public class ApiServlet extends HttpServlet {
             try {
                 // toda alteração (POST/PUT/DELETE) é atômica: grava tudo ou nada
                 final List<String> segs = segments(req);
-                out = m.equals("GET") ? route(m, segs, req, resp) : Db.tx(() -> route(m, segs, req, resp));
+                // exceção: gerar relatório com a IA abre a própria transação só para gravar, depois da resposta da IA
+                out = m.equals("GET") || SpotService.isAiGenerate(m, segs) ? route(m, segs, req, resp) : Db.tx(() -> route(m, segs, req, resp));
             } finally {
                 EmailTriggers.ACTOR.remove();
             }

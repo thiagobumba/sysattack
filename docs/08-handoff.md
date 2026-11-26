@@ -102,7 +102,9 @@ Db  → H2 em arquivo; esquema criado e migrado no AppListener.contextInitialize
 
 - Base `/api/...`, JSON UTF-8, sessão por cookie `HttpOnly` + `SameSite=Lax`.
 - **Escritas exigem `X-Requested-With: SysAttack`** e `Origin` do próprio servidor.
-- Toda escrita roda em transação (`Db.tx`); efeito externo (e-mail, apagar arquivo) vai
+- Toda escrita roda em transação (`Db.tx`) — exceção: `POST spot/{id}/reports/generate` confere
+  a permissão antes, chama a IA sem transação e só então abre uma para gravar (`SpotService.isAiGenerate`).
+  Efeito externo (e-mail, apagar arquivo) vai
   em `Db.afterCommit`, e limpeza de arquivo órfão em `Db.onRollback`.
 - Erro = `{ "error": "mensagem em português" }` com o status certo
   (400 regra de negócio, 401 sem sessão, 403 sem permissão/CSRF, 404, 405, 409 vínculo, 500).
