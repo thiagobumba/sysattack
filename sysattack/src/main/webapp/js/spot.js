@@ -235,20 +235,20 @@ const Spot = (() => {
     const acts = p => `<td class="acts">${p.recurring && !p.closed_scope ? `<button class="icon-btn" title="Copiar projeto (novo período)" aria-label="Copiar projeto spot" data-action="sp-copy-project" data-id="${p.id}">${ic('copy')}</button>` : ''}${p.status === 'ENCERRADO' && !isAdmin() ? '' : `<button class="icon-btn" title="Editar" aria-label="Editar projeto spot" data-action="sp-edit-project" data-id="${p.id}">${ic('edit')}</button>
           <button class="icon-btn del" title="Excluir" aria-label="Excluir projeto spot" data-action="sp-del-project" data-id="${p.id}">${ic('trash')}</button>`}</td>`;
     const name = p => `<td class="strong"><span class="nm-wrap">${Logo.avatar('S', p, 'sm')}<span class="nm-txt">${esc(p.name)}${p.recurring ? ' <span class="badge b-dark rec">Recorrente</span>' : ''}<span class="small">${esc(p.client || '—')}</span></span></span></td>`;
-    const tableHours = `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableHours = () => `<table class="tbl"><thead><tr><th>Projeto</th><th>Saúde</th><th>Modelo</th><th class="num">Fixadas</th><th class="num">Consumidas</th><th class="num">Saldo atual</th><th>Último relatório</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${healthChip(p.health)}<span class="small">${healthSub(p.health, p.kpi)}</span></td>
           <td>${MODEL[p.hours_model]}<span class="small">${esc(p.period_label || '')}</span>${vigencia(p)}</td>
           <td class="num">${h(p.kpi.contracted)}</td><td class="num">${h(p.kpi.consumed)}</td>
           <td class="num strong ${Number(p.kpi.balance) < 0 ? 'late-txt' : ''}">${h(p.kpi.balance)}</td>
           <td>${p.last_report ? fmt(String(p.last_report).slice(0, 10)) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
-    const tableScope = `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Financeiro</th><th class="num">Arquivos</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableScope = () => `<table class="tbl"><thead><tr><th>Projeto</th><th>Vigência</th><th>Entregas</th><th class="num">Financeiro</th><th class="num">Arquivos</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}
           <td>${fmt(p.start_date)}${p.end_date ? ' a ' + fmt(p.end_date) : ' em diante'}${vigencia(p)}</td>
           <td>${healthChip(p.scope.health)}${pct(p.scope.pct)}<span class="small">${p.scope.delivered} de ${p.scope.total} demanda(s) entregue(s)</span></td>
           <td class="num strong">${brl(p.project_value)}<span class="small">${brl(p.finance.invoiced)} faturado (${p.finance.pct_invoiced}%)</span></td>
           <td class="num">${p.scope.files}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
-    const tableEvo = `<table class="tbl"><thead><tr><th>Projeto</th><th>Tipo</th><th class="num">Pedidos</th><th class="num">Entregues</th><th class="num">Em andamento</th><th class="num">Na triagem</th><th class="num">Estimado / Executado</th><th class="num">Economia</th><th>Situação</th><th></th></tr></thead><tbody>
+    const tableEvo = () => `<table class="tbl"><thead><tr><th>Projeto</th><th>Tipo</th><th class="num">Pedidos</th><th class="num">Entregues</th><th class="num">Em andamento</th><th class="num">Na triagem</th><th class="num">Estimado / Executado</th><th class="num">Economia</th><th>Situação</th><th></th></tr></thead><tbody>
         ${rows.map(p => `<tr class="click" data-go="#/spot/${p.id}">${name(p)}<td>${esc(P_KIND[p.kind] || '')}</td>
           <td class="num strong">${p.evo.total}</td><td class="num">${p.evo.delivered}<span class="small">${p.evo.features} feature(s)</span></td><td class="num">${p.evo.doing}</td>
           <td class="num ${p.evo.triage ? 'late-txt' : ''}">${p.evo.triage}</td><td class="num">${p.evo.eco && p.evo.eco.features.length ? hh(p.evo.eco.estimated) + ' / ' + hh(p.evo.eco.executed) : '—'}</td><td class="num strong">${p.evo.eco && p.evo.eco.features.length && Number(p.evo.eco.rate) > 0 ? brl(p.evo.eco.avoided) : '—'}</td><td>${badge(S_STATUS, p.status)}</td>${acts(p)}</tr>`).join('')}</tbody></table>`;
@@ -256,7 +256,7 @@ const Spot = (() => {
       <section class="panel"><div class="panel-head"><div class="tabs" style="margin:0;border:0;flex:1">
         ${kinds.map(k => `<button class="tab ${listTab === k ? 'active' : ''}" data-action="sp-list-tab" data-kind="${k}">${KINDS[k]} (${count(k)})</button>`).join('')}</div>
         <button class="btn btn-primary btn-sm" data-action="sp-new">+ Novo projeto spot</button></div>
-        <div class="table-wrap">${rows.length ? (listTab === 'ESCOPO' ? tableScope : listTab === 'EVOL' ? tableEvo : tableHours)
+        <div class="table-wrap">${rows.length ? (listTab === 'ESCOPO' ? tableScope() : listTab === 'EVOL' ? tableEvo() : tableHours())
         : empty('Nenhum projeto nesta guia', listTab === 'ESCOPO' ? 'Cadastre um projeto marcando “Escopo fechado”: não controla horas, só escopo, demandas e entregas.' : listTab === 'EVOL' ? 'Cadastre um projeto do tipo “Evolutivas Salesforce” ou “Evolutivas Protheus” para reunir os pedidos que chegam por e-mail ou chamado TIFlux e as features entregues.' : 'Cadastre o projeto com as horas fixadas, lance as horas consumidas e gere o relatório semanal com o Claude.')}</div></section>`;
   }
 

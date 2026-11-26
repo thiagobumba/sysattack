@@ -5,7 +5,7 @@ pendente. Escrito para que uma sessão nova do Claude Code (ou outra pessoa) ret
 trabalho sem precisar reler o histórico de conversas.
 
 **Última atualização:** 26/11/2026 · commit `ffba7f7` · branch `claude/dev` ·
-`?v=121` · `SCHEMA_VERSION = 58` · versão do produto **1.1.0 – Alpha**.
+`?v=122` · `SCHEMA_VERSION = 58` · versão do produto **1.1.0 – Alpha**.
 
 As regras de trabalho do dia a dia estão em [`../CLAUDE.md`](../CLAUDE.md) (lido
 automaticamente pelo Claude Code). Este documento é o contexto: o porquê de cada coisa.
@@ -436,6 +436,7 @@ numa cópia e confira o `pre-update-*.mv.db`.
 | **Logo: ele queria o PNG, não o código** | A v121 (recorte/preenchimento do avatar) foi implementada e **revertida a pedido** (`git revert`, commit `05b3380`). O que ele queria era o arquivo `horus-avatar-400.png` para baixar. | Quando o pedido for "me manda a imagem", mande o arquivo — não mexa no código. |
 | **ALTER antes do CREATE** | As colunas de OAuth e assinatura de `email_settings` eram acrescentadas antes do `CREATE TABLE` dela. Em banco existente passava; em instalação nova o Tomcat não subia. | Teste `Db.init()` com uma pasta de dados **vazia** (`-Dsysattack.data=<pasta nova>`) sempre que mexer no esquema. |
 | **Auditoria antes da validação** | `Audit.log` grava em conexão própria e não é desfeito no rollback; registrado antes da validação, deixava na trilha uma "senha redefinida" que não aconteceu. | Chame `Audit.log` só depois de todas as validações que podem lançar erro. |
+| **Lista Spot monta as três tabelas** | A lista monta as tabelas de horas, escopo e evolutivos com as mesmas linhas antes de escolher qual mostrar. Quando o servidor passou a mandar só os indicadores de cada tipo, a tabela de escopo leu `p.scope` de um contrato e a tela quebrou ("reading 'health'"). | As tabelas agora são funções e só a da guia aberta é montada. Ao enxugar uma resposta da API, procure no JS todo template que lê o campo, mesmo os que não aparecem na tela. |
 
 Outras regras de comportamento que nasceram da prática:
 

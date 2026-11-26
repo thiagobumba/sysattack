@@ -57,7 +57,7 @@ Nenhuma alteração é considerada pronta sem estes seis passos:
    "`SCHEMA_VERSION` (atualmente **N**)").
 4. **Cache do front-end**: se mexeu em `js/` ou `css/`, aumente o `?v=NN` nos **quatro**
    HTML: `index.html`, `login.html`, `privacidade.html`, `definir-senha.html`.
-   **Versão atual: `?v=121`.**
+   **Versão atual: `?v=122`.**
 5. **Commit e push na branch `claude/dev`** (é a única branch de trabalho), terminando
    a mensagem com:
    ```

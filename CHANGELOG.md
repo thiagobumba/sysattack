@@ -5,6 +5,7 @@ Etapas: **Alpha** → **Beta** → **RC** (release candidate) → **Oficial**. A
 
 ## Não publicado
 
+- **Correção: a tela Projetos Spot não abria ("Algo deu errado… reading 'health'").** A lista montava as três tabelas (horas, escopo fechado e evolutivos) com os mesmos projetos antes de escolher qual mostrar. Depois que o servidor passou a mandar só os indicadores de cada tipo, a tabela de escopo tentava ler a saúde da entrega de um projeto de contrato e a tela quebrava. Agora só a tabela da guia aberta é montada. Versão do front-end `?v=122`.
 - **Correções de integridade e desempenho (revisão geral do código).**
   - **Instalação nova não subia.** Num banco vazio, a inicialização tentava acrescentar colunas à tabela de e-mail antes de criá-la, e o Tomcat parava com "Falha ao iniciar o banco de dados". Isso travava justamente o caminho de instalar em outro local e importar um backup. As colunas passaram para logo depois da criação da tabela. Em instalação existente nada muda.
   - **Nunca fica sem administrador ativo.** A regra "deve existir ao menos um administrador" contava também administradores bloqueados: dava para rebaixar o único administrador ativo e ficar sem ninguém para desbloquear os outros. Agora só os ativos contam.
